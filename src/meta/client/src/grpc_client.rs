@@ -317,8 +317,8 @@ impl MetaGrpcClient {
 
         let mgr = MetaChannelManager { timeout, conf };
 
-        let rt =
-            Runtime::with_worker_threads(1, Some("meta-client-rt".to_string())).map_err(|e| {
+        let rt = Runtime::with_worker_threads(1, Some("meta-client-rt".to_string()), true)
+            .map_err(|e| {
                 MetaClientError::ClientRuntimeError(
                     AnyError::new(&e).add_context(|| "when creating meta-client"),
                 )

@@ -28,5 +28,7 @@ pub mod containers;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
+pub use runtime::block_on;
 pub use runtime::match_join_handle;
 pub use runtime::set_alloc_error_hook;
+pub use runtime::uncheck_block_on;

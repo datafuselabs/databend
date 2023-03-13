@@ -21,6 +21,7 @@ use common_base::base::signal_stream;
 use common_base::base::DummySignalStream;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::uncheck_block_on;
 use common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
@@ -103,7 +104,10 @@ impl Drop for ShutdownHandle {
                 .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
         {
             let signal_stream = DummySignalStream::create(SignalType::Exit);
-            futures::executor::block_on(self.shutdown(signal_stream));
+            // Safe, we need blocking shutdown in the global runtime
+            unsafe {
+                uncheck_block_on(self.shutdown(signal_stream));
+            }
         }
     }
 }

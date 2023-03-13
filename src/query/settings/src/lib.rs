@@ -23,6 +23,7 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::Dialect;
+use common_base::block_on;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_config::GlobalConfig;
@@ -896,7 +897,8 @@ impl Settings {
                     .set_setting(user_setting)
                     .await
             });
-            let _ = futures::executor::block_on(set_handle).unwrap()?;
+
+            let _ = block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 
@@ -919,7 +921,7 @@ impl Settings {
                     .set_setting(user_setting)
                     .await
             });
-            let _ = futures::executor::block_on(set_handle).unwrap()?;
+            let _ = block_on(set_handle).unwrap()?;
             setting.level = ScopeLevel::Global;
         }
 

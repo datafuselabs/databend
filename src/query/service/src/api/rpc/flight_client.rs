@@ -27,6 +27,7 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio::time::Duration;
+use common_base::block_on;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::BoxFuture;
@@ -399,7 +400,7 @@ impl Drop for FlightExchangeRef {
         if !self.is_closed_request.load(Ordering::SeqCst)
             || !self.is_closed_response.load(Ordering::SeqCst)
         {
-            futures::executor::block_on(async move {
+            block_on(async move {
                 self.close_input().await;
                 self.close_output().await;
             });

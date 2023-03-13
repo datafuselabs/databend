@@ -263,6 +263,7 @@ impl QueryContextShared {
                 let runtime = Arc::new(Runtime::with_worker_threads(
                     2,
                     Some("query-ctx".to_string()),
+                    false,
                 )?);
                 *query_runtime = Some(runtime.clone());
                 Ok(runtime)

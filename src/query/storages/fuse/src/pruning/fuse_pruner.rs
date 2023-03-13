@@ -134,6 +134,7 @@ impl FusePruner {
         let pruning_runtime = Arc::new(Runtime::with_worker_threads(
             max_threads,
             Some("pruning-worker".to_owned()),
+            false,
         )?);
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_stats = Arc::new(FusePruningStatistics::default());

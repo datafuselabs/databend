@@ -29,6 +29,7 @@ impl GlobalIORuntime {
         GlobalInstance::set(Arc::new(Runtime::with_worker_threads(
             thread_num,
             Some("IO-worker".to_owned()),
+            true,
         )?));
         Ok(())
     }

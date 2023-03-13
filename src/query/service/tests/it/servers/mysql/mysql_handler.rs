@@ -131,7 +131,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let start_barriers = Arc::new(Barrier::new(3));
     let destroy_barriers = Arc::new(Barrier::new(3));
 
-    let runtime = Runtime::with_worker_threads(2, None)?;
+    let runtime = Runtime::with_worker_threads(2, None, false)?;
     let mut join_handlers = Vec::with_capacity(3);
     for _ in 0..3 {
         let port = listening.port();

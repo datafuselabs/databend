@@ -95,20 +95,21 @@ impl FuseTable {
                 let push_downs = push_downs.clone();
                 let lazy_init_segments = lazy_init_segments.clone();
 
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_info,
-                            lazy_init_segments,
-                            0,
-                        )
-                        .await?;
+                let partitions =
+                    Runtime::with_worker_threads(2, None, false)?.block_on(async move {
+                        let (_statistics, partitions) = table
+                            .prune_snapshot_blocks(
+                                ctx,
+                                dal,
+                                push_downs,
+                                table_info,
+                                lazy_init_segments,
+                                0,
+                            )
+                            .await?;
 
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
+                        Result::<_, ErrorCode>::Ok(partitions)
+                    })?;
 
                 query_ctx.set_partitions(partitions)?;
                 Ok(())

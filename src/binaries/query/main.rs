@@ -47,7 +47,7 @@ use tracing::info;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
-    match Runtime::with_default_worker_threads() {
+    match Runtime::with_default_worker_threads(true) {
         Err(cause) => {
             eprintln!("Databend Query start failure, cause: {:?}", cause);
             std::process::exit(cause.code() as i32);

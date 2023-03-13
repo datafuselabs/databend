@@ -157,6 +157,7 @@ impl Server for MySQLHandler {
                 let rejected_rt = Arc::new(Runtime::with_worker_threads(
                     1,
                     Some("mysql-handler".to_string()),
+                    false,
                 )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);

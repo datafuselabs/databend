@@ -18,8 +18,8 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
+use common_base::runtime::Runtime;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -111,8 +111,9 @@ pub fn parse_exprs(
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
-            let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast, None)))?;
+            let (scalar, _) = *block_in_place(|| {
+                Runtime::block_on_with_current(type_checker.resolve(ast, None))
+            })?;
             let expr = scalar.as_expr_with_col_index()?;
             Ok(expr)
         })

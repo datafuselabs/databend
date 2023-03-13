@@ -1976,7 +1976,6 @@ dependencies = [
  "common-meta-types",
  "common-users",
  "dashmap",
- "futures",
  "itertools",
  "num_cpus",
  "sys-info",

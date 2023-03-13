@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use common_base::block_on;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -119,7 +120,7 @@ impl StatisticsSender {
         self.shutdown_flag.store(true, Ordering::Release);
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
-        futures::executor::block_on(async move {
+        block_on(async move {
             if let Err(error_code) = shutdown_flag_sender.send(error).await {
                 tracing::warn!(
                     "Cannot send data via flight exchange, cause: {:?}",

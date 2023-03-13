@@ -23,6 +23,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Select3Output;
+use common_base::block_on;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
@@ -55,6 +56,7 @@ impl StatisticsReceiver {
             runtime: Arc::new(Runtime::with_worker_threads(
                 2,
                 Some(String::from("StatisticsReceiver")),
+                false,
             )?),
         })
     }
@@ -188,7 +190,7 @@ impl StatisticsReceiver {
 
     pub fn wait_shutdown(&mut self) -> Result<()> {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
-        futures::executor::block_on(async move {
+        block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
                 match exchange_handler.await {
                     Ok(Ok(_)) => Ok(()),

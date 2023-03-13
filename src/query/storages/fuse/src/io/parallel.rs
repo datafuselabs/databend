@@ -43,6 +43,7 @@ where
     let runtime = Arc::new(Runtime::with_worker_threads(
         max_runtime_threads,
         Some(thread_name),
+        false,
     )?);
 
     // 2. spawn all the tasks to the runtime with semaphore.

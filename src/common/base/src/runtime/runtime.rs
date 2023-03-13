@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::backtrace::Backtrace;
+use std::cell::RefCell;
 use std::future::Future;
 use std::sync::Arc;
 use std::thread;
@@ -30,6 +31,31 @@ use tokio::task::JoinHandle;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::MemStat;
+
+thread_local! {
+    static STATE: RefCell<RuntimeState> = RefCell::new(RuntimeState::empty());
+}
+
+pub struct RuntimeState {
+    global: bool,
+}
+
+impl RuntimeState {
+    pub const fn empty() -> RuntimeState {
+        RuntimeState { global: false }
+    }
+
+    pub fn set_global() {
+        STATE.with(|v: &RefCell<RuntimeState>| {
+            let mut borrow_mut = v.borrow_mut();
+            borrow_mut.global = true;
+        })
+    }
+
+    pub fn is_global() -> bool {
+        STATE.with(|v: &RefCell<RuntimeState>| v.borrow().global)
+    }
+}
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -126,11 +152,16 @@ impl Runtime {
         })
     }
 
-    fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
-        builder
-            .enable_all()
-            .on_thread_start(mem_stat.on_start_thread());
+    fn tracker_builder(mem_stat: Arc<MemStat>, global: bool) -> Builder {
+        let mut builder = Builder::new_multi_thread();
+        let fun = mem_stat.on_start_thread();
+        builder.enable_all().on_thread_start(move || {
+            if global {
+                RuntimeState::set_global();
+            }
+
+            fun();
+        });
 
         builder
     }
@@ -142,9 +173,9 @@ impl Runtime {
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
-    pub fn with_default_worker_threads() -> Result<Self> {
+    pub fn with_default_worker_threads(global: bool) -> Result<Self> {
         let mem_stat = MemStat::create(String::from("UnnamedRuntime"));
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = Self::tracker_builder(mem_stat.clone(), global);
 
         #[cfg(debug_assertions)]
         {
@@ -160,7 +191,11 @@ impl Runtime {
     }
 
     #[allow(unused_mut)]
-    pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
+    pub fn with_worker_threads(
+        workers: usize,
+        mut thread_name: Option<String>,
+        global: bool,
+    ) -> Result<Self> {
         let mut mem_stat_name = String::from("UnnamedRuntime");
 
         if let Some(thread_name) = thread_name.as_ref() {
@@ -168,7 +203,7 @@ impl Runtime {
         }
 
         let mem_stat = MemStat::create(mem_stat_name);
-        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
+        let mut runtime_builder = Self::tracker_builder(mem_stat.clone(), global);
 
         #[cfg(debug_assertions)]
         {
@@ -195,8 +230,20 @@ impl Runtime {
         self.handle.clone()
     }
 
+    pub fn block_on_with_current<F: Future>(future: F) -> F::Output {
+        assert!(
+            !RuntimeState::is_global(),
+            "Cannot call block_on_current in global runtime"
+        );
+        Handle::current().block_on(future)
+    }
+
     pub fn block_on<T, F>(&self, future: F) -> F::Output
     where F: Future<Output = Result<T>> + Send + 'static {
+        assert!(
+            !RuntimeState::is_global(),
+            "Cannot call runtime block_on in global runtime"
+        );
         let future = CatchUnwindFuture::create(future);
         self.handle.block_on(future).flatten()
     }

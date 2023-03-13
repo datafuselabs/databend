@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio::io::BufWriter;
 use common_base::base::tokio::net::TcpStream;
+use common_base::block_on;
 use common_base::runtime::Runtime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
@@ -43,7 +44,7 @@ impl MySQLConnection {
 
         let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
         let query_executor =
-            Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
+            Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()), false)?;
         Thread::spawn(move || {
             let join_handle = query_executor.spawn(async move {
                 let client_addr = match non_blocking_stream.peer_addr() {
@@ -65,7 +66,8 @@ impl MySQLConnection {
                 let w = BufWriter::with_capacity(DEFAULT_RESULT_SET_WRITE_BUFFER_SIZE, w);
                 AsyncMysqlIntermediary::run_with_options(interactive_worker, r, w, &opts).await
             });
-            let _ = futures::executor::block_on(join_handle);
+
+            let _ = block_on(join_handle);
         });
         Ok(())
     }
