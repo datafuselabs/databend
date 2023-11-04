@@ -34,6 +34,8 @@ use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
+use common_base::runtime::Runtime;
+use common_catalog::table_context::TableContext;
 use storages_common_cache::LoadParams;
 
 use crate::hive_partition::HivePartInfo;
@@ -43,6 +45,7 @@ use crate::MetaDataReader;
 #[derive(Clone)]
 pub struct HiveBlockReader {
     operator: Operator,
+    query_id: String,
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
@@ -103,6 +106,7 @@ impl DataBlockDeserializer {
 
 impl HiveBlockReader {
     pub fn create(
+        ctx: Arc<dyn TableContext>,
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
@@ -143,6 +147,7 @@ impl HiveBlockReader {
             projection,
             projected_schema,
             output_schema,
+            query_id: ctx.get_id(),
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
             chunk_size,
@@ -203,18 +208,18 @@ impl HiveBlockReader {
     #[async_backtrace::framed]
     async fn read_column(
         op: Operator,
+        query_id: String,
         path: String,
         offset: u64,
         length: u64,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<u8>> {
-        let handler =
-            common_base::base::tokio::spawn(async_backtrace::location!().frame(async move {
-                let chunk = op.read_with(&path).range(offset..offset + length).await?;
+        let handler = Runtime::spawn_current_runtime(query_id, async move {
+            let chunk = op.read_with(&path).range(offset..offset + length).await?;
 
-                let _semaphore_permit = semaphore.acquire().await.unwrap();
-                Ok(chunk)
-            }));
+            let _semaphore_permit = semaphore.acquire().await.unwrap();
+            Ok(chunk)
+        });
 
         match handler.await {
             Ok(Ok(data)) => Ok(data),
@@ -261,6 +266,7 @@ impl HiveBlockReader {
 
             join_handlers.push(Self::read_column(
                 self.operator.clone(),
+                self.query_id.clone(),
                 part.filename.to_string(),
                 start,
                 len,

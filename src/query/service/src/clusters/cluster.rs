@@ -22,7 +22,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
@@ -31,6 +30,8 @@ use common_base::base::DummySignalStream;
 use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
+use common_base::runtime::Runtime;
+use common_base::GLOBAL_TASK;
 pub use common_catalog::cluster_info::Cluster;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -426,8 +427,9 @@ impl ClusterHeartbeat {
     }
 
     pub fn start(&mut self, node_info: NodeInfo) {
-        self.shutdown_handler = Some(tokio::spawn(
-            async_backtrace::location!().frame(self.heartbeat_loop(node_info)),
+        self.shutdown_handler = Some(Runtime::spawn_current_runtime(
+            GLOBAL_TASK,
+            self.heartbeat_loop(node_info),
         ));
     }
 

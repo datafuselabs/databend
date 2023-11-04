@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio;
+use common_base::runtime::Runtime;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
@@ -197,21 +197,22 @@ impl Processor for ReadParquetDataSource<false> {
             let mut chunks = Vec::with_capacity(parts.len());
             for part in &parts {
                 let part = part.clone();
+                let query_id = self.partitions.ctx.get_id();
                 let block_reader = self.block_reader.clone();
                 let settings = ReadSettings::from_ctx(&self.partitions.ctx)?;
                 let index_reader = self.index_reader.clone();
                 let virtual_reader = self.virtual_reader.clone();
 
                 chunks.push(async move {
-                    tokio::spawn(async_backtrace::location!().frame(async move {
+                    Runtime::spawn_current_runtime(&query_id, async move {
                         let part = FusePartInfo::from_part(&part)?;
 
                         if let Some(index_reader) = index_reader.as_ref() {
                             let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &part.location,
-                            index_reader.index_id(),
-                        );
+                                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                                    &part.location,
+                                    index_reader.index_id(),
+                                );
                             if let Some(data) = index_reader
                                 .read_parquet_data_by_merge_io(&settings, &loc)
                                 .await
@@ -250,9 +251,9 @@ impl Processor for ReadParquetDataSource<false> {
                             .await?;
 
                         Ok(DataSource::Normal((source, virtual_source)))
-                    }))
-                    .await
-                    .unwrap()
+                    })
+                        .await
+                        .unwrap()
                 });
             }
 

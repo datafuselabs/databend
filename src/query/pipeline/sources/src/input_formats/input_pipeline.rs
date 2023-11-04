@@ -19,6 +19,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
@@ -167,7 +168,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 let (data_tx, data_rx) = tokio::sync::mpsc::channel(ctx.num_prefetch_per_split());
                 let split_clone = s.clone();
                 let ctx_clone2 = ctx_clone.clone();
-                tokio::spawn(async_backtrace::location!().frame(async move {
+                Runtime::spawn_current_runtime(ctx.table_context.get_id(), async move {
                     if let Err(e) =
                         Self::copy_reader_with_aligner(ctx_clone2, split_clone, data_tx).await
                     {
@@ -175,7 +176,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     } else {
                         debug!("copy split reader stopped");
                     }
-                }));
+                });
                 if split_tx
                     .send(Ok(Split {
                         info: s.clone(),

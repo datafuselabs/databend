@@ -22,6 +22,7 @@ use common_ast::ast::Statement;
 use common_base::base::tokio;
 use common_base::base::tokio::io::AsyncWriteExt;
 use common_base::base::ProgressValues;
+use common_base::runtime::Runtime;
 use common_exception::Result;
 use common_expression::block_debug::box_render;
 use common_expression::infer_table_schema;
@@ -160,7 +161,7 @@ impl<'a> FormatDisplay<'a> {
 
         let is_repl = self.is_repl;
 
-        let handle = tokio::spawn(async move {
+        let handle = Runtime::spawn_current_runtime(ctx.get_id(), async move {
             if !is_repl {
                 return (None, None);
             }

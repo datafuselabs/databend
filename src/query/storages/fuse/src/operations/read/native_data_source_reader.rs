@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::tokio;
+use common_base::runtime::Runtime;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::table_context::TableContext;
@@ -206,48 +206,47 @@ impl Processor for ReadNativeDataSource<false> {
                 let ctx = self.partitions.ctx.clone();
                 chunks.push(async move {
                     let query_id = ctx.get_id();
-                    let handler =
-                        tokio::spawn(async_backtrace::location!(query_id).frame(async move {
-                            let fuse_part = FusePartInfo::from_part(&part)?;
-                            if let Some(index_reader) = index_reader.as_ref() {
-                                let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &fuse_part.location,
-                            index_reader.index_id(),
-                        );
-                                if let Some(data) = index_reader.read_native_data(&loc).await {
-                                    // Read from aggregating index.
-                                    return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
-                                }
-                            }
-
-                            if let Some(virtual_reader) = virtual_reader.as_ref() {
-                                let loc = TableMetaLocationGenerator::gen_virtual_block_location(
+                    let handler = Runtime::spawn_current_runtime(query_id, async move {
+                        let fuse_part = FusePartInfo::from_part(&part)?;
+                        if let Some(index_reader) = index_reader.as_ref() {
+                            let loc =
+                                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                                     &fuse_part.location,
+                                    index_reader.index_id(),
                                 );
-
-                                // If virtual column file exists, read the data from the virtual columns directly.
-                                if let Some((mut virtual_source_data, ignore_column_ids)) =
-                                    virtual_reader.read_native_data(&loc).await
-                                {
-                                    let mut source_data = block_reader
-                                        .async_read_native_columns_data(
-                                            &part,
-                                            &ctx,
-                                            &ignore_column_ids,
-                                        )
-                                        .await?;
-                                    source_data.append(&mut virtual_source_data);
-                                    return Ok(DataSource::Normal(source_data));
-                                }
+                            if let Some(data) = index_reader.read_native_data(&loc).await {
+                                // Read from aggregating index.
+                                return Ok::<_, ErrorCode>(DataSource::AggIndex(data));
                             }
+                        }
 
-                            Ok(DataSource::Normal(
-                                block_reader
-                                    .async_read_native_columns_data(&part, &ctx, &None)
-                                    .await?,
-                            ))
-                        }));
+                        if let Some(virtual_reader) = virtual_reader.as_ref() {
+                            let loc = TableMetaLocationGenerator::gen_virtual_block_location(
+                                &fuse_part.location,
+                            );
+
+                            // If virtual column file exists, read the data from the virtual columns directly.
+                            if let Some((mut virtual_source_data, ignore_column_ids)) =
+                                virtual_reader.read_native_data(&loc).await
+                            {
+                                let mut source_data = block_reader
+                                    .async_read_native_columns_data(
+                                        &part,
+                                        &ctx,
+                                        &ignore_column_ids,
+                                    )
+                                    .await?;
+                                source_data.append(&mut virtual_source_data);
+                                return Ok(DataSource::Normal(source_data));
+                            }
+                        }
+
+                        Ok(DataSource::Normal(
+                            block_reader
+                                .async_read_native_columns_data(&part, &ctx, &None)
+                                .await?,
+                        ))
+                    });
                     handler.await.unwrap()
                 });
             }

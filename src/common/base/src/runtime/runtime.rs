@@ -272,6 +272,22 @@ impl Runtime {
         Ok(handlers)
     }
 
+    pub fn spawn_current_runtime<F>(id: impl Into<String>, task: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let id = id.into();
+        let task = match id == GLOBAL_TASK {
+            true => async_backtrace::location!(String::from(GLOBAL_TASK_DESC)).frame(task),
+            false => {
+                async_backtrace::location!(format!("Running query {} spawn task", id)).frame(task)
+            }
+        };
+
+        tokio::spawn(task)
+    }
+
     // TODO(Winter): remove
     // Please do not use this method(it's temporary)
     #[async_backtrace::framed]

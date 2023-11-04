@@ -17,8 +17,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_recursion::async_recursion;
-use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
+use common_base::GLOBAL_TASK;
 use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -199,8 +200,8 @@ impl HiveTable {
             self.is_prewhere_column_partition_keys(self.table_info.schema(), &plan.push_downs)?;
         // create prewhere&remaindata block reader
         let prewhere_reader =
-            self.build_prewhere_reader(plan, chunk_size, prewhere_all_partitions)?;
-        let remain_reader = self.build_remain_reader(plan, chunk_size, prewhere_all_partitions)?;
+            self.build_prewhere_reader(ctx.clone(), plan, chunk_size, prewhere_all_partitions)?;
+        let remain_reader = self.build_remain_reader(ctx.clone(), plan, chunk_size, prewhere_all_partitions)?;
         let prewhere_filter =
             self.build_prewhere_filter_executor(plan, prewhere_reader.get_output_schema())?;
 
@@ -242,10 +243,10 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filters,
-            limit: Some(lm),
-            ..
-        }) = &plan.push_downs
+                        filters,
+                        limit: Some(lm),
+                        ..
+                    }) = &plan.push_downs
         {
             if *lm > 100000 {
                 return false;
@@ -279,9 +280,9 @@ impl HiveTable {
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
         if let Some(PushDownInfo {
-            projection: Some(prj),
-            ..
-        }) = push_downs
+                        projection: Some(prj),
+                        ..
+                    }) = push_downs
         {
             match prj {
                 Projection::Columns(indices) => Ok(indices.clone()),
@@ -298,6 +299,7 @@ impl HiveTable {
     // Build the prewhere reader.
     fn build_prewhere_reader(
         &self,
+        ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         chunk_size: usize,
         prewhere_all_partitions: bool,
@@ -312,6 +314,7 @@ impl HiveTable {
                     plan.push_downs.as_ref(),
                 );
                 HiveBlockReader::create(
+                    ctx,
                     self.dal.clone(),
                     self.table_info.schema(),
                     projection,
@@ -320,6 +323,7 @@ impl HiveTable {
                 )
             }
             (false, Some(v)) => HiveBlockReader::create(
+                ctx,
                 self.dal.clone(),
                 self.table_info.schema(),
                 v.prewhere_columns,
@@ -347,6 +351,7 @@ impl HiveTable {
     // Build the remain reader.
     fn build_remain_reader(
         &self,
+        ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         chunk_size: usize,
         prewhere_all_partitions: bool,
@@ -362,6 +367,7 @@ impl HiveTable {
                         Arc::new(None)
                     } else {
                         let reader = HiveBlockReader::create(
+                            ctx.clone(),
                             self.dal.clone(),
                             self.table_info.schema(),
                             v.remain_columns,
@@ -492,10 +498,9 @@ impl HiveTable {
             let sem_t = sem.clone();
             let operator_t = self.dal.clone();
             let dir_t = dir.to_string();
-            let task = tokio::spawn(
-                async_backtrace::location!()
-                    .frame(async move { list_files_from_dir(operator_t, dir_t, sem_t).await }),
-            );
+            let task = Runtime::spawn_current_runtime(GLOBAL_TASK, async move {
+                list_files_from_dir(operator_t, dir_t, sem_t).await
+            });
             tasks.push((task, partition));
         }
 
@@ -760,10 +765,9 @@ async fn list_files_from_dir(
     for dir in dirs {
         let sem_t = sem.clone();
         let operator_t = operator.clone();
-        let task = tokio::spawn(
-            async_backtrace::location!()
-                .frame(async move { list_files_from_dir(operator_t, dir, sem_t).await }),
-        );
+        let task = Runtime::spawn_current_runtime(GLOBAL_TASK, async move {
+            list_files_from_dir(operator_t, dir, sem_t).await
+        });
         tasks.push(task);
     }
 

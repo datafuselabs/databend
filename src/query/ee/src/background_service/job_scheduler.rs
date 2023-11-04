@@ -22,6 +22,8 @@ use common_base::base::tokio::sync::mpsc::error::TryRecvError;
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
+use common_base::runtime::Runtime;
+use common_base::GLOBAL_TASK;
 use common_exception::Result;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
@@ -165,7 +167,7 @@ impl JobScheduler {
             info!(background = true; "Running execute job");
         }
 
-        tokio::spawn(async move { job.run().await });
+        Runtime::spawn_current_runtime(GLOBAL_TASK, async move { job.run().await });
         Ok(())
     }
 

@@ -19,6 +19,8 @@ use std::sync::Arc;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
+use common_base::runtime::Runtime;
+use common_base::GLOBAL_TASK;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -89,7 +91,7 @@ impl RpcService {
             )
             .serve_with_incoming_shutdown(incoming, self.shutdown_notify());
 
-        tokio::spawn(async_backtrace::location!().frame(server));
+        Runtime::spawn_current_runtime(GLOBAL_TASK, server);
         Ok(())
     }
 }

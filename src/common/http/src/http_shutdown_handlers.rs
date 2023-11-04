@@ -20,6 +20,8 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::runtime::Runtime;
+use common_base::GLOBAL_TASK;
 use futures::future::Either;
 use futures::FutureExt;
 use log::error;
@@ -80,12 +82,11 @@ impl HttpShutdownHandler {
         }
 
         let (tx, rx) = oneshot::channel();
-        let join_handle = common_base::base::tokio::spawn(
-            async_backtrace::location!().frame(
-                poem::Server::new_with_acceptor(acceptor)
-                    .name(self.service_name.clone())
-                    .run_with_graceful_shutdown(ep, rx.map(|_| ()), graceful_shutdown_timeout),
-            ),
+        let join_handle = Runtime::spawn_current_runtime(
+            GLOBAL_TASK,
+            poem::Server::new_with_acceptor(acceptor)
+                .name(self.service_name.clone())
+                .run_with_graceful_shutdown(ep, rx.map(|_| ()), graceful_shutdown_timeout),
         );
         self.join_handle = Some(join_handle);
         self.abort_handle = Some(tx);
