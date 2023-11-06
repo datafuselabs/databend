@@ -12,12 +12,7 @@ interface IProps {
 const CommonModal = ({ visible, width, children, className, onClose }: IProps) => {
   useEffect(() => {
     if (visible) {
-      const id = setTimeout(()=> {
-        document.body.style.overflow = 'hidden';
-        clearTimeout(id);
-      });
-    } else {
-      document.body.style.overflow = 'visible';
+      document.body.style.overflow = 'hidden';
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
