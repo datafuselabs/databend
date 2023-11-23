@@ -762,6 +762,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59bdb34bc650a32731b31bd8f0829cc15d24a708ee31559e0bb34f2bc320cba"
+
+[[package]]
 name = "atomic-polyfill"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1975,6 +1981,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tonic 0.10.2",
+ "uuid",
 ]
 
 [[package]]
@@ -4471,6 +4478,7 @@ dependencies = [
  "tempfile",
  "vacuum-handler",
  "virtual-column",
+ "walkdir",
 ]
 
 [[package]]
@@ -12504,6 +12512,7 @@ version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
 dependencies = [
+ "atomic",
  "getrandom 0.2.11",
  "serde",
 ]

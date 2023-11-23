@@ -67,6 +67,7 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -121,7 +122,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use uuid::Uuid;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -239,8 +239,8 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
             let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
                 &None,
+                None,
                 None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),
@@ -254,16 +254,15 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r = FuseTable::commit_to_meta_server(
-                ctx.as_ref(),
-                fuse_table.get_table_info(),
-                fuse_table.meta_location_generator(),
-                new_snapshot,
-                None,
-                &None,
-                fuse_table.get_operator_ref(),
-            )
-            .await;
+            let r = fuse_table
+                .commit_to_meta_server(
+                    ctx.as_ref(),
+                    fuse_table.get_table_info(),
+                    new_snapshot,
+                    None,
+                    &None,
+                )
+                .await;
 
             if self.update_meta_error.is_some() {
                 assert_eq!(
@@ -886,5 +885,9 @@ impl Catalog for FakedCatalog {
 
     async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         todo!()
+    }
+
+    async fn get_table_lvt(&self, _table_id: u64) -> Result<GetLVTReply> {
+        Ok(GetLVTReply { time: None })
     }
 }

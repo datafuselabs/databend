@@ -29,6 +29,8 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.38 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.39 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.46 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.183 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.183 03_meta_compression_v4_to_v5 03_flashback_v4_to_v5
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

@@ -129,7 +129,7 @@ async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()>
 #[ignore]
 async fn test_random_location_memory_size() -> common_exception::Result<()> {
     // generate random location of Type Location
-    let location_gen = TableMetaLocationGenerator::with_prefix("/root".to_string());
+    let location_gen = TableMetaLocationGenerator::new("/root".to_string(), 1);
 
     let num_segments = 5_000_000;
     let sys = System::new_all();
@@ -326,7 +326,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
     }
     assert_eq!(num_number_columns + num_string_columns, col_stats.len());
 
-    let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
+    let location_gen = TableMetaLocationGenerator::new("/root/12345/67890".to_owned(), 1);
 
     let (block_location, block_uuid) = location_gen.gen_block_location();
     let block_meta = BlockMeta {
@@ -389,7 +389,7 @@ async fn setup() -> common_exception::Result<ThriftFileMetaData> {
 
     let block = DataBlock::new_from_columns(columns);
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned(), 1);
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
     let block_writer = BlockWriter::new(&operator, &loc_generator);
     let (_block_meta, thrift_file_meta) = block_writer

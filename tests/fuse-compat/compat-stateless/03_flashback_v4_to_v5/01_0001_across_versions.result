@@ -18,15 +18,15 @@ checking that after flashback to the 4th last snapshot s2 which is of version 3,
 checking that after flashback to the 5th last snapshot s1 which is of version 3, the table contains {1}
 1
 suite: test compaction & fuse_snapshot across version boundary
-checking that 2 snapshots of version 3 exist
-2	3
+checking that 2 snapshots of version 4 exist
+2	4
 doing compact
 checking that after compaction the table still contains {1,2}
 1
 2
 checking that after compaction, 2 snapshots of version 3, and 1 snapshot of version 4 exist
 1	5
-2	3
+2	4
 checking the version and location of snapshots s2 is correct
 true	true
 checking that flashback works as expected (to s2)
@@ -35,8 +35,8 @@ checking that after flashback to s2,  the table contains {1,2}
 1
 2
 suite: mixed versioned segment compaction test
-check segments after compaction, there should be 2 segments, a version v3 and a version v5
-1	3
+check segments after compaction, there should be 2 segments, a version v4 and a version v5
+1	4
 1	5
 check table contains {1,2,3,4} after compaction
 1

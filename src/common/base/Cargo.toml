@@ -54,7 +54,7 @@ state = "0.5"
 tikv-jemalloc-ctl = { workspace = true }
 tikv-jemalloc-sys = "0.5.2"
 tokio = { workspace = true }
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+uuid = { version = "1.4.1", features = ["serde", "v4", "v7"] }
 
 [dev-dependencies]
 anyerror = { workspace = true }

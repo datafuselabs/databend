@@ -108,9 +108,11 @@ impl FuseTable {
             table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
             // 2. the table option `snapshot_location`
-            let loc = self
-                .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+            let loc = self.meta_location_generator.gen_snapshot_location(
+                &snapshot.snapshot_id,
+                format_version,
+                snapshot.table_version,
+            )?;
             table_info
                 .meta
                 .options
@@ -205,10 +207,10 @@ impl FuseTable {
         // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
         let prev = snapshot.prev_snapshot_id;
         match prev {
-            Some((id, v)) => {
-                let new_loc = self
-                    .meta_location_generator()
-                    .snapshot_location_from_uuid(&id, v)?;
+            Some((id, v, table_version)) => {
+                let new_loc =
+                    self.meta_location_generator()
+                        .gen_snapshot_location(&id, v, table_version)?;
                 Ok((new_loc, files))
             }
             None => Err(ErrorCode::TableHistoricalDataNotFound(

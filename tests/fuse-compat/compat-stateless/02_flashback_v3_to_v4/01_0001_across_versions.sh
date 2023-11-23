@@ -144,7 +144,7 @@ echo "optimize table t2 compact segment" | $BENDSQL_CLIENT_CONNECT
 # grab the id of s6
 FST_SNAPSHOT_S6_ID=$(echo "select snapshot_id from fuse_snapshot('default','t2') limit 1" | $BENDSQL_CLIENT_CONNECT)
 
-echo "check segments after compaction, there should be 2 segments, a version v3 and a version v4"
+echo "check segments after compaction, there should be 2 segments, a version v3 and a version v5"
 echo "select count() c, format_version v from fuse_segment('default', 't2', '$FST_SNAPSHOT_S6_ID') group by v order by v " | $BENDSQL_CLIENT_CONNECT
 
 echo "check table contains {1,2,3,4} after compaction"

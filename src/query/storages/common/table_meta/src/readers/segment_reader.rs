@@ -34,6 +34,7 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
         let mut buffer: Vec<u8> = vec![];
         reader.read_to_end(&mut buffer).await?;
         match &self.0 {
+            SegmentInfoVersion::V5(_) => CompactSegmentInfo::from_slice(&buffer),
             SegmentInfoVersion::V4(_) => CompactSegmentInfo::from_slice(&buffer),
             SegmentInfoVersion::V3(_) => {
                 let current: SegmentInfo = SegmentInfoV3::from_slice(&buffer)?.into();
@@ -58,7 +59,7 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
                 let current: SegmentInfo = (v0, &fields[..]).into();
                 current.try_into()
             }
-            SegmentInfoVersion::V5(_) => unimplemented!(),
+            SegmentInfoVersion::V6(_) => unimplemented!(),
         }
     }
 }

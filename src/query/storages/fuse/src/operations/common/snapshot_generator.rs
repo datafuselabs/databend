@@ -32,7 +32,7 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use uuid::Uuid;
+use storages_common_table_meta::meta::TableVersion;
 
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics_mut;
@@ -202,13 +202,15 @@ impl ConflictResolveContext {
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: Option<ConflictResolveContext>,
+    table_version: Option<TableVersion>,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>) -> Self {
+    pub fn new(base_snapshot: Arc<TableSnapshot>, table_version: Option<TableVersion>) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: None,
+            table_version,
         }
     }
 }
@@ -258,9 +260,13 @@ impl SnapshotGenerator for MutationGenerator {
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
-                        Uuid::new_v4(),
                         &previous.timestamp,
-                        Some((previous.snapshot_id, previous.format_version)),
+                        Some((
+                            previous.snapshot_id,
+                            previous.format_version,
+                            previous.table_version,
+                        )),
+                        self.table_version,
                         schema,
                         new_summary,
                         new_segments,
@@ -289,15 +295,21 @@ pub struct AppendGenerator {
     leaf_default_values: HashMap<ColumnId, Scalar>,
     overwrite: bool,
     conflict_resolve_ctx: Option<ConflictResolveContext>,
+    table_version: Option<TableVersion>,
 }
 
 impl AppendGenerator {
-    pub fn new(ctx: Arc<dyn TableContext>, overwrite: bool) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        overwrite: bool,
+        table_version: Option<TableVersion>,
+    ) -> Self {
         AppendGenerator {
             ctx,
             leaf_default_values: HashMap::new(),
             overwrite,
             conflict_resolve_ctx: None,
+            table_version,
         }
     }
 
@@ -379,7 +391,11 @@ impl SnapshotGenerator for AppendGenerator {
 
         if let Some(snapshot) = &previous {
             prev_timestamp = snapshot.timestamp;
-            prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
+            prev_snapshot_id = Some((
+                snapshot.snapshot_id,
+                snapshot.format_version,
+                snapshot.table_version,
+            ));
             table_statistics_location = snapshot.table_statistics_location.clone();
 
             if !self.overwrite {
@@ -422,9 +438,9 @@ impl SnapshotGenerator for AppendGenerator {
         }
 
         Ok(TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
+            self.table_version,
             schema,
             new_summary,
             new_segments,

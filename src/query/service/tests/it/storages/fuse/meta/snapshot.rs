@@ -23,10 +23,9 @@ use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {
-    let uuid = Uuid::new_v4();
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::new(uuid, &None, None, schema, stats, vec![], None, None)
+    TableSnapshot::new(&None, None, None, schema, stats, vec![], None, None)
 }
 
 #[test]
@@ -39,11 +38,10 @@ fn snapshot_timestamp_is_some() {
 fn snapshot_timestamp_monotonic_increase() {
     let prev = default_snapshot();
     let schema = TableSchema::empty();
-    let uuid = Uuid::new_v4();
     let current = TableSnapshot::new(
-        uuid,
         &prev.timestamp,
         prev.prev_snapshot_id,
+        None,
         schema,
         Default::default(),
         vec![],
@@ -59,15 +57,14 @@ fn snapshot_timestamp_monotonic_increase() {
 fn snapshot_timestamp_time_skew_tolerance() {
     let mut prev = default_snapshot();
     let schema = TableSchema::empty();
-    let uuid = Uuid::new_v4();
 
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
 
     let current = TableSnapshot::new(
-        uuid,
         &prev.timestamp,
         prev.prev_snapshot_id,
+        None,
         schema,
         Default::default(),
         vec![],
@@ -102,8 +99,9 @@ fn test_snapshot_v1_to_v4() {
     );
     assert!(v1.timestamp.is_some());
 
-    let v4: TableSnapshot = TableSnapshotV2::from(v1.clone()).into();
-    assert_eq!(v4.format_version, v1.format_version());
-    assert_eq!(v4.snapshot_id, v1.snapshot_id);
-    assert_eq!(v4.timestamp, v1.timestamp);
+    let snapshot: TableSnapshot = TableSnapshotV2::from(v1.clone()).into();
+    assert_eq!(snapshot.format_version, v1.format_version());
+    assert_eq!(snapshot.snapshot_id, v1.snapshot_id);
+    assert_eq!(snapshot.timestamp, v1.timestamp);
+    assert_eq!(snapshot.table_version, None);
 }

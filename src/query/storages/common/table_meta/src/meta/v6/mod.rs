@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use v0::ColumnMeta as SingleColumnMeta;
-pub use v2::BlockMeta;
-pub use v2::ClusterStatistics;
-pub use v2::ColumnMeta;
-pub use v2::ColumnStatistics;
-pub use v2::Statistics;
-pub use v5::CompactSegmentInfo;
-pub use v5::SegmentInfo;
-pub use v5::TableSnapshot;
-pub use v5::TableSnapshotLite;
-pub use v5::TableSnapshotStatistics;
+mod segment;
+mod snapshot;
+mod statistics;
 
-use super::v0;
-use super::v2;
-use super::v5;
+pub use segment::CompactSegmentInfo;
+pub use segment::InternalSegmentInfo;
+pub use segment::LeafSegmentInfo;
+pub use segment::SegmentInfo;
+pub use snapshot::TableSnapshot;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnStatistics;
+pub use statistics::Statistics;

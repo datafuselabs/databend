@@ -21,13 +21,13 @@ use uuid::Uuid;
 #[test]
 fn test_meta_locations() -> Result<()> {
     let test_prefix = "test_pref";
-    let locs = TableMetaLocationGenerator::with_prefix(test_prefix.to_owned());
+    let locs = TableMetaLocationGenerator::new(test_prefix.to_owned(), 1);
     let ((path, _ver), _id) = locs.gen_block_location();
     assert!(path.starts_with(test_prefix));
     let seg_loc = locs.gen_segment_info_location();
     assert!(seg_loc.starts_with(test_prefix));
     let uuid = Uuid::new_v4();
-    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
+    let snapshot_loc = locs.gen_snapshot_location(&uuid, TableSnapshot::VERSION, None)?;
     assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
 }

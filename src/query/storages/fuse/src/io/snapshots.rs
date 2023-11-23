@@ -39,6 +39,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotLite;
+use storages_common_table_meta::meta::TableVersion;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -48,6 +49,7 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SnapshotLiteExtended {
     pub format_version: u64,
     pub snapshot_id: SnapshotId,
+    pub table_version: Option<TableVersion>,
     pub timestamp: Option<DateTime<Utc>>,
     pub segments: HashSet<Location>,
     pub table_statistics_location: Option<String>,
@@ -282,6 +284,7 @@ impl SnapshotsIO {
         Ok(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: snapshot.snapshot_id,
+            table_version: snapshot.table_version,
             timestamp: snapshot.timestamp,
             segments,
             table_statistics_location,
@@ -335,7 +338,7 @@ impl SnapshotsIO {
         let root_snapshot_lite = TableSnapshotLite::from((root_snapshot, format_version));
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
         chained_snapshot_lites.push(root_snapshot_lite);
-        while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
+        while let Some((prev_snapshot_id, _, _)) = prev_snapshot_id_tuple {
             let prev_snapshot_lite = snapshot_map.remove(&prev_snapshot_id);
             match prev_snapshot_lite {
                 None => {

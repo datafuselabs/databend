@@ -48,6 +48,12 @@ impl Debug for OtherErrors {
     }
 }
 
+impl From<uuid::Error> for ErrorCode {
+    fn from(error: uuid::Error) -> Self {
+        ErrorCode::Internal(format!("Invalid Uuid, cause: {}", error))
+    }
+}
+
 impl From<std::net::AddrParseError> for ErrorCode {
     fn from(error: std::net::AddrParseError) -> Self {
         ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))

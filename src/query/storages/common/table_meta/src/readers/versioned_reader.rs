@@ -36,7 +36,8 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
         let mut buffer: Vec<u8> = vec![];
         reader.read_to_end(&mut buffer).await?;
         let r = match self {
-            TableSnapshotStatisticsVersion::V0(v) => load_json(&buffer, v).await?,
+            TableSnapshotStatisticsVersion::V0(v) => load_json(&buffer, v).await?.into(),
+            TableSnapshotStatisticsVersion::V1(v) => load_json(&buffer, v).await?,
         };
         Ok(r)
     }

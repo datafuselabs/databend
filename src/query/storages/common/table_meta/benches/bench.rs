@@ -187,7 +187,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
     }
     assert_eq!(num_number_columns + num_string_columns, col_stats.len());
 
-    let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
+    let location_gen = TableMetaLocationGenerator::new("/root/12345/67890".to_owned(), 1);
 
     let (block_location, block_uuid) = location_gen.gen_block_location();
     let block_meta = BlockMeta {

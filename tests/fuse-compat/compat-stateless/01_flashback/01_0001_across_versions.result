@@ -24,8 +24,8 @@ doing compact
 checking that after compaction the table still contains {1,2}
 1
 2
-checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 3 exist
-1	4
+checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 5 exist
+1	5
 2	2
 checking the version and location of snapshots s2 is correct
 true	true
@@ -35,9 +35,9 @@ checking that after flashback to s2,  the table contains {1,2}
 1
 2
 suite: mixed versioned segment compaction test
-check segments after compaction, there should be 2 segments, a version v2 and a version v3
+check segments after compaction, there should be 2 segments, a version v2 and a version v5
 1	2
-1	4
+1	5
 check table contains {1,2,3,4} after compaction
 1
 2

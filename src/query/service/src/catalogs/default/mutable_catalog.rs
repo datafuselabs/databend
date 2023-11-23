@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -55,6 +57,8 @@ use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -69,6 +73,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReply;
+use common_meta_app::schema::SetLVTReq;
 use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
@@ -535,5 +541,17 @@ impl Catalog for MutableCatalog {
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         self.ctx.storage_factory.get_storage_descriptors()
+    }
+
+    async fn set_table_lvt(&self, table_id: u64, time: DateTime<Utc>) -> Result<SetLVTReply> {
+        let req = SetLVTReq { table_id, time };
+        let res = self.ctx.meta.set_table_lvt(req).await?;
+        Ok(res)
+    }
+
+    async fn get_table_lvt(&self, table_id: u64) -> Result<GetLVTReply> {
+        let req = GetLVTReq { table_id };
+        let res = self.ctx.meta.get_table_lvt(req).await?;
+        Ok(res)
     }
 }

@@ -27,7 +27,6 @@ use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
 use common_storages_factory::Table;
 use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::merge_statistics;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -37,6 +36,7 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use futures_util::TryStreamExt;
 use opendal::Operator;
 use serde::Serialize;
+use storages_common_table_meta::meta::new_snapshot_id;
 use storages_common_table_meta::meta::testing::SegmentInfoV2;
 use storages_common_table_meta::meta::testing::TableSnapshotV2;
 use storages_common_table_meta::meta::BlockMeta;
@@ -54,14 +54,40 @@ pub async fn generate_snapshot_with_segments(
     fuse_table: &FuseTable,
     segment_locations: Vec<Location>,
     time_stamp: Option<DateTime<Utc>>,
+    with_table_version: bool,
 ) -> Result<String> {
-    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let current_snapshot = fuse_table.read_table_snapshot().await?;
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
-    let mut new_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
+    let table_version_option = if with_table_version {
+        Some(fuse_table.current_table_version())
+    } else {
+        None
+    };
+    let mut new_snapshot = if let Some(current_snapshot) = current_snapshot {
+        TableSnapshot::from_previous(current_snapshot.as_ref(), table_version_option)
+    } else {
+        TableSnapshot::new(
+            &None,
+            None,
+            Some(fuse_table.current_table_version()),
+            fuse_table.schema().as_ref().to_owned(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+        )
+    };
     new_snapshot.segments = segment_locations;
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    // if not with table version, use snapshot id without timestamp
+    if !with_table_version {
+        new_snapshot.snapshot_id = new_snapshot_id();
+    }
+    let new_snapshot_location = location_gen.gen_snapshot_location(
+        &new_snapshot.snapshot_id,
+        TableSnapshot::VERSION,
+        new_snapshot.table_version,
+    )?;
     if let Some(ts) = time_stamp {
         new_snapshot.timestamp = Some(ts)
     }
@@ -77,13 +103,32 @@ pub async fn generate_orphan_files(
     fuse_table: &FuseTable,
     orphan_segment_number: usize,
     orphan_block_number_per_segment: usize,
-) -> Result<Vec<(Location, SegmentInfoV2)>> {
-    generate_segments_v2(
+) -> Result<Vec<(Location, SegmentInfo)>> {
+    generate_segments(
         fuse_table,
         orphan_segment_number,
         orphan_block_number_per_segment,
     )
     .await
+}
+
+pub async fn generate_segments(
+    fuse_table: &FuseTable,
+    number_of_segments: usize,
+    blocks_per_segment: usize,
+) -> Result<Vec<(Location, SegmentInfo)>> {
+    let mut segs = vec![];
+    for _ in 0..number_of_segments {
+        let dal = fuse_table.get_operator_ref();
+        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
+        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
+        let segment_info = SegmentInfo::new(block_metas, summary);
+        let generator = fuse_table.meta_location_generator();
+        let location = generator.gen_segment_info_location();
+        write_v2_to_storage(dal, &location, &segment_info).await?;
+        segs.push(((location, SegmentInfoV2::VERSION), segment_info))
+    }
+    Ok(segs)
 }
 
 pub async fn generate_segments_v2(
@@ -107,24 +152,6 @@ pub async fn generate_segments_v2(
         );
         write_v2_to_storage(dal, &location, &segment_info).await?;
         segs.push(((location, SegmentInfoV2::VERSION), segment_info))
-    }
-    Ok(segs)
-}
-
-pub async fn generate_segments(
-    fuse_table: &FuseTable,
-    number_of_segments: usize,
-    blocks_per_segment: usize,
-) -> Result<Vec<(Location, SegmentInfo)>> {
-    let mut segs = vec![];
-    for _ in 0..number_of_segments {
-        let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
-        let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
-        segs.push((segment_location, segment_info))
     }
     Ok(segs)
 }
@@ -180,8 +207,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     );
     snapshot_0.timestamp = Some(now - Duration::hours(13));
 
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_0.snapshot_id, TableSnapshotV2::VERSION)?;
+    let new_snapshot_location = location_gen.gen_snapshot_location(
+        &snapshot_0.snapshot_id,
+        TableSnapshotV2::VERSION,
+        None,
+    )?;
     write_v2_to_storage(&operator, &new_snapshot_location, &snapshot_0).await?;
 
     // generate 2 segments, 4 blocks.
@@ -192,9 +222,13 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     // create snapshot 1, the format version is 3.
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
     let mut snapshot_1 = TableSnapshot::new(
-        Uuid::new_v4(),
         &snapshot_0.timestamp,
-        Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),
+        Some((
+            snapshot_0.snapshot_id,
+            TableSnapshotV2::VERSION,
+            Some(fuse_table.current_table_version()),
+        )),
+        Some(fuse_table.current_table_version() + 1),
         schema.as_ref().clone(),
         Statistics::default(),
         locations,
@@ -203,8 +237,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
+    let new_snapshot_location = location_gen.gen_snapshot_location(
+        &snapshot_1.snapshot_id,
+        TableSnapshot::VERSION,
+        snapshot_1.table_version,
+    )?;
     snapshot_1
         .write_meta(&operator, &new_snapshot_location)
         .await?;
@@ -215,25 +252,28 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1);
+    let mut snapshot_2 =
+        TableSnapshot::from_previous(&snapshot_1, Some(fuse_table.current_table_version()));
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
+    let new_snapshot_location = location_gen.gen_snapshot_location(
+        &snapshot_2.snapshot_id,
+        TableSnapshot::VERSION,
+        snapshot_2.table_version,
+    )?;
     snapshot_2
         .write_meta(&operator, &new_snapshot_location)
         .await?;
-    FuseTable::commit_to_meta_server(
-        fixture.new_query_ctx().await?.as_ref(),
-        fuse_table.get_table_info(),
-        location_gen,
-        snapshot_2,
-        None,
-        &None,
-        &operator,
-    )
-    .await
+    fuse_table
+        .commit_to_meta_server(
+            fixture.new_query_ctx().await?.as_ref(),
+            fuse_table.get_table_info(),
+            snapshot_2,
+            None,
+            &None,
+        )
+        .await
 }
 
 async fn write_v2_to_storage<T>(data_accessor: &Operator, location: &str, meta: &T) -> Result<()>

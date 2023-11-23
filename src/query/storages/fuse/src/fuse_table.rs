@@ -18,6 +18,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::RwLock;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -55,6 +56,7 @@ use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableVersion;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::table_storage_prefix;
 use storages_common_table_meta::table::TableCompression;
@@ -67,7 +69,6 @@ use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
@@ -101,6 +102,7 @@ pub struct FuseTable {
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
+    pub(crate) prev_snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
     table_type: FuseTableType,
 }
 
@@ -175,7 +177,8 @@ impl FuseTable {
         let part_prefix = table_info.meta.part_prefix.clone();
 
         let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+            TableMetaLocationGenerator::new(storage_prefix, table_info.ident.seq)
+                .with_part_prefix(part_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -187,6 +190,7 @@ impl FuseTable {
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
+            prev_snapshot: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -222,6 +226,10 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
         }
+    }
+
+    pub fn current_table_version(&self) -> TableVersion {
+        self.table_info.ident.seq
     }
 
     /// Get max page size.
@@ -288,17 +296,26 @@ impl FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
+    pub async fn read_table_snapshot_by_location(
+        &self,
+        location: String,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = self.snapshot_format_version(Some(location.clone())).await?;
+        let params = LoadParams {
+            location,
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        Ok(Some(reader.read(&params).await?))
+    }
+
+    #[minitrace::trace]
+    #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-            let ver = self.snapshot_format_version(Some(loc.clone())).await?;
-            let params = LoadParams {
-                location: loc,
-                len_hint: None,
-                ver,
-                put_cache: true,
-            };
-            Ok(Some(reader.read(&params).await?))
+            self.read_table_snapshot_by_location(loc).await
         } else {
             Ok(None)
         }
@@ -475,7 +492,9 @@ impl Table for FuseTable {
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_id = prev
+            .as_ref()
+            .map(|v| (v.snapshot_id, prev_version, v.table_version));
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
@@ -486,9 +505,9 @@ impl Table for FuseTable {
         };
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
+            Some(self.current_table_version()),
             schema,
             summary,
             segments,
@@ -499,16 +518,8 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
+        self.commit_to_meta_server(ctx.as_ref(), &table_info, new_snapshot, None, &None)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -529,7 +540,9 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_id = prev
+            .as_ref()
+            .map(|v| (v.snapshot_id, prev_version, v.table_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -537,9 +550,9 @@ impl Table for FuseTable {
         };
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
+            Some(self.current_table_version()),
             schema,
             summary,
             segments,
@@ -550,16 +563,8 @@ impl Table for FuseTable {
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
+        self.commit_to_meta_server(ctx.as_ref(), &table_info, new_snapshot, None, &None)
+            .await
     }
 
     #[minitrace::trace]

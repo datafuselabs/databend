@@ -1,0 +1,97 @@
+###################################
+# prepare the data for logic test #
+###################################
+
+
+statement ok
+DROP TABLE IF EXISTS fuse_test_snapshots;
+
+statement ok
+CREATE TABLE fuse_test_snapshots( c int);
+
+# prepare 3 blocks and segments
+statement ok
+INSERT INTO fuse_test_snapshots VALUES(1);
+
+statement ok
+INSERT INTO fuse_test_snapshots VALUES(2);
+
+statement ok
+INSERT INTO fuse_test_snapshots VALUES(3);
+
+#######################################
+# prepare the data for stateless test #
+#######################################
+#
+# TODO (refine compat test)
+#
+# yes it is weird:
+#
+# we write down table data in the "old" version here, and verifies
+# the backward compatibility later, using the "current" version.
+#
+# for most of the cases, this checking can be done as sql logic test cases.
+#
+# unfortunately, for the "flashback" cases, we need to "capture" the outputs
+# of query, and feed them to subsequent queries (by using debend-test and bash)
+#
+#
+
+statement ok
+DROP TABLE IF EXISTS fuse_test_flashback;
+
+statement ok
+CREATE TABLE fuse_test_flashback( c int);
+
+# prepare 3 blocks and segments
+statement ok
+INSERT INTO fuse_test_flashback VALUES(1);
+
+statement ok
+INSERT INTO fuse_test_flashback VALUES(2);
+
+statement ok
+INSERT INTO fuse_test_flashback VALUES(3);
+
+########################################
+# prepare the data for compaction test #
+#  issue 11204                         #
+########################################
+
+statement ok
+DROP TABLE IF EXISTS fuse_test_compaction;
+
+statement ok
+CREATE TABLE fuse_test_compaction( c int);
+
+# prepare 3 blocks and segments
+statement ok
+INSERT INTO fuse_test_compaction VALUES(1);
+
+statement ok
+INSERT INTO fuse_test_compaction VALUES(2);
+
+
+################################################################
+# prepare the data for mixed versioned segment compaction test #
+################################################################
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+create table t2(c int) block_per_segment=2
+
+statement ok
+INSERT INTO t2 VALUES(1);
+
+statement ok
+INSERT INTO t2 VALUES(2);
+
+statement ok
+INSERT INTO t2 VALUES(3);
+
+statement ok
+optimize table t2 compact segment;
+
+

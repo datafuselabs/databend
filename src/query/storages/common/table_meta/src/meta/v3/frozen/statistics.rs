@@ -34,7 +34,7 @@ pub struct Statistics {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
 }
 
-impl From<Statistics> for crate::meta::v5::Statistics {
+impl From<Statistics> for crate::meta::v6::Statistics {
     fn from(value: Statistics) -> Self {
         Self {
             row_count: value.row_count,
@@ -94,7 +94,7 @@ impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
     }
 }
 
-impl From<ColumnStatistics> for crate::meta::v5::ColumnStatistics {
+impl From<ColumnStatistics> for crate::meta::v6::ColumnStatistics {
     fn from(value: ColumnStatistics) -> Self {
         Self {
             minmax: MinMax::new(value.min, value.max),

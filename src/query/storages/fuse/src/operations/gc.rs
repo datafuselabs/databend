@@ -127,9 +127,11 @@ impl FuseTable {
                     continue;
                 }
 
-                if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
-                {
+                if let Ok(loc) = location_gen.gen_snapshot_location(
+                    &s.snapshot_id,
+                    s.format_version,
+                    s.table_version,
+                ) {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -200,9 +202,11 @@ impl FuseTable {
             let mut segments_to_be_purged = HashSet::new();
             let mut ts_to_be_purged = HashSet::new();
             for s in remain_snapshots {
-                if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
-                {
+                if let Ok(loc) = location_gen.gen_snapshot_location(
+                    &s.snapshot_id,
+                    s.format_version,
+                    s.table_version,
+                ) {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -299,6 +303,7 @@ impl FuseTable {
         let snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: root_snapshot.snapshot_id,
+            table_version: root_snapshot.table_version,
             timestamp: root_snapshot.timestamp,
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
             table_statistics_location: root_snapshot.table_statistics_location.clone(),

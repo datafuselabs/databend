@@ -68,9 +68,11 @@ impl FuseTable {
             .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
-                let snapshot_loc = self
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
+                let snapshot_loc = self.meta_location_generator.gen_snapshot_location(
+                    &snapshot.snapshot_id,
+                    snapshot.format_version,
+                    snapshot.table_version,
+                )?;
 
                 let mut nodes_num = 1;
                 let cluster = ctx.get_cluster();

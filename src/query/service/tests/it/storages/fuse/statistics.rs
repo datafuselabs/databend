@@ -318,7 +318,7 @@ async fn test_accumulator() -> common_exception::Result<()> {
     let mut stats_acc = StatisticsAccumulator::default();
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned(), 1);
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;

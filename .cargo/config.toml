@@ -5,3 +5,6 @@ JEMALLOC_SYS_WITH_MALLOC_CONF = "percpu_arena:percpu,oversize_threshold:0,backgr
 ## If you are using aarch64-apple-darwin, you may need to set the following:
 ## JEMALLOC_SYS_WITH_LG_PAGE = "14"
 ## JEMALLOC_SYS_WITH_MALLOC_CONF = "oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000"
+
+[target.'cfg(all())']
+rustflags = ["--cfg", "uuid_unstable"]

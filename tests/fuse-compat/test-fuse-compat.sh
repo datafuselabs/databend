@@ -57,6 +57,6 @@ run_test $old_query_ver $old_config_path $logictest_path
 
 if [ -n "$stateless_test_path" ];
 then
-  echo "=== ruing supplementary stateless test: ${stateless_test_path}"
+  echo "=== running supplementary stateless test: ${stateless_test_path}"
   run_stateless $stateless_test_path
 fi

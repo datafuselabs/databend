@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
+use std::vec;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -48,8 +50,10 @@ use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::schema::DatabaseMeta;
+use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
+use common_meta_types::MatchSeq;
 use common_pipeline_core::processors::ProcessorPtr;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
@@ -57,6 +61,7 @@ use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::UpdatePlan;
+use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
 use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
@@ -69,7 +74,12 @@ use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
 use parking_lot::Mutex;
+use storages_common_table_meta::meta::new_snapshot_id;
+use storages_common_table_meta::meta::testing::SegmentInfoV4;
+use storages_common_table_meta::meta::testing::TableSnapshotV4;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -761,6 +771,130 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
     append_sample_data_overwrite(num_blocks, false, fixture).await
 }
 
+pub async fn append_sample_data_of_v4(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    append_sample_data_overwrite(num_blocks, false, fixture).await?;
+
+    // rename file name to version 4 format
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse_table.get_operator();
+    let generator = fuse_table.meta_location_generator();
+    let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
+    let snapshot = fuse_table
+        .read_table_snapshot_by_location(snapshot_loc.clone())
+        .await?
+        .unwrap();
+
+    // rename segment/block/index file name to version 4 format
+    let mut new_segments = vec![];
+    for (file_name, seg_ver) in &snapshot.segments {
+        if TableMetaLocationGenerator::location_table_version(file_name).is_none() {
+            new_segments.push((file_name.clone(), *seg_ver));
+            continue;
+        }
+
+        let new_file_name = generator.gen_segment_info_location_of_v4();
+        let data = operator.read(file_name).await?;
+        let segment: SegmentInfo = SegmentInfo::from_slice(&data)?;
+
+        let mut new_blocks = vec![];
+        for block in &segment.blocks {
+            let mut new_block = block.as_ref().to_owned().clone();
+
+            let (block_location, _) = &block.location;
+            let ((new_block_location, version), block_uuid) = generator.gen_block_location_of_v4();
+
+            if let Some((block_index_location, _)) = &block.bloom_filter_index_location {
+                let (new_block_index_location, version) =
+                    generator.block_bloom_index_location_of_v4(&block_uuid);
+
+                operator
+                    .rename(block_index_location, &new_block_index_location)
+                    .await?;
+
+                new_block.bloom_filter_index_location = Some((new_block_index_location, version));
+            }
+            operator.rename(block_location, &new_block_location).await?;
+            new_block.location = (new_block_location, version);
+
+            new_blocks.push(Arc::new(new_block));
+        }
+
+        let segment_v4: SegmentInfoV4 = SegmentInfoV4 {
+            format_version: 4,
+            blocks: new_blocks,
+            summary: segment.summary,
+        };
+
+        operator.delete(file_name).await?;
+
+        let bytes = segment_v4.to_bytes()?;
+        operator.write(&new_file_name, bytes).await?;
+
+        new_segments.push((new_file_name, 4));
+    }
+
+    let snapshot_id = new_snapshot_id();
+    let snapshot_v4: TableSnapshotV4 = TableSnapshotV4 {
+        format_version: 4,
+        snapshot_id,
+        timestamp: snapshot.timestamp,
+        prev_snapshot_id: if let Some((uuid, version, _)) = snapshot.prev_snapshot_id {
+            Some((uuid, version))
+        } else {
+            None
+        },
+        schema: snapshot.schema.clone(),
+        summary: snapshot.summary.clone(),
+        segments: new_segments.clone(),
+        cluster_key_meta: snapshot.cluster_key_meta.clone(),
+        table_statistics_location: snapshot.table_statistics_location.clone(),
+    };
+
+    let new_snapshot_loc = generator.gen_snapshot_location_of_v4(&snapshot_id, 4)?;
+    operator.delete(&snapshot_loc).await?;
+
+    let bytes = snapshot_v4.to_bytes()?;
+    operator.write(&new_snapshot_loc, bytes).await?;
+
+    // update last snapshot
+    let last_snapshot_hint_location = generator.gen_last_snapshot_hint_location();
+    operator
+        .write(&last_snapshot_hint_location, new_snapshot_loc.clone())
+        .await?;
+
+    // update table meta
+    let table_info = fuse_table.get_table_info();
+    let table_version = table_info.ident.seq;
+    let table_id = table_info.ident.table_id;
+    let mut new_table_meta = table_info.meta.clone();
+    new_table_meta.options.insert(
+        OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+        new_snapshot_loc.clone(),
+    );
+    let req = UpdateTableMetaReq {
+        table_id,
+        seq: MatchSeq::Exact(table_version),
+        new_table_meta,
+        copied_files: None,
+        deduplicated_label: None,
+    };
+    let catalog = fixture
+        .default_ctx
+        .get_catalog(table_info.catalog())
+        .await?;
+    catalog.update_table_meta(table_info, req).await?;
+
+    // evict the cache
+    fixture.new_query_ctx().await?.evict_table_from_cache(
+        &fixture.default_catalog_name(),
+        &fixture.default_db_name(),
+        &fixture.default_table_name(),
+    )?;
+
+    Ok(())
+}
+
 pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     let table = fixture.latest_default_table().await?;
     table.analyze(fixture.default_ctx.clone()).await
@@ -854,6 +988,61 @@ pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixtur
         .await
 }
 
+pub async fn get_data_dir_files(
+    exclude_files: Option<Vec<HashSet<String>>>,
+) -> Result<HashSet<String>> {
+    let data_path = match &GlobalConfig::instance().storage.params {
+        StorageParams::Fs(v) => v.root.clone(),
+        _ => panic!("storage type is not fs"),
+    };
+    let root = data_path.as_str();
+    let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+    let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
+    let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
+    let prefix_block = FUSE_TBL_BLOCK_PREFIX;
+    let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+    let mut return_files = HashSet::new();
+
+    fn update_return_files(
+        return_files: &mut HashSet<String>,
+        exclude_files: &Option<Vec<HashSet<String>>>,
+        file: String,
+    ) {
+        if let Some(exclude_files) = exclude_files {
+            for exclude_file_set in exclude_files {
+                if exclude_file_set.contains(&file) {
+                    return;
+                }
+            }
+        }
+        return_files.insert(file);
+    }
+
+    for entry in WalkDir::new(root).into_iter().flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+        // trim the leading prefix, e.g. "/db_id/table_id/"
+        let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
+        let path = path[0];
+        if path.starts_with(prefix_snapshot)
+            || path.starts_with(prefix_segment)
+            || path.starts_with(prefix_block)
+            || path.starts_with(prefix_index)
+            || path.starts_with(prefix_snapshot_statistics)
+        {
+            update_return_files(
+                &mut return_files,
+                &exclude_files,
+                entry_path[1..].to_string(),
+            );
+        }
+    }
+
+    Ok(return_files)
+}
+
 pub async fn check_data_dir(
     fixture: &TestFixture,
     case_name: &str,
@@ -883,6 +1072,7 @@ pub async fn check_data_dir(
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
     let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
+
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {

@@ -87,11 +87,17 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
-        let orphan_snapshot_location = location_gen
-            .snapshot_location_from_uuid(&orphan_snapshot_id, TableSnapshot::VERSION)?;
+        let orphan_snapshot_location = location_gen.gen_snapshot_location(
+            &orphan_snapshot_id,
+            TableSnapshot::VERSION,
+            None,
+        )?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
-        let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
+        let orphan_snapshot = TableSnapshot::from_previous(
+            current_snapshot.as_ref(),
+            Some(fuse_table.current_table_version()),
+        );
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)
             .await?;
@@ -198,9 +204,13 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 
     // 2. prepare S_2
     let new_timestamp = base_timestamp + Duration::minutes(1);
-    let _snapshot_location =
-        generate_snapshot_with_segments(fuse_table, segment_locations.clone(), Some(new_timestamp))
-            .await?;
+    let _snapshot_location = generate_snapshot_with_segments(
+        fuse_table,
+        segment_locations.clone(),
+        Some(new_timestamp),
+        true,
+    )
+    .await?;
 
     // 2. prepare S_0
     {
@@ -213,6 +223,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
             fuse_table,
             segment_locations.clone(),
             Some(new_timestamp),
+            true,
         )
         .await?;
     }

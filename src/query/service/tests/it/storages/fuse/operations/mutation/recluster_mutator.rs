@@ -52,7 +52,7 @@ use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 async fn test_recluster_mutator_block_select() -> Result<()> {
     let fixture = TestFixture::new().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned(), 1);
 
     let data_accessor = ctx.get_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
@@ -215,10 +215,9 @@ async fn test_safety_for_recluster() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
         }
 
-        let id = Uuid::new_v4();
         let snapshot = Arc::new(TableSnapshot::new(
-            id,
             &None,
+            None,
             None,
             schema.as_ref().clone(),
             summary,

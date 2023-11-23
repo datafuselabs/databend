@@ -15,13 +15,12 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use common_base::base::uuid::Uuid;
 use common_expression::ColumnId;
 
 use crate::meta::ColumnStatistics;
 
 pub type FormatVersion = u64;
-pub type SnapshotId = Uuid;
+
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;

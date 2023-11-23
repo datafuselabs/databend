@@ -33,3 +33,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+uuid = { version = "1.4.1", features = ["serde", "v4", "v7"] }

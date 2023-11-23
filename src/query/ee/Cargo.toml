@@ -51,6 +51,7 @@ futures-util = { workspace = true }
 jwt-simple = "0.11.0"
 log = { workspace = true }
 tempfile = "3.4.0"
+walkdir = "2.3.2"
 
 [dev-dependencies]
 common-sql = { path = "../sql" }

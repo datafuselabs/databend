@@ -108,7 +108,6 @@ mod tests {
     use std::panic::catch_unwind;
 
     use common_expression::TableSchema;
-    use storages_common_table_meta::meta::SnapshotId;
     use storages_common_table_meta::meta::Statistics;
 
     use super::*;
@@ -136,8 +135,8 @@ mod tests {
         for v in 0..TableSnapshot::VERSION {
             let r = catch_unwind(|| {
                 let mut snapshot = TableSnapshot::new(
-                    SnapshotId::new_v4(),
                     &None,
+                    None,
                     None,
                     TableSchema::default(),
                     Statistics::default(),
@@ -153,8 +152,8 @@ mod tests {
 
         // current version allowed
         let snapshot = TableSnapshot::new(
-            SnapshotId::new_v4(),
             &None,
+            None,
             None,
             TableSchema::default(),
             Statistics::default(),
