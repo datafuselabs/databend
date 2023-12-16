@@ -166,6 +166,9 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+common-meta-sled-store = { path = "../../meta/sled-store" }
+databend-meta = { path = "../../meta/service" }
+
 arrow-cast = { workspace = true }
 ordered-float = { workspace = true }
 

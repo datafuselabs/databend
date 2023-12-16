@@ -17,6 +17,8 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
+use common_base::base::tokio;
+use common_base::base::tokio::time::sleep;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::cluster_info::Cluster;
 use common_catalog::table::AppendMode;
@@ -60,11 +62,11 @@ use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
-use log::info;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use uuid::Uuid;
 
+use crate::api::RpcService;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
@@ -127,6 +129,7 @@ struct OSSSetup {
 impl Setup for OSSSetup {
     async fn setup(&self) -> Result<InnerConfig> {
         TestFixture::init_global_with_config(&self.config).await?;
+        TestFixture::start_global_services(&self.config).await?;
         Ok(self.config.clone())
     }
 }
@@ -211,16 +214,21 @@ impl TestFixture {
         GlobalServices::init_with(config).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
 
-        // Cluster register.
-        {
-            ClusterDiscovery::instance()
-                .register_to_metastore(config)
-                .await?;
-            info!(
-                "Databend query unit test setup registered:{:?} to metasrv:{:?}.",
-                config.query.cluster_id, config.meta.endpoints
-            );
-        }
+        Ok(())
+    }
+
+    /// This is a mock as start_services in binaries/query/entry.rs
+    pub async fn start_global_services(config: &InnerConfig) -> Result<()> {
+        // Flight service.
+        let mut srv = RpcService::create(config.clone())?;
+        srv.start(config.query.flight_api_address.parse()?).await?;
+
+        // Register to metastore.
+        ClusterDiscovery::instance()
+            .register_to_metastore(&config)
+            .await?;
+
+        sleep(tokio::time::Duration::from_secs(5)).await;
 
         Ok(())
     }

@@ -216,9 +216,11 @@ impl ClusterDiscovery {
                         let start_at = Instant::now();
                         if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
-                                "Cannot connect node [{:?}] after {:?}s, remove it in query. cause: {:?}",
+                                "{} cannot connect node [{:?}] after {:?}s, remove it in query, cluster nodes:{:?}. cause: {:?}",
+                                self.local_id,
                                 node.flight_address,
                                 start_at.elapsed().as_secs_f32(),
+                                cluster_nodes,
                                 cause
                             );
 

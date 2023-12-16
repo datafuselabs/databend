@@ -13,3 +13,6 @@
 // limitations under the License.
 
 mod cluster;
+mod metasrv_mock;
+
+pub use metasrv_mock::MetaSrvMock;
