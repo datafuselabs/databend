@@ -115,6 +115,12 @@ impl BloomColumnFilterReader {
     pub async fn read(&self) -> Result<Arc<Xor8Filter>> {
         self.cached_reader.read(&self.param).await
     }
+
+    pub async fn load_without_deserialize(&self) -> Result<Vec<u8>> {
+        self.cached_reader
+            .loader
+            .load_without_deserialize(&self.param).await
+    }
 }
 
 /// Loader that fetch range of the target object with customized cache key
@@ -124,6 +130,17 @@ pub struct Xor8FilterLoader {
     pub cache_key: String,
     pub operator: Operator,
     pub column_descriptor: ColumnDescriptor,
+}
+
+impl Xor8FilterLoader {
+    pub async fn load_without_deserialize(&self, params: &LoadParams) -> Result<Vec<u8>> {
+        let bytes = self
+            .operator
+            .read_with(&params.location)
+            .range(self.offset..self.offset + self.len)
+            .await?;
+        Ok(bytes)
+    }
 }
 
 #[async_trait::async_trait]

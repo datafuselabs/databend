@@ -28,6 +28,7 @@ use log::info;
 
 use crate::FusePartInfo;
 
+#[allow(unused)]
 pub fn runtime_filter_pruner(
     table_schema: Arc<TableSchema>,
     part: &PartInfoPtr,

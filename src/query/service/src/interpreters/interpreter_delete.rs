@@ -202,17 +202,8 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?
         {
-            let cluster = self.ctx.get_cluster();
-            let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
             let partitions = fuse_table
-                .mutation_read_partitions(
-                    self.ctx.clone(),
-                    snapshot.clone(),
-                    col_indices.clone(),
-                    filters.clone(),
-                    is_lazy,
-                    true,
-                )
+                .mutation_read_partitions(snapshot.clone())
                 .await?;
 
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.

@@ -55,71 +55,32 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
-        let is_lazy = push_downs
-            .as_ref()
-            .map(|p| p.lazy_materialization)
-            .unwrap_or_default();
-        match snapshot {
-            Some(snapshot) => {
-                let snapshot_loc = self
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
-
-                let mut nodes_num = 1;
-                let cluster = ctx.get_cluster();
-
-                if !cluster.is_empty() {
-                    nodes_num = cluster.nodes.len();
-                }
-
-                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
-                    let mut segments = Vec::with_capacity(snapshot.segments.len());
-                    for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
-                    }
-
-                    return Ok((
-                        PartStatistics::new_estimated(
-                            Some(snapshot_loc),
-                            snapshot.summary.row_count as usize,
-                            snapshot.summary.compressed_byte_size as usize,
-                            snapshot.segments.len(),
-                            snapshot.segments.len(),
-                        ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments, true),
-                    ));
-                }
-
-                let snapshot_loc = Some(snapshot_loc);
-                let table_schema = self.schema_with_stream();
-                let summary = snapshot.summary.block_count as usize;
-                let mut segments_location = Vec::with_capacity(snapshot.segments.len());
-                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                    segments_location.push(SegmentLocation {
-                        segment_idx: idx,
-                        location: segment_location.clone(),
-                        snapshot_loc: snapshot_loc.clone(),
-                    });
-                }
-
-                self.prune_snapshot_blocks(
-                    ctx.clone(),
-                    self.operator.clone(),
-                    push_downs.clone(),
-                    table_schema,
-                    segments_location,
-                    summary,
-                )
-                .await
-            }
-            None => Ok((PartStatistics::default(), Partitions::default())),
+        if snapshot.is_none() {
+            return Ok((PartStatistics::default(), Partitions::default()));
         }
+        let snapshot = snapshot.unwrap();
+        let snapshot_loc = self
+            .meta_location_generator
+            .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
+        let mut segments = Vec::with_capacity(snapshot.segments.len());
+        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+            segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
+        }
+
+        Ok((
+            PartStatistics::new_estimated(
+                Some(snapshot_loc),
+                snapshot.summary.row_count as usize,
+                snapshot.summary.compressed_byte_size as usize,
+                snapshot.segments.len(),
+                snapshot.segments.len(),
+            ),
+            Partitions::create(PartitionsShuffleKind::Mod, segments, true),
+        ))
     }
 
     #[minitrace::trace]

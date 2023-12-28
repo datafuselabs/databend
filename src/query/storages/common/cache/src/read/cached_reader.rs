@@ -30,7 +30,7 @@ use crate::NamedCache;
 /// A cache-aware reader
 pub struct CachedReader<L, C> {
     cache: Option<C>,
-    loader: L,
+    pub loader: L,
 }
 
 pub type CacheHolder<V, S, M> = Arc<RwLock<InMemoryCache<V, S, M>>>;

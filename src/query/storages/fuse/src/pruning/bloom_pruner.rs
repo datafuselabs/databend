@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::Location;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns_without_deserialize;
 use crate::io::BloomBlockFilterReader;
 
 #[async_trait::async_trait]
@@ -148,6 +149,34 @@ impl BloomPrunerCreator {
             }
             Err(e) => Err(e),
         }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn load_filters_without_deserialize(
+        &self,
+        index_location: &Location,
+        index_length: u64,
+        column_ids_of_indexed_block: Vec<ColumnId>,
+    ) -> Result<Vec<Vec<u8>>> {
+        let version = index_location.1;
+
+        // filter out columns that no longer exist in the indexed block
+        let index_columns = self.index_fields.iter().try_fold(
+            Vec::with_capacity(self.index_fields.len()),
+            |mut acc, field| {
+                if column_ids_of_indexed_block.contains(&field.column_id()) {
+                    acc.push(BloomIndex::build_filter_column_name(version, field)?);
+                }
+                Ok::<_, ErrorCode>(acc)
+            },
+        )?;
+        load_bloom_filter_by_columns_without_deserialize(
+            self.dal.clone(),
+            &index_columns,
+            &index_location.0,
+            index_length,
+        )
+        .await
     }
 }
 

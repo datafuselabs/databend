@@ -125,6 +125,48 @@ async fn load_bloom_filter_by_columns<'a>(
     })
 }
 
+/// load index column data
+#[minitrace::trace]
+pub async fn load_bloom_filter_by_columns_without_deserialize<'a>(
+    dal: Operator,
+    column_needed: &'a [String],
+    index_path: &'a str,
+    index_length: u64,
+) -> Result<Vec<Vec<u8>>> {
+    // 1. load index meta
+    let bloom_index_meta = load_index_meta(dal.clone(), index_path, index_length).await?;
+
+    // 2. filter out columns that needed and exist in the index
+    // 2.1 dedup the columns
+    let column_needed: HashSet<&String> = HashSet::from_iter(column_needed);
+    // 2.2 collects the column metas and their column ids
+    let index_column_chunk_metas = &bloom_index_meta.columns;
+    let mut col_metas = Vec::with_capacity(column_needed.len());
+    for column_name in column_needed {
+        for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
+            if name == column_name {
+                col_metas.push((idx as ColumnId, (name, column_meta)))
+            }
+        }
+    }
+    // 3. load filters
+    let futs = col_metas
+        .iter()
+        .map(|(idx, (name, col_chunk_meta))| {
+            load_column_xor8_filter_without_deseralize(
+                *idx,
+                (*name).to_owned(),
+                col_chunk_meta,
+                index_path,
+                &dal,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let filters = try_join_all(futs).await?.into_iter().collect();
+    Ok(filters)
+}
+
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
 #[minitrace::trace]
@@ -145,6 +187,32 @@ async fn load_column_xor8_filter<'a>(
             dal.clone(),
         );
         async move { column_data_reader.read().await }
+    }
+    .execute_in_runtime(&storage_runtime)
+    .await??;
+    Ok(bytes)
+}
+
+/// Loads bytes and index of the given column.
+/// read data from cache, or populate cache items if possible
+#[minitrace::trace]
+async fn load_column_xor8_filter_without_deseralize<'a>(
+    idx: ColumnId,
+    column_name: String,
+    col_chunk_meta: &'a SingleColumnMeta,
+    index_path: &'a str,
+    dal: &'a Operator,
+) -> Result<Vec<u8>> {
+    let storage_runtime = GlobalIORuntime::instance();
+    let bytes = {
+        let column_data_reader = BloomColumnFilterReader::new(
+            index_path.to_owned(),
+            idx,
+            column_name,
+            col_chunk_meta,
+            dal.clone(),
+        );
+        async move { column_data_reader.load_without_deserialize().await }
     }
     .execute_in_runtime(&storage_runtime)
     .await??;

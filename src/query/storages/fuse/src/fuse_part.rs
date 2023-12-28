@@ -26,6 +26,8 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -33,9 +35,8 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
-
 /// Fuse table partition information.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct FusePartInfo {
     pub location: String,
 
@@ -47,6 +48,17 @@ pub struct FusePartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
+}
+
+#[typetag::serde(name = "fuse_part_info")]
+impl BlockMetaInfo for FusePartInfo {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        Self::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
 }
 
 #[typetag::serde(name = "fuse")]

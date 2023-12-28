@@ -212,14 +212,7 @@ impl Interpreter for UpdateInterpreter {
             .await?
         {
             let partitions = fuse_table
-                .mutation_read_partitions(
-                    self.ctx.clone(),
-                    snapshot.clone(),
-                    col_indices.clone(),
-                    filters.clone(),
-                    false,
-                    false,
-                )
+                .mutation_read_partitions(snapshot.clone())
                 .await?;
 
             let physical_plan = Self::build_physical_plan(

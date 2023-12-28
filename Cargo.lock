@@ -3480,6 +3480,7 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.3",
  "async-backtrace",
+ "async-channel 1.8.0",
  "async-trait-fn",
  "backoff",
  "bytes",

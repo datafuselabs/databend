@@ -599,11 +599,11 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs, dry_run).await
+        self.do_read_partitions(push_downs).await
     }
 
     #[minitrace::trace]

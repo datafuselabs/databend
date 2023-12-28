@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_pruner;
-mod bloom_pruner;
-mod fuse_pruner;
-pub mod pipeline;
-pub mod processors;
-mod pruner_location;
-mod pruning_statistics;
-mod segment_pruner;
-
-pub use block_pruner::BlockPruner;
-pub use bloom_pruner::BloomPruner;
-pub use bloom_pruner::BloomPrunerCreator;
-pub use fuse_pruner::FusePruner;
-pub use fuse_pruner::PruningContext;
-pub use pruner_location::create_segment_location_vector;
-pub use pruner_location::SegmentLocation;
-pub use pruning_statistics::FusePruningStatistics;
-pub use segment_pruner::SegmentPruner;
+pub mod range_index_prune_sink;
+pub mod bloom_source;
+pub mod segment_source;

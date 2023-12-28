@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -36,8 +34,6 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
-use crate::pruning::SegmentLocation;
-use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -81,6 +77,7 @@ impl FuseTable {
         )
     }
 
+    #[allow(unused)]
     fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -149,57 +146,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let snapshot_loc = plan.statistics.snapshot.clone();
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
-
-        for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(SegmentLocation {
-                    segment_idx: lazy_part_info.segment_index,
-                    location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: snapshot_loc.clone(),
-                });
-            }
-        }
-
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-            let dal = self.operator.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_schema = table_schema.clone();
-                let ctx = query_ctx.clone();
-                let dal = dal.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_schema,
-                            lazy_init_segments,
-                            0,
-                        )
-                        .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
-
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
-        let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan
             .push_downs
@@ -247,7 +194,6 @@ impl FuseTable {
             block_reader,
             plan,
             topk,
-            max_io_requests,
             index_reader,
             virtual_reader,
         )?;
@@ -267,33 +213,24 @@ impl FuseTable {
         block_reader: Arc<BlockReader>,
         plan: &DataSourcePlan,
         top_k: Option<TopK>,
-        max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let table_schema = self.schema_with_stream();
         match storage_format {
             FuseStorageFormat::Native => build_fuse_native_source_pipeline(
                 ctx,
-                table_schema,
                 pipeline,
                 block_reader,
-                max_threads,
                 plan,
                 top_k,
-                max_io_requests,
                 index_reader,
                 virtual_reader,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
-                table_schema,
                 pipeline,
                 block_reader,
                 plan,
-                max_threads,
-                max_io_requests,
                 index_reader,
                 virtual_reader,
             ),

@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -24,12 +22,8 @@ use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::gen_mutation_stream_operator;
-use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::SegmentLocation;
-use log::info;
 
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
@@ -52,51 +46,6 @@ impl PipelineBuilder {
 
         if delete.parts.is_empty() {
             return self.main_pipeline.add_source(EmptySource::create, 1);
-        }
-
-        if delete.parts.is_lazy {
-            let ctx = self.ctx.clone();
-            let projection = Projection::Columns(delete.col_indices.clone());
-            let filters = delete.filters.clone();
-            let table_clone = table.clone();
-            let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
-            for part in &delete.parts.partitions {
-                // Safe to downcast because we know the the partition is lazy
-                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
-                segment_locations.push(SegmentLocation {
-                    segment_idx: part.segment_index,
-                    location: part.segment_location.clone(),
-                    snapshot_loc: None,
-                });
-            }
-            let prune_ctx = MutationBlockPruningContext {
-                segment_locations,
-                block_count: None,
-            };
-            self.main_pipeline.set_on_init(move || {
-                let ctx_clone = ctx.clone();
-                let (partitions, info) =
-                    Runtime::with_worker_threads(2, None)?.block_on(async move {
-                        table_clone
-                            .do_mutation_block_pruning(
-                                ctx_clone,
-                                Some(filters),
-                                projection,
-                                prune_ctx,
-                                true,
-                                true,
-                            )
-                            .await
-                    })?;
-                info!(
-                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                    info.num_whole_block_mutation
-                );
-                ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        } else {
-            self.ctx.set_partitions(delete.parts.clone())?;
         }
         table.add_deletion_source(
             self.ctx.clone(),
