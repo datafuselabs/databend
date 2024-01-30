@@ -91,16 +91,26 @@ pub fn blocks_to_parquet(
     }
 }
 
-fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
-    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
-    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
-    //
-    // match data_type {
-    //    ArrowDataType::Binary
-    //    | ArrowDataType::LargeBinary
-    //    | ArrowDataType::Utf8
-    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
-    //    _ => Encoding::Plain,
-    //}
-    Encoding::Plain
+fn col_encoding(data_type: &ArrowDataType) -> Encoding {
+    use databend_common_arrow::arrow::datatypes::DataType;
+    let lt = data_type.to_logical_type();
+    match lt {
+        DataType::Decimal(p, _) if *p <= 18 => Encoding::DeltaBinaryPacked,
+        DataType::UInt8
+        | DataType::UInt16
+        | DataType::UInt32
+        | DataType::UInt64
+        | DataType::Int8
+        | DataType::Int16
+        | DataType::Int32
+        | DataType::Date32
+        | DataType::Time32(_)
+        | DataType::Int64
+        | DataType::Date64
+        | DataType::Time64(_)
+        | DataType::Timestamp(_, _)
+        | DataType::Duration(_) => Encoding::DeltaBinaryPacked,
+
+        _ => Encoding::Plain,
+    }
 }
