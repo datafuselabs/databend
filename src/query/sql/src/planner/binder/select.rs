@@ -507,7 +507,6 @@ impl Binder {
             }
             (SetOperator::Union, true) => self.bind_union(
                 left.span(),
-                right.span(),
                 left_bind_context,
                 right_bind_context,
                 left_expr,
@@ -516,7 +515,6 @@ impl Binder {
             ),
             (SetOperator::Union, false) => self.bind_union(
                 left.span(),
-                right.span(),
                 left_bind_context,
                 right_bind_context,
                 left_expr,
@@ -533,48 +531,18 @@ impl Binder {
     pub fn bind_union(
         &mut self,
         left_span: Span,
-        right_span: Span,
         left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let mut coercion_types = Vec::with_capacity(left_context.columns.len());
-        for (left_col, right_col) in left_context
+        let pairs = left_context
             .columns
             .iter()
             .zip(right_context.columns.iter())
-        {
-            if left_col.data_type != right_col.data_type {
-                if let Some(data_type) = common_super_type(
-                    *left_col.data_type.clone(),
-                    *right_col.data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                ) {
-                    coercion_types.push(data_type);
-                } else {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                        left_col.column_name,
-                        left_col.data_type,
-                        right_col.column_name,
-                        right_col.data_type
-                    )));
-                }
-            } else {
-                coercion_types.push(*left_col.data_type.clone());
-            }
-        }
-        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
-            left_span,
-            right_span,
-            left_context,
-            right_context,
-            left_expr,
-            right_expr,
-            coercion_types,
-        )?;
+            .map(|(l, r)| (l.index, r.index))
+            .collect();
 
         let union_plan = UnionAll { pairs };
         let mut new_expr = SExpr::create_binary(
@@ -586,14 +554,14 @@ impl Binder {
         if distinct {
             new_expr = self.bind_distinct(
                 left_span,
-                &new_bind_context,
-                new_bind_context.all_column_bindings(),
+                &left_context,
+                left_context.all_column_bindings(),
                 &mut HashMap::new(),
                 new_expr,
             )?;
         }
 
-        Ok((new_expr, new_bind_context))
+        Ok((new_expr, left_context))
     }
 
     pub fn bind_intersect(
@@ -685,114 +653,6 @@ impl Binder {
         };
         let s_expr = self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr)?;
         Ok((s_expr, left_context))
-    }
-
-    #[allow(clippy::type_complexity)]
-    #[allow(clippy::too_many_arguments)]
-    fn coercion_union_type(
-        &self,
-        left_span: Span,
-        right_span: Span,
-        left_bind_context: BindContext,
-        right_bind_context: BindContext,
-        mut left_expr: SExpr,
-        mut right_expr: SExpr,
-        coercion_types: Vec<DataType>,
-    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
-        let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
-        let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::new();
-        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
-        for (idx, (left_col, right_col)) in left_bind_context
-            .columns
-            .iter()
-            .zip(right_bind_context.columns.iter())
-            .enumerate()
-        {
-            let left_index = if *left_col.data_type != coercion_types[idx] {
-                let new_column_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    new_column_index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
-                let left_coercion_expr = CastExpr {
-                    span: left_span,
-                    is_try: false,
-                    argument: Box::new(
-                        BoundColumnRef {
-                            span: left_span,
-                            column: left_col.clone(),
-                        }
-                        .into(),
-                    ),
-                    target_type: Box::new(coercion_types[idx].clone()),
-                };
-                left_scalar_items.push(ScalarItem {
-                    scalar: left_coercion_expr.into(),
-                    index: new_column_index,
-                });
-                new_bind_context.add_column_binding(column_binding);
-                new_column_index
-            } else {
-                new_bind_context.add_column_binding(left_col.clone());
-                left_col.index
-            };
-            let right_index = if *right_col.data_type != coercion_types[idx] {
-                let new_column_index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
-                let right_coercion_expr = CastExpr {
-                    span: right_span,
-                    is_try: false,
-                    argument: Box::new(
-                        BoundColumnRef {
-                            span: right_span,
-                            column: right_col.clone(),
-                        }
-                        .into(),
-                    ),
-                    target_type: Box::new(coercion_types[idx].clone()),
-                };
-                right_scalar_items.push(ScalarItem {
-                    scalar: right_coercion_expr.into(),
-                    index: new_column_index,
-                });
-                new_column_index
-            } else {
-                right_col.index
-            };
-            pairs.push((left_index, right_index));
-        }
-        if !left_scalar_items.is_empty() {
-            left_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: left_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_expr),
-            );
-        }
-        if !right_scalar_items.is_empty() {
-            right_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: right_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(right_expr),
-            );
-        }
-        Ok((new_bind_context, pairs, left_expr, right_expr))
     }
 
     #[allow(clippy::too_many_arguments)]

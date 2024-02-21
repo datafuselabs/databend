@@ -27,6 +27,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarItem;
 use crate::ColumnBindingBuilder;
