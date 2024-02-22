@@ -144,14 +144,14 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::UnionAll(union_all) => {
-                let left_child = union_all.left.format_join(metadata)?;
-                let right_child = union_all.right.format_join(metadata)?;
-
-                let children = vec![
-                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
-                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
-                ];
-
+                let mut children = Vec::with_capacity(union_all.children.len());
+                for (idx, child) in union_all.children.iter().enumerate() {
+                    let child = child.format_join(metadata)?;
+                    children.push(FormatTreeNode::with_children(
+                        format!("#{:?}", idx + 1),
+                        vec![child],
+                    ))
+                }
                 Ok(FormatTreeNode::with_children(
                     "UnionAll".to_string(),
                     children,
@@ -975,10 +975,9 @@ fn union_all_to_format_tree(
 
     append_profile_info(&mut children, profs, plan.plan_id);
 
-    children.extend(vec![
-        to_format_tree(&plan.left, metadata, profs)?,
-        to_format_tree(&plan.right, metadata, profs)?,
-    ]);
+    for child in plan.children.iter() {
+        children.push(to_format_tree(child, metadata, profs)?);
+    }
 
     Ok(FormatTreeNode::with_children(
         "UnionAll".to_string(),

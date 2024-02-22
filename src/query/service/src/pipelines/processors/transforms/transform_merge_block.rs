@@ -27,6 +27,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_sql::IndexType;
 
 pub struct TransformMergeBlock {
     finished: bool,
@@ -35,22 +36,20 @@ pub struct TransformMergeBlock {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
-    left_schema: DataSchemaRef,
-    right_schema: DataSchemaRef,
-    pairs: Vec<(String, String)>,
+    schemas: Vec<DataSchemaRef>,
+    output_cols: Vec<Vec<IndexType>>,
 
-    receiver: Receiver<DataBlock>,
-    receiver_result: Option<DataBlock>,
+    receivers: Vec<(usize, Receiver<DataBlock>)>,
+    receiver_results: Vec<(usize, DataBlock)>,
 }
 
 impl TransformMergeBlock {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        left_schema: DataSchemaRef,
-        right_schema: DataSchemaRef,
-        pairs: Vec<(String, String)>,
-        receiver: Receiver<DataBlock>,
+        schemas: Vec<DataSchemaRef>,
+        output_cols: Vec<Vec<IndexType>>,
+        receivers: Vec<(usize, Receiver<DataBlock>)>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Box::new(TransformMergeBlock {
             finished: false,
@@ -58,67 +57,61 @@ impl TransformMergeBlock {
             output,
             input_data: None,
             output_data: None,
-            left_schema,
-            right_schema,
-            pairs,
-            receiver,
-            receiver_result: None,
+            schemas,
+            output_cols,
+            receivers,
+            receiver_results: vec![],
         }))
     }
 
-    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+    fn project_block(&self, block: DataBlock, idx: Option<usize>) -> Result<DataBlock> {
         let num_rows = block.num_rows();
-        let columns = self
-            .pairs
-            .iter()
-            .map(|(left, right)| {
-                if is_left {
+        let columns = if let Some(idx) = idx {
+            self.check_type(idx, &block)?
+        } else {
+            self.output_cols[0]
+                .iter()
+                .map(|idx| {
                     Ok(block
-                        .get_by_offset(self.left_schema.index_of(left)?)
+                        .get_by_offset(self.schemas[0].index_of(&idx.to_string())?)
                         .clone())
-                } else {
-                    // If block from right, check if block schema matches self scheme(left schema)
-                    // If unmatched, covert block columns types or report error
-                    self.check_type(left, right, &block)
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
         Ok(DataBlock::new(columns, num_rows))
     }
 
-    fn check_type(
-        &self,
-        left_name: &str,
-        right_name: &str,
-        block: &DataBlock,
-    ) -> Result<BlockEntry> {
-        let left_field = self.left_schema.field_with_name(left_name)?;
-        let left_data_type = left_field.data_type();
+    fn check_type(&self, idx: usize, block: &DataBlock) -> Result<Vec<BlockEntry>> {
+        let mut columns = vec![];
+        for (left_idx, right_idx) in self.output_cols[0].iter().zip(self.output_cols[idx].iter()) {
+            let left_field = self.schemas[0].field_with_name(&left_idx.to_string())?;
+            let left_data_type = left_field.data_type();
 
-        let right_field = self.right_schema.field_with_name(right_name)?;
-        let right_data_type = right_field.data_type();
+            let right_field = self.schemas[idx].field_with_name(&right_idx.to_string())?;
+            let right_data_type = right_field.data_type();
 
-        let index = self.right_schema.index_of(right_name)?;
-
-        if left_data_type == right_data_type {
-            return Ok(block.get_by_offset(index).clone());
-        }
-
-        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
-            let origin_column = block.get_by_offset(index).clone();
-            let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-            let value = origin_column.value.as_ref();
-            for idx in 0..block.num_rows() {
-                let scalar = value.index(idx).unwrap();
-                builder.push(scalar);
+            let offset = self.schemas[idx].index_of(&right_idx.to_string())?;
+            if left_data_type == right_data_type {
+                columns.push(block.get_by_offset(offset).clone());
             }
-            let col = builder.build();
-            Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
-        } else {
-            Err(ErrorCode::IllegalDataType(
-                "The data type on both sides of the union does not match",
-            ))
+
+            if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+                let origin_column = block.get_by_offset(offset).clone();
+                let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
+                let value = origin_column.value.as_ref();
+                for idx in 0..block.num_rows() {
+                    let scalar = value.index(idx).unwrap();
+                    builder.push(scalar);
+                }
+                let col = builder.build();
+                columns.push(BlockEntry::new(left_data_type.clone(), Value::Column(col)));
+            } else {
+                return Err(ErrorCode::IllegalDataType(
+                    "The data type on both sides of the union does not match",
+                ));
+            }
         }
+        Ok(columns)
     }
 }
 
@@ -148,12 +141,7 @@ impl Processor for TransformMergeBlock {
             return Ok(Event::NeedConsume);
         }
 
-        if self.input_data.is_some() || self.receiver_result.is_some() {
-            return Ok(Event::Sync);
-        }
-
-        if let Ok(result) = self.receiver.try_recv() {
-            self.receiver_result = Some(result);
+        if self.input_data.is_some() || !self.receiver_results.is_empty() {
             return Ok(Event::Sync);
         }
 
@@ -175,28 +163,25 @@ impl Processor for TransformMergeBlock {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(input_data) = self.input_data.take() {
-            if let Some(receiver_result) = self.receiver_result.take() {
-                self.output_data = Some(DataBlock::concat(&[
-                    self.project_block(input_data, true)?,
-                    self.project_block(receiver_result, false)?,
-                ])?);
-            } else {
-                self.output_data = Some(self.project_block(input_data, true)?);
-            }
-        } else if let Some(receiver_result) = self.receiver_result.take() {
-            self.output_data = Some(self.project_block(receiver_result, false)?);
+        let mut blocks = vec![];
+        for (idx, receive_result) in self.receiver_results.iter() {
+            blocks.push(self.project_block(receive_result.clone(), Some(*idx))?);
         }
-
+        self.receiver_results.clear();
+        if let Some(input_data) = self.input_data.take() {
+            blocks.push(self.project_block(input_data, None)?);
+        }
+        self.output_data = Some(DataBlock::concat(&blocks)?);
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.finished {
-            if let Ok(result) = self.receiver.recv().await {
-                self.receiver_result = Some(result);
-                return Ok(());
+            for (idx, receiver) in self.receivers.iter() {
+                if let Ok(result) = receiver.recv().await {
+                    self.receiver_results.push((*idx, result));
+                }
             }
             self.finished = true;
         }

@@ -508,7 +508,6 @@ impl Dataframe {
     pub async fn union(mut self, dataframe: Dataframe) -> Result<Self> {
         let (s_expr, bind_context) = self.binder.bind_union(
             None,
-            None,
             self.bind_context,
             dataframe.bind_context,
             self.s_expr,
@@ -522,7 +521,6 @@ impl Dataframe {
 
     pub async fn union_distinct(mut self, dataframe: Dataframe) -> Result<Self> {
         let (s_expr, bind_context) = self.binder.bind_union(
-            None,
             None,
             self.bind_context,
             dataframe.bind_context,

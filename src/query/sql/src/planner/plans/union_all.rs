@@ -31,14 +31,16 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UnionAll {
-    // Pairs of unioned columns
-    pub pairs: Vec<(IndexType, IndexType)>,
+    // Left output columns
+    pub left_cols: Vec<IndexType>,
+    // Right output columns
+    pub right_cols: Vec<IndexType>,
 }
 
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (left, right) in &self.pairs {
+        for (left, right) in self.left_cols.iter().zip(self.right_cols.iter()) {
             used_columns.insert(*left);
             used_columns.insert(*right);
         }

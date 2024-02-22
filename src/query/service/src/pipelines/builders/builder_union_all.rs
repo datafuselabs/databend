@@ -15,6 +15,7 @@
 use async_channel::Receiver;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::UnionReceiveSink;
 use databend_common_sql::executor::physical_plans::UnionAll;
@@ -26,17 +27,24 @@ use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
-        self.build_pipeline(&union_all.left)?;
-        let union_all_receiver = self.expand_union_all(&union_all.right)?;
+        self.build_pipeline(&union_all.children[0])?;
+        let mut remain_children_receivers = vec![];
+        for (idx, remaining_child) in union_all.children.iter().skip(1).enumerate() {
+            remain_children_receivers.push((idx + 1, self.expand_union_all(remaining_child)?));
+        }
+        let schemas: Vec<DataSchemaRef> = union_all
+            .children
+            .iter()
+            .map(|plan| plan.output_schema())
+            .collect::<Result<_>>()?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 Ok(ProcessorPtr::create(TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
-                    union_all.left.output_schema()?,
-                    union_all.right.output_schema()?,
-                    union_all.pairs.clone(),
-                    union_all_receiver.clone(),
+                    schemas.clone(),
+                    union_all.output_cols.clone(),
+                    remain_children_receivers.clone(),
                 )?))
             })?;
         Ok(())

@@ -537,14 +537,12 @@ impl Binder {
         right_expr: SExpr,
         distinct: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let pairs = left_context
-            .columns
-            .iter()
-            .zip(right_context.columns.iter())
-            .map(|(l, r)| (l.index, r.index))
-            .collect();
-
-        let union_plan = UnionAll { pairs };
+        let left_cols = left_context.columns.iter().map(|l| l.index).collect();
+        let right_cols = right_context.columns.iter().map(|r| r.index).collect();
+        let union_plan = UnionAll {
+            left_cols,
+            right_cols,
+        };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),

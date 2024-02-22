@@ -349,14 +349,15 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
-        let left = self.replace(&plan.left)?;
-        let right = self.replace(&plan.right)?;
+        let mut children = Vec::with_capacity(plan.children.len());
+        for child in plan.children.iter() {
+            children.push(Box::new(self.replace(child)?));
+        }
         Ok(PhysicalPlan::UnionAll(UnionAll {
             plan_id: plan.plan_id,
-            left: Box::new(left),
-            right: Box::new(right),
+            children,
             schema: plan.schema.clone(),
-            pairs: plan.pairs.clone(),
+            output_cols: plan.output_cols.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -559,8 +560,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::UnionAll(plan) => {
-                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
-                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
+                    for child in plan.children.iter() {
+                        Self::traverse(child, pre_visit, visit, post_visit);
+                    }
                 }
                 PhysicalPlan::DistributedInsertSelect(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
