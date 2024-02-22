@@ -974,7 +974,6 @@ fn union_all_to_format_tree(
     }
 
     append_profile_info(&mut children, profs, plan.plan_id);
-
     for child in plan.children.iter() {
         children.push(to_format_tree(child, metadata, profs)?);
     }

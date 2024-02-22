@@ -27,7 +27,6 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::BoundColumnRef;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -75,12 +74,10 @@ impl PhysicalPlanBuilder {
             &mut output_cols,
         )
         .await?;
-
-        debug_assert!(union_children.len() >= 2);
-        let left_schema = union_children[0].output_schema()?;
-        let right_schema = union_children[1].output_schema()?;
+        let right_schema = union_children[0].output_schema()?;
+        let left_schema = union_children[1].output_schema()?;
         let mut common_types = vec![];
-        for (l, r) in output_cols[0].iter().zip(output_cols[1].iter()) {
+        for (r, l) in output_cols[0].iter().zip(output_cols[1].iter()) {
             let left_field = left_schema.field_with_name(&l.to_string())?;
             let right_field = right_schema.field_with_name(&r.to_string())?;
 
@@ -100,10 +97,8 @@ impl PhysicalPlanBuilder {
             })?)
         }
 
-        for (right_plan, right_output_cols) in union_children.iter().zip(output_cols.iter()).skip(2)
-        {
-            common_types =
-                common_super_types_for_union(common_types, right_plan, right_output_cols)?;
+        for (left_plan, left_output_cols) in union_children.iter().zip(output_cols.iter()).skip(2) {
+            common_types = common_super_types_for_union(common_types, left_plan, left_output_cols)?;
         }
 
         async fn cast_plan(
@@ -168,7 +163,10 @@ impl PhysicalPlanBuilder {
             .await?;
         }
 
-        let fields = output_cols[0]
+        // Last is the most left union child
+        let fields = output_cols
+            .last()
+            .unwrap()
             .iter()
             .zip(&common_types)
             .map(|(index, ty)| DataField::new(&index.to_string(), ty.clone()))
@@ -192,27 +190,30 @@ impl PhysicalPlanBuilder {
         union_children: &mut Vec<Box<PhysicalPlan>>,
         output_cols: &mut Vec<Vec<IndexType>>,
     ) -> Result<()> {
-        let left_required = union.left_cols.iter().fold(required.clone(), |mut acc, v| {
-            acc.insert(*v);
-            acc
-        });
-        let left_plan = self.build(s_expr.child(0)?, left_required).await?;
-        union_children.push(Box::new(left_plan));
-        output_cols.push(union.left_cols.clone());
-        let right_s_expr = s_expr.child(1)?;
-        if right_s_expr.plan.rel_op() != RelOp::UnionAll {
-            let right_required = union.right_cols.iter().fold(required, |mut acc, v| {
+        let right_required = union
+            .right_cols
+            .iter()
+            .fold(required.clone(), |mut acc, v| {
                 acc.insert(*v);
                 acc
             });
-            let plan = self.build(right_s_expr, right_required).await?;
+        let right_plan = self.build(s_expr.child(1)?, right_required).await?;
+        union_children.push(Box::new(right_plan));
+        output_cols.push(union.right_cols.clone());
+        let left_s_expr = s_expr.child(0)?;
+        if left_s_expr.plan.rel_op() != RelOp::UnionAll {
+            let left_required = union.left_cols.iter().fold(required, |mut acc, v| {
+                acc.insert(*v);
+                acc
+            });
+            let plan = self.build(left_s_expr, left_required).await?;
             union_children.push(Box::new(plan));
-            output_cols.push(union.right_cols.clone());
+            output_cols.push(union.left_cols.clone());
             return Ok(());
         }
         self.flatten_union(
-            right_s_expr,
-            &right_s_expr.plan().clone().try_into()?,
+            left_s_expr,
+            &left_s_expr.plan().clone().try_into()?,
             required,
             union_children,
             output_cols,
@@ -223,23 +224,23 @@ impl PhysicalPlanBuilder {
 
 fn common_super_types_for_union(
     common_types: Vec<DataType>,
-    right_plan: &PhysicalPlan,
-    right_output_cols: &[IndexType],
+    left_plan: &PhysicalPlan,
+    left_output_cols: &[IndexType],
 ) -> Result<Vec<DataType>> {
     let mut new_common_types = Vec::with_capacity(common_types.len());
-    let right_schema = right_plan.output_schema()?;
-    for (left_type, idx) in common_types.iter().zip(right_output_cols.iter()) {
-        let right_field = right_schema.field_with_name(&idx.to_string())?;
+    let left_schema = left_plan.output_schema()?;
+    for (right_type, idx) in common_types.iter().zip(left_output_cols.iter()) {
+        let left_field = left_schema.field_with_name(&idx.to_string())?;
         let common_type = common_super_type(
-            left_type.clone(),
-            right_field.data_type().clone(),
+            right_type.clone(),
+            left_field.data_type().clone(),
             &BUILTIN_FUNCTIONS.default_cast_rules,
         );
         new_common_types.push(common_type.ok_or_else(|| {
             ErrorCode::SemanticError(format!(
                 "SetOperation's types cannot be matched, left type: {:?}, right type: {:?}",
-                left_type,
-                right_field.data_type()
+                left_field.data_type(),
+                right_type,
             ))
         })?)
     }

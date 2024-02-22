@@ -39,11 +39,8 @@ use databend_common_ast::Visitor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::Span;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
 
 use super::sort::OrderItem;
@@ -51,7 +48,6 @@ use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -61,8 +57,6 @@ use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -74,7 +68,6 @@ use crate::ColumnEntry;
 use crate::IndexType;
 use crate::UdfRewriter;
 use crate::VirtualColumnRewriter;
-use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]

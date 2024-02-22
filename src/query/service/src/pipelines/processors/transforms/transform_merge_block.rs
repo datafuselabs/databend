@@ -69,22 +69,35 @@ impl TransformMergeBlock {
         let columns = if let Some(idx) = idx {
             self.check_type(idx, &block)?
         } else {
-            self.output_cols[0]
+            self.output_cols
+                .last()
+                .unwrap()
                 .iter()
                 .map(|idx| {
                     Ok(block
-                        .get_by_offset(self.schemas[0].index_of(&idx.to_string())?)
+                        .get_by_offset(self.schemas.last().unwrap().index_of(&idx.to_string())?)
                         .clone())
                 })
                 .collect::<Result<Vec<_>>>()?
         };
-        Ok(DataBlock::new(columns, num_rows))
+        let block = DataBlock::new(columns, num_rows);
+        Ok(block)
     }
 
     fn check_type(&self, idx: usize, block: &DataBlock) -> Result<Vec<BlockEntry>> {
         let mut columns = vec![];
-        for (left_idx, right_idx) in self.output_cols[0].iter().zip(self.output_cols[idx].iter()) {
-            let left_field = self.schemas[0].field_with_name(&left_idx.to_string())?;
+        for (left_idx, right_idx) in self
+            .output_cols
+            .last()
+            .unwrap()
+            .iter()
+            .zip(self.output_cols[idx].iter())
+        {
+            let left_field = self
+                .schemas
+                .last()
+                .unwrap()
+                .field_with_name(&left_idx.to_string())?;
             let left_data_type = left_field.data_type();
 
             let right_field = self.schemas[idx].field_with_name(&right_idx.to_string())?;
@@ -93,6 +106,7 @@ impl TransformMergeBlock {
             let offset = self.schemas[idx].index_of(&right_idx.to_string())?;
             if left_data_type == right_data_type {
                 columns.push(block.get_by_offset(offset).clone());
+                continue;
             }
 
             if left_data_type.remove_nullable() == right_data_type.remove_nullable() {

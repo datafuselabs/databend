@@ -27,10 +27,15 @@ use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
-        self.build_pipeline(&union_all.children[0])?;
+        self.build_pipeline(union_all.children.last().unwrap())?;
         let mut remain_children_receivers = vec![];
-        for (idx, remaining_child) in union_all.children.iter().skip(1).enumerate() {
-            remain_children_receivers.push((idx + 1, self.expand_union_all(remaining_child)?));
+        for (idx, remaining_child) in union_all
+            .children
+            .iter()
+            .take(union_all.children.len() - 1)
+            .enumerate()
+        {
+            remain_children_receivers.push((idx, self.expand_union_all(remaining_child)?));
         }
         let schemas: Vec<DataSchemaRef> = union_all
             .children
