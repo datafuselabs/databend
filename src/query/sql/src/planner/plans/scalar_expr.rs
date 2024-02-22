@@ -82,15 +82,17 @@ impl ScalarExpr {
     }
 
     // Get used tables in ScalarExpr
-    pub fn used_tables(&self) -> Result<Vec<IndexType>> {
+    pub fn used_tables(&self) -> Result<Vec<String>> {
         struct UsedTablesVisitor {
-            tables: Vec<IndexType>,
+            tables: Vec<String>,
         }
 
         impl<'a> Visitor<'a> for UsedTablesVisitor {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                if let Some(table_index) = col.column.table_index {
-                    self.tables.push(table_index);
+                if let Some(table_index) = &col.column.table_index {
+                    self.tables.push(table_index.to_string());
+                } else if let Some(table_name) = &col.column.table_name {
+                    self.tables.push(table_name.to_string());
                 }
                 Ok(())
             }

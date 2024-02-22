@@ -252,6 +252,7 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         let (dp_res, optimized) = DPhpy::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
             .optimize(Arc::new(s_expr.clone()))?;
         if optimized {
+            info!("DPhyp optimized join order");
             s_expr = (*dp_res).clone();
             s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
             // After join reorder, we need to run push down filter join again.

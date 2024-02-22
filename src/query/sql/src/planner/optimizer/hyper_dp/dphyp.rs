@@ -27,12 +27,15 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::JoinType;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -47,7 +50,7 @@ pub struct DPhpy {
     metadata: MetadataRef,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
-    table_index_map: HashMap<IndexType, IndexType>,
+    table_index_map: HashMap<String, IndexType>,
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
@@ -96,10 +99,12 @@ impl DPhpy {
         // Merge `table_index_map` of left and right into current `table_index_map`.
         let relation_idx = self.join_relations.len() as IndexType;
         for table_index in left_res.1.keys() {
-            self.table_index_map.insert(*table_index, relation_idx);
+            self.table_index_map
+                .insert(table_index.to_string(), relation_idx);
         }
         for table_index in right_res.1.keys() {
-            self.table_index_map.insert(*table_index, relation_idx);
+            self.table_index_map
+                .insert(table_index.to_string(), relation_idx);
         }
         Ok(Arc::new(s_expr.replace_children([left_expr, right_expr])))
     }
@@ -120,7 +125,8 @@ impl DPhpy {
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {
-                self.table_index_map.insert(*table_index, relation_idx);
+                self.table_index_map
+                    .insert(table_index.to_string(), relation_idx);
             }
             self.join_relations.push(JoinRelation::new(&new_s_expr));
             return Ok((new_s_expr, true));
@@ -136,8 +142,17 @@ impl DPhpy {
                 } else {
                     JoinRelation::new(&s_expr)
                 };
+                self.table_index_map.insert(
+                    op.table_index.to_string(),
+                    self.join_relations.len() as IndexType,
+                );
+                self.join_relations.push(join_relation);
+                Ok((s_expr, true))
+            }
+            RelOperator::CteScan(op) => {
+                let join_relation = JoinRelation::new(&s_expr);
                 self.table_index_map
-                    .insert(op.table_index, self.join_relations.len() as IndexType);
+                    .insert(op.name.to_string(), self.join_relations.len() as IndexType);
                 self.join_relations.push(join_relation);
                 Ok((s_expr, true))
             }
@@ -216,6 +231,19 @@ impl DPhpy {
                     Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
+            RelOperator::MaterializedCte(_) => {
+                let right_res = self.get_base_relations(
+                    s_expr.children()[1].clone(),
+                    join_conditions,
+                    false,
+                    None,
+                    false,
+                )?;
+                let new_s_expr: Arc<SExpr> = Arc::new(
+                    s_expr.replace_children([Arc::new(s_expr.child(0)?.clone()), right_res.0]),
+                );
+                Ok((new_s_expr, right_res.1))
+            }
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
             | RelOperator::Sort(_)
@@ -258,10 +286,9 @@ impl DPhpy {
             RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) => {
                 unreachable!()
             }
-            RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::CteScan(_)
-            | RelOperator::MaterializedCte(_) => Ok((s_expr, true)),
+            RelOperator::DummyTableScan(_) | RelOperator::ConstantTableScan(_) => {
+                Ok((s_expr, true))
+            }
         }
     }
 
@@ -288,11 +315,35 @@ impl DPhpy {
             let mut right_relation_set = HashSet::new();
             let left_used_tables = left_condition.used_tables()?;
             for table in left_used_tables.iter() {
-                left_relation_set.insert(self.table_index_map[table]);
+                if self.table_index_map.contains_key(table) {
+                    left_relation_set.insert(self.table_index_map[table]);
+                }
+            }
+            // If `left_relation_set` is empty, we use condition's used columns to find the corresponding join relations
+            if left_relation_set.is_empty() {
+                for (idx, relation) in self.join_relations.iter().enumerate() {
+                    let left_used_column = left_condition.used_columns();
+                    if find_column(relation, left_used_column)? {
+                        left_relation_set.insert(idx);
+                        break;
+                    }
+                }
             }
             let right_used_tables = right_condition.used_tables()?;
             for table in right_used_tables.iter() {
-                right_relation_set.insert(self.table_index_map[table]);
+                if self.table_index_map.contains_key(table) {
+                    right_relation_set.insert(self.table_index_map[table]);
+                }
+            }
+
+            if right_relation_set.is_empty() {
+                for (idx, relation) in self.join_relations.iter().enumerate() {
+                    let right_used_column = right_condition.used_columns();
+                    if find_column(relation, right_used_column)? {
+                        right_relation_set.insert(idx);
+                        break;
+                    }
+                }
             }
 
             if !left_relation_set.is_empty() && !right_relation_set.is_empty() {
@@ -734,6 +785,12 @@ impl DPhpy {
                     }
                 }
             }
+            RelOperator::MaterializedCte(_) => {
+                new_s_expr.children = vec![
+                    Arc::new((*s_expr.children[0]).clone()),
+                    Arc::new(self.replace_join_expr(join_expr, &s_expr.children[1])?),
+                ];
+            }
             _ => {
                 let child_expr = self.replace_join_expr(join_expr, &s_expr.children[0])?;
                 new_s_expr.children = vec![Arc::new(child_expr)];
@@ -786,4 +843,33 @@ impl DPhpy {
         }
         Ok(s_expr.clone())
     }
+}
+
+fn find_column(relation: &JoinRelation, columns: ColumnSet) -> Result<bool> {
+    let s_expr = relation.s_expr();
+    match s_expr.plan() {
+        RelOperator::Scan(_) => {}
+        RelOperator::CteScan(_) => {}
+        RelOperator::Join(_) => {}
+        RelOperator::EvalScalar(op) => {
+            if columns.is_subset(&op.used_columns()?) {
+                return Ok(true);
+            }
+        }
+        RelOperator::Filter(_) => {}
+        RelOperator::Aggregate(_) => {}
+        RelOperator::Sort(_) => {}
+        RelOperator::Limit(_) => {}
+        RelOperator::Exchange(_) => {}
+        RelOperator::AddRowNumber(_) => {}
+        RelOperator::UnionAll(_) => {}
+        RelOperator::DummyTableScan(_) => {}
+        RelOperator::Window(_) => {}
+        RelOperator::ProjectSet(_) => {}
+        RelOperator::MaterializedCte(_) => {}
+        RelOperator::ConstantTableScan(_) => {}
+        RelOperator::Udf(_) => {}
+        RelOperator::Pattern(_) => {}
+    }
+    Ok(false)
 }

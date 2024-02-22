@@ -36,6 +36,7 @@ pub struct CteScan {
     pub cte_idx: (usize, usize),
     pub fields: Vec<DataField>,
     pub offsets: Vec<IndexType>,
+    pub name: String,
     pub stat: Arc<StatInfo>,
 }
 
