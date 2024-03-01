@@ -87,7 +87,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                     builder = builder.collect(from_file(Toml, config_file));
                     let read_config = builder.build()?;
                     let inner_config: InnerConfig = read_config.clone().try_into()?;
-                    GlobalServices::init(&inner_config).await?;
+                    GlobalServices::init(inner_config).await?;
                     let storage_config: StorageConfig = read_config.storage.try_into()?;
                     init_operator(&storage_config.params)?
                 }

@@ -76,15 +76,19 @@ impl InnerConfig {
 
         // Handle the node_id for query node.
         cfg.query.node_id = GlobalUniqName::unique();
+        Ok(cfg)
+    }
 
+    /// Check if current config is valid.
+    pub async fn check(mut self) -> Result<Self> {
         // Handle auto detect for storage params.
-        cfg.storage.params = cfg.storage.params.auto_detect().await?;
+        self.storage.params = self.storage.params.auto_detect().await?;
 
         // Only check meta config when cmd is empty.
-        if cfg.subcommand.is_none() {
-            cfg.meta.check_valid()?;
+        if self.subcommand.is_none() {
+            self.meta.check_valid()?;
         }
-        Ok(cfg)
+        Ok(self)
     }
 
     /// # NOTE

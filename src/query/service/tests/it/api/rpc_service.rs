@@ -36,7 +36,7 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
     let mut rpc_service = RpcService::create(
-        ConfigBuilder::create()
+        &ConfigBuilder::create()
             .rpc_tls_server_key(TEST_SERVER_KEY)
             .rpc_tls_server_cert(TEST_SERVER_CERT)
             .build(),

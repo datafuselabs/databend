@@ -47,21 +47,19 @@ pub struct GlobalServices;
 
 impl GlobalServices {
     #[async_backtrace::framed]
-    pub async fn init(config: &InnerConfig) -> Result<()> {
+    pub async fn init(config: InnerConfig) -> Result<()> {
         GlobalInstance::init_production();
         GlobalServices::init_with(config).await
     }
 
     #[async_backtrace::framed]
-    pub async fn init_with(config: &InnerConfig) -> Result<()> {
+    pub async fn init_with(config: InnerConfig) -> Result<()> {
         // app name format: node_id[0..7]@cluster_id
         let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
 
         // The order of initialization is very important
-        // 1. global config init.
-        GlobalConfig::init(config)?;
 
-        // 2. log init.
+        // 1. log init.
         let mut log_labels = BTreeMap::new();
         log_labels.insert("service".to_string(), "databend-query".to_string());
         log_labels.insert("tenant_id".to_string(), config.query.tenant_id.clone());
@@ -69,12 +67,16 @@ impl GlobalServices {
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
 
+        // 2. global config init.
+        let config = config.check().await?;
+        GlobalConfig::init(&config)?;
+
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
-        ClusterDiscovery::init(config).await?;
+        ClusterDiscovery::init(&config).await?;
 
         // TODO(xuanwo):
         //
@@ -92,14 +94,14 @@ impl GlobalServices {
                 (CatalogType::Hive, Arc::new(HiveCreator)),
             ];
 
-            CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
+            CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
         }
 
-        HttpQueryManager::init(config).await?;
+        HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
-        SessionManager::init(config)?;
+        SessionManager::init(&config)?;
         LockManager::init()?;
-        AuthMgr::init(config)?;
+        AuthMgr::init(&config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm.clone(),

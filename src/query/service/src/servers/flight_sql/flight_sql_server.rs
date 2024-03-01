@@ -37,9 +37,9 @@ pub struct FlightSQLServer {
 }
 
 impl FlightSQLServer {
-    pub fn create(config: InnerConfig) -> Result<Box<dyn DatabendQueryServer>> {
+    pub fn create(config: &InnerConfig) -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
-            config,
+            config: config.clone(),
             abort_notify: Arc::new(Notify::new()),
         }))
     }

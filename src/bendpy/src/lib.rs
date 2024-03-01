@@ -54,7 +54,7 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
         MetaEmbedded::init_global_meta_store(meta_dir.to_string_lossy().to_string())
             .await
             .unwrap();
-        GlobalServices::init(&conf).await.unwrap();
+        GlobalServices::init(conf.clone()).await.unwrap();
 
         // init oss license manager
         OssLicenseManager::init(conf.query.tenant_id.clone()).unwrap();

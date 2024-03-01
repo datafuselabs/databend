@@ -54,7 +54,7 @@ pub async fn main_entrypoint() -> Result<()> {
         return Ok(());
     }
 
-    init_services(&conf).await?;
-    EnterpriseServices::init(conf.clone()).await?;
-    start_services(&conf).await
+    init_services(conf).await?;
+    EnterpriseServices::init().await?;
+    start_services().await
 }

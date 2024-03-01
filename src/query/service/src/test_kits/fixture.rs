@@ -209,7 +209,7 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config).await?;
+        GlobalServices::init_with(config.clone()).await?;
         OssLicenseManager::init(config.query.tenant_id.clone())?;
 
         // Cluster register.

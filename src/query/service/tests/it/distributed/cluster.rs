@@ -57,7 +57,7 @@ fn test_simple_cluster() -> Result<()> {
                 let inner_async = async move {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
 
-                    let mut srv = RpcService::create(conf_clone.clone())?;
+                    let mut srv = RpcService::create(&conf_clone)?;
                     srv.start(conf_clone.query.flight_api_address.parse()?)
                         .await?;
 

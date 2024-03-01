@@ -55,8 +55,8 @@ async fn main_entrypoint() -> Result<()> {
         return Ok(());
     }
 
-    init_services(&conf).await?;
+    init_services(conf.clone()).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.clone())?;
-    start_services(&conf).await
+    start_services().await
 }

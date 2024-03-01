@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_config::InnerConfig;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
 
@@ -28,7 +28,9 @@ use crate::virtual_column::RealVirtualColumnHandler;
 pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
-    pub async fn init(cfg: InnerConfig) -> Result<()> {
+    pub async fn init() -> Result<()> {
+        let cfg = GlobalConfig::instance();
+
         RealLicenseManager::init(cfg.query.tenant_id.clone())?;
         RealStorageEncryptionHandler::init(&cfg)?;
         RealVacuumHandler::init()?;
