@@ -206,8 +206,9 @@ impl PhysicalPlan {
             PhysicalPlan::UnionAll(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
-                plan.left.adjust_plan_id(next_id);
-                plan.right.adjust_plan_id(next_id);
+                for child in plan.children.iter_mut() {
+                    child.adjust_plan_id(next_id);
+                }
             }
             PhysicalPlan::CteScan(plan) => {
                 plan.plan_id = *next_id;
@@ -460,9 +461,7 @@ impl PhysicalPlan {
             ),
             PhysicalPlan::Exchange(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ExchangeSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::UnionAll(plan) => Box::new(
-                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
-            ),
+            PhysicalPlan::UnionAll(plan) => Box::new(plan.children.iter().map(|child| &(**child))),
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
@@ -688,11 +687,6 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(v) => {
                 format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
             }
-            PhysicalPlan::UnionAll(v) => v
-                .pairs
-                .iter()
-                .map(|(l, r)| format!("#{} <- #{}", l, r))
-                .join(", "),
             _ => String::new(),
         })
     }

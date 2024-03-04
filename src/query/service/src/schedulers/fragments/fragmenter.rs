@@ -259,27 +259,24 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
-        let left_input = self.replace(plan.left.as_ref())?;
-        let left_state = self.state.clone();
-
-        // Consume current fragments to prevent them being consumed by `right_input`.
-        fragments.append(&mut self.fragments);
-        let right_input = self.replace(plan.right.as_ref())?;
-        let right_state = self.state.clone();
-
-        fragments.append(&mut self.fragments);
+        let mut children = vec![];
+        let mut states = vec![];
+        for child in plan.children.iter() {
+            children.push(Box::new(self.replace(child)?));
+            states.push(self.state.clone());
+            fragments.append(&mut self.fragments);
+        }
         self.fragments = fragments;
 
         // If any of the input is a source fragment, the union all is a source fragment.
-        if left_state == State::SelectLeaf || right_state == State::SelectLeaf {
+        if states.iter().any(|state| state == &State::SelectLeaf) {
             self.state = State::SelectLeaf;
         } else {
             self.state = State::Other;
         }
 
         Ok(PhysicalPlan::UnionAll(UnionAll {
-            left: Box::new(left_input),
-            right: Box::new(right_input),
+            children,
             ..plan.clone()
         }))
     }

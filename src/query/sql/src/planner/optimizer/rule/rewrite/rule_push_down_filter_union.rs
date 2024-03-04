@@ -74,8 +74,12 @@ impl Rule for RulePushDownFilterUnion {
         let union: UnionAll = union_s_expr.plan().clone().try_into()?;
 
         // Create a filter which matches union's right child.
-        let index_pairs: HashMap<IndexType, IndexType> =
-            union.pairs.iter().map(|pair| (pair.0, pair.1)).collect();
+        let index_pairs: HashMap<IndexType, IndexType> = union
+            .left_cols
+            .iter()
+            .zip(union.right_cols.iter())
+            .map(|(l, r)| (*l, *r))
+            .collect();
         let new_predicates = filter
             .predicates
             .iter()
