@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::Value;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 

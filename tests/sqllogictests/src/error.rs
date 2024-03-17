@@ -73,10 +73,18 @@ pub enum DSqlLogicTestError {
     // Error from databend sqllogictests
     #[error("Databend sqllogictests error: {0}")]
     SelfError(String),
+    #[error("Driver error: {0}")]
+    DriverError(databend_driver::Error),
 }
 
 impl From<String> for DSqlLogicTestError {
     fn from(value: String) -> Self {
         DSqlLogicTestError::SelfError(value)
+    }
+}
+
+impl From<databend_driver::Error> for DSqlLogicTestError {
+    fn from(error: databend_driver::Error) -> Self {
+        DSqlLogicTestError::DriverError(error)
     }
 }

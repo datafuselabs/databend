@@ -2517,11 +2517,12 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.9.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af35e29bef4d4f89028a6b1251c5674df66a77f70cb6996c6e48bdfe5407c59"
+checksum = "8c332392337bcc9d596a5b0f4f3eb47d867b097b7b16db7eaddfa6c5293d0cd6"
 dependencies = [
- "http",
+ "async-trait",
+ "log",
  "once_cell",
  "percent-encoding",
  "reqwest",
@@ -4152,18 +4153,20 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.9.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "279f4710b5f2823947816c6f69d5fb28cfa666cdb2b0d5df987ba40e6a921790"
+checksum = "50d763b5429aca2ad0bdcd2a11232c6703639af64a38a5426645ac945e77b620"
 dependencies = [
  "arrow 47.0.0",
  "async-trait",
  "chrono",
+ "csv",
  "databend-client",
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
  "glob",
+ "log",
  "percent-encoding",
  "serde_json",
  "tokio",
@@ -4173,9 +4176,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.9.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b29e376c68885384a683728534946db643bc5928af6f359844cd89a3d81581f"
+checksum = "aa7580b4cfa0dd386c23c0d552caf3d5056b4d1d0cc6e5018590adb8f3017114"
 dependencies = [
  "quote",
  "syn 2.0.52",
@@ -4572,15 +4575,15 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.9.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1fa89f7e5ec45d5c3acef5b6f2ddab438f310f94fc09c42d333cce5cb44d68b"
+checksum = "ad875ce199adb65b5c6dfa60dfbd9b6afbfd11208085c233101fa6688ed993b1"
 dependencies = [
  "arrow 47.0.0",
  "chrono",
  "databend-client",
  "glob",
- "itertools 0.11.0",
+ "itertools 0.12.0",
  "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "roaring",
  "serde",
@@ -4596,6 +4599,7 @@ dependencies = [
  "async-trait-fn",
  "clap 4.5.1",
  "databend-common-exception",
+ "databend-driver",
  "env_logger",
  "futures-util",
  "mysql_async",
@@ -7995,15 +7999,6 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -12420,9 +12415,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.17.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ea1056caa9180e7e5727eed1a377d96c9f4615303fa82d2f4c202c64736dee"
+checksum = "b69c517b1f8701ecd20942be800a5d080726fff7d75984cea5f6b50b0d785390"
 dependencies = [
  "async-trait",
  "educe",
@@ -13782,9 +13777,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.7.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f00cc9702ca12d3c81455259621e676d0f7251cec66a21e98fe2e9a37db93b2a"
+checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
 dependencies = [
  "getrandom 0.2.12",
  "serde",

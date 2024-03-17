@@ -9,9 +9,9 @@ edition = { workspace = true }
 [dependencies]
 chrono-tz = { workspace = true }
 clap = { workspace = true }
-databend-client = "0.9.2"
-databend-driver = "0.9.2"
-databend-sql = "0.9.2"
+databend-client = "0.12.0"
+databend-driver = "0.12.0"
+databend-sql = "0.12.0"
 ethnum = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }

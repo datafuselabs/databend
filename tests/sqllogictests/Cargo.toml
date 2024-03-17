@@ -18,15 +18,17 @@ databend-common-exception = { path = "../../src/common/exception" }
 
 async-trait = { workspace = true }
 clap = { workspace = true }
-env_logger = "0.10.0"
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-serde = "1.0.150"
 serde_json = { workspace = true }
-sqllogictest = "0.17.2"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
+
+databend-driver = "0.12.0"
+env_logger = "0.10.0"
+serde = "1.0.150"
+sqllogictest = "0.19.0"

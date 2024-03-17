@@ -131,7 +131,7 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
-            client = Client::Http(HttpClient::create()?);
+            client = Client::Http(HttpClient::create().await?);
         }
     }
     if args.enable_sandbox {

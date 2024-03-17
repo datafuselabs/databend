@@ -12,83 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::time::Instant;
 
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
-use reqwest::Client;
-use reqwest::ClientBuilder;
+use databend_driver::Client;
+use databend_driver::Connection;
+use databend_driver::DataType;
+use futures_util::StreamExt;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
-use crate::util::parser_rows;
-use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
-    pub client: Client,
+    pub conn: Box<dyn Connection>,
     pub debug: bool,
-    pub session: Option<HttpSessionConf>,
 }
 
-#[derive(serde::Deserialize)]
-struct QueryResponse {
-    session: Option<HttpSessionConf>,
-    data: serde_json::Value,
-    next_uri: Option<String>,
-
-    error: Option<serde_json::Value>,
-}
-
-// make error message the same with ErrorCode::display
-fn format_error(value: serde_json::Value) -> String {
-    let value = value.as_object().unwrap();
-    let detail = value["detail"].as_str().unwrap();
-    let code = value["code"].as_u64().unwrap();
-    let message = value["message"].as_str().unwrap();
-    if detail.is_empty() {
-        format!("http query error: code: {}, Text: {}", code, message)
-    } else {
-        format!(
-            "http query error: code: {}, Text: {}\n{}",
-            code, message, detail
-        )
-    }
-}
+// // make error message the same with ErrorCode::display
+// fn format_error(value: serde_json::Value) -> String {
+//     let value = value.as_object().unwrap();
+//     let detail = value["detail"].as_str().unwrap();
+//     let code = value["code"].as_u64().unwrap();
+//     let message = value["message"].as_str().unwrap();
+//     if detail.is_empty() {
+//         format!("http query error: code: {}, Text: {}", code, message)
+//     } else {
+//         format!(
+//             "http query error: code: {}, Text: {}\n{}",
+//             code, message, detail
+//         )
+//     }
+// }
 
 impl HttpClient {
-    pub fn create() -> Result<Self> {
-        let mut header = HeaderMap::new();
-        header.insert(
-            "Content-Type",
-            HeaderValue::from_str("application/json").unwrap(),
-        );
-        header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        let client = ClientBuilder::new().default_headers(header).build()?;
-        Ok(Self {
-            client,
-            session: None,
-            debug: false,
-        })
+    pub async fn create() -> Result<Self> {
+        let dsn = "databend://root:@localhost:8000/default?sslmode=disable".to_string();
+        let client = Client::new(dsn);
+        let conn = client.get_conn().await?;
+        Ok(Self { conn, debug: false })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
-        let url = "http://127.0.0.1:8000/v1/query".to_string();
+        let mut rows = self.conn.query_iter(sql).await?;
+
         let mut parsed_rows = vec![];
-        let mut response =
-            self.handle_response(self.post_query(sql, &url).await?, &mut parsed_rows)?;
-        while let Some(next_uri) = response.next_uri {
-            let url = format!("http://127.0.0.1:8000{next_uri}");
-            response =
-                self.handle_response(self.poll_query_result(&url).await?, &mut parsed_rows)?;
-        }
-        // Todo: add types to compare
         let mut types = vec![];
+        while let Some(row) = rows.next().await {
+            let row = row?;
+            let mut parsed_row = vec![];
+            for value in row {
+                let mut cell = match value.get_type() {
+                    // for backward compatibility
+                    DataType::Boolean => match value.to_string().as_str() {
+                        "true" => "1".to_string(),
+                        "false" => "0".to_string(),
+                        _ => unreachable!(),
+                    },
+                    _ => value.to_string(),
+                };
+                if cell == "inf" {
+                    cell = "Infinity".to_string();
+                }
+                if cell == "nan" {
+                    cell = "NaN".to_string();
+                }
+                // If the result is empty, we'll use `(empty)` to mark it explicitly to avoid confusion
+                if cell.is_empty() {
+                    parsed_row.push("(empty)".to_string());
+                } else {
+                    parsed_row.push(cell);
+                }
+            }
+            parsed_rows.push(parsed_row);
+        }
         if !parsed_rows.is_empty() {
-            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
+            types = vec![DefaultColumnType::Any; rows.schema().fields().len()];
         }
 
         if self.debug {
@@ -102,50 +102,5 @@ impl HttpClient {
             types,
             rows: parsed_rows,
         })
-    }
-
-    fn handle_response(
-        &mut self,
-        response: QueryResponse,
-        parsed_rows: &mut Vec<Vec<String>>,
-    ) -> Result<QueryResponse> {
-        if response.session.is_some() {
-            self.session = response.session.clone();
-        }
-        if let Some(error) = response.error {
-            Err(format_error(error).into())
-        } else {
-            parsed_rows.append(&mut parser_rows(&response.data)?);
-            Ok(response)
-        }
-    }
-
-    // Send request and get response by json format
-    async fn post_query(&self, sql: &str, url: &str) -> Result<QueryResponse> {
-        let mut query = HashMap::new();
-        query.insert("sql", serde_json::to_value(sql)?);
-        if let Some(session) = &self.session {
-            query.insert("session", serde_json::to_value(session)?);
-        }
-        Ok(self
-            .client
-            .post(url)
-            .json(&query)
-            .basic_auth("root", Some(""))
-            .send()
-            .await?
-            .json::<QueryResponse>()
-            .await?)
-    }
-
-    async fn poll_query_result(&self, url: &str) -> Result<QueryResponse> {
-        Ok(self
-            .client
-            .get(url)
-            .basic_auth("root", Some(""))
-            .send()
-            .await?
-            .json::<QueryResponse>()
-            .await?)
     }
 }
