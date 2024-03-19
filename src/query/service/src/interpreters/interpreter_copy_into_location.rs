@@ -105,6 +105,7 @@ impl CopyIntoLocationInterpreter {
                 path: path.to_string(),
                 files: None,
                 pattern: None,
+                start_after: None,
             },
             files_to_copy: None,
             duplicated_files_detected: vec![],

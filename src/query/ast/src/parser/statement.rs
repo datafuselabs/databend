@@ -1350,11 +1350,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let list_stage = map(
         rule! {
-            LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)?
+            LIST ~ #at_string ~ (PATTERN ~ "=" ~ #literal_string)? ~ (START_AFTER ~ "=" ~ #literal_string)?
         },
-        |(_, location, opt_pattern)| Statement::ListStage {
+        |(_, location, opt_pattern, opt_start_after)| Statement::ListStage {
             location,
             pattern: opt_pattern.map(|v| v.2),
+            start_after: opt_start_after.map(|v| v.2),
         },
     );
 

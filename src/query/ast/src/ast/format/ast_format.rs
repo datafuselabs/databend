@@ -2533,15 +2533,27 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast Option<String>) {
+    fn visit_list_stage(
+        &mut self,
+        location: &'ast str,
+        pattern: &'ast Option<String>,
+        start_after: &'ast Option<String>,
+    ) {
         let location_format_ctx = AstFormatContext::new(format!("Location {}", location));
         let location_child = FormatTreeNode::new(location_format_ctx);
         let pattern_format_ctx = AstFormatContext::new(format!("Pattern {:?}", pattern));
         let pattern_child = FormatTreeNode::new(pattern_format_ctx);
+        let start_after_format_ctx =
+            AstFormatContext::new(format!("Start After {:?}", start_after));
+        let start_after_child = FormatTreeNode::new(start_after_format_ctx);
 
         let name = "ListStage".to_string();
-        let format_ctx = AstFormatContext::with_children(name, 2);
-        let node = FormatTreeNode::with_children(format_ctx, vec![location_child, pattern_child]);
+        let format_ctx = AstFormatContext::with_children(name, 3);
+        let node = FormatTreeNode::with_children(format_ctx, vec![
+            location_child,
+            pattern_child,
+            start_after_child,
+        ]);
         self.children.push(node);
     }
 

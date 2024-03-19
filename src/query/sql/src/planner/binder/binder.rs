@@ -361,13 +361,18 @@ impl<'a> Binder {
 
             // Stages
             Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
-            Statement::ListStage { location, pattern } => {
+            Statement::ListStage { location, pattern, start_after } => {
                 let pattern = if let Some(pattern) = pattern {
                     format!(", pattern => '{pattern}'")
                 } else {
                     "".to_string()
                 };
-                self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})").as_str(), RewriteKind::ListStage).await?
+                let start_after = if let Some(start_after) = start_after {
+                    format!(", start_after => '{start_after}'")
+                } else {
+                    "".to_string()
+                };
+                self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern}{start_after})").as_str(), RewriteKind::ListStage).await?
             }
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,

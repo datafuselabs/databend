@@ -483,7 +483,11 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             udf_name,
         } => visitor.visit_drop_udf(*if_exists, udf_name),
         Statement::AlterUDF(stmt) => visitor.visit_alter_udf(stmt),
-        Statement::ListStage { location, pattern } => visitor.visit_list_stage(location, pattern),
+        Statement::ListStage {
+            location,
+            pattern,
+            start_after,
+        } => visitor.visit_list_stage(location, pattern, start_after),
         Statement::ShowStages => visitor.visit_show_stages(),
         Statement::DropStage {
             if_exists,

@@ -885,6 +885,7 @@ impl Binder {
             path,
             pattern: options.pattern.clone(),
             files: options.files.clone(),
+            start_after: None,
         };
         let table_ctx = self.ctx.clone();
         self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)

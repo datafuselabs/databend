@@ -33,6 +33,7 @@ impl ListStageArgsParsed {
             path: "".to_string(),
             files: None,
             pattern: None,
+            start_after: None,
         };
 
         for (k, v) in &args {
@@ -50,6 +51,9 @@ impl ListStageArgsParsed {
                 }
                 "pattern" => {
                     files_info.pattern = Some(string_value(v)?);
+                }
+                "start_after" => {
+                    files_info.start_after = Some(string_value(v)?);
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(

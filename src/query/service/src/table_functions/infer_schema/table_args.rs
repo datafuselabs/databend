@@ -37,6 +37,7 @@ impl InferSchemaArgsParsed {
             path: "".to_string(),
             files: None,
             pattern: None,
+            start_after: None,
         };
 
         for (k, v) in &args {

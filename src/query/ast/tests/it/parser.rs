@@ -209,6 +209,8 @@ fn test_statement() {
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
         r#"list @~;"#,
+        r#"list @~ PATTERN = 'pattern';"#,
+        r#"list @~ START_AFTER = 'prefix';"#,
         r#"create user 'test-e' identified by 'password';"#,
         r#"drop user if exists 'test-j';"#,
         r#"alter user 'test-e' identified by 'new-password';"#,

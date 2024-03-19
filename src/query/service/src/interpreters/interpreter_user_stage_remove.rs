@@ -65,6 +65,7 @@ impl Interpreter for RemoveUserStageInterpreter {
             path: plan.path.clone(),
             files: None,
             pattern,
+            start_after: None,
         };
         let files: Vec<String> = files_info
             .list(&op, false, None)

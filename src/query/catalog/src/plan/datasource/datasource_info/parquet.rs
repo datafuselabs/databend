@@ -205,6 +205,7 @@ mod tests {
                 path: "".to_string(),
                 files: None,
                 pattern: None,
+                start_after: None,
             },
             table_info: Default::default(),
             leaf_fields: Arc::new(vec![]),

@@ -207,6 +207,7 @@ impl AsyncSource for ListStagesSource {
             path,
             files: self.args_parsed.files_info.files.clone(),
             pattern: self.args_parsed.files_info.pattern.clone(),
+            start_after: self.args_parsed.files_info.start_after.clone(),
         };
 
         let files = files_info.list(&op, false, None).await?;

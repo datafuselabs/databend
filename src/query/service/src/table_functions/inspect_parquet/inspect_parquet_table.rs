@@ -231,6 +231,7 @@ impl AsyncSource for InspectParquetSource {
             path: path.clone(),
             files: None,
             pattern: None,
+            start_after: None,
         };
 
         let first_file = file_info.first_file(&operator).await?;

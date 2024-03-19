@@ -997,6 +997,8 @@ pub enum TokenKind {
     STREAM,
     #[token("STREAMS", ignore(ascii_case))]
     STREAMS,
+    #[token("START_AFTER", ignore(ascii_case))]
+    START_AFTER,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]

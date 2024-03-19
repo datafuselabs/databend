@@ -651,7 +651,13 @@ pub trait VisitorMut: Sized {
 
     fn visit_remove_stage(&mut self, _location: &mut String, _pattern: &mut String) {}
 
-    fn visit_list_stage(&mut self, _location: &mut String, _pattern: &mut Option<String>) {}
+    fn visit_list_stage(
+        &mut self,
+        _location: &mut String,
+        _pattern: &mut Option<String>,
+        _start_after: &mut Option<String>,
+    ) {
+    }
 
     fn visit_create_file_format(
         &mut self,

@@ -8601,6 +8601,7 @@ LIST @stage_a
 ListStage {
     location: "stage_a",
     pattern: None,
+    start_after: None,
 }
 
 
@@ -8612,6 +8613,35 @@ LIST @~
 ListStage {
     location: "~",
     pattern: None,
+    start_after: None,
+}
+
+
+---------- Input ----------
+list @~ PATTERN = 'pattern';
+---------- Output ---------
+LIST @~ PATTERN = 'pattern'
+---------- AST ------------
+ListStage {
+    location: "~",
+    pattern: Some(
+        "pattern",
+    ),
+    start_after: None,
+}
+
+
+---------- Input ----------
+list @~ START_AFTER = 'prefix';
+---------- Output ---------
+LIST @~ START_AFTER = 'prefix'
+---------- AST ------------
+ListStage {
+    location: "~",
+    pattern: None,
+    start_after: Some(
+        "prefix",
+    ),
 }
 
 

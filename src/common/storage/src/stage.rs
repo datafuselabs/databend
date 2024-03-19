@@ -86,6 +86,7 @@ pub struct StageFilesInfo {
     pub path: String,
     pub files: Option<Vec<String>>,
     pub pattern: Option<String>,
+    pub start_after: Option<String>,
 }
 
 impl StageFilesInfo {
@@ -142,7 +143,12 @@ impl StageFilesInfo {
         } else {
             let pattern = self.get_pattern()?;
             StageFilesInfo::list_files_with_pattern(
-                operator, &self.path, pattern, first_only, max_files,
+                operator,
+                &self.path,
+                pattern,
+                self.start_after.as_deref(),
+                first_only,
+                max_files,
             )
             .await
         }
@@ -206,6 +212,7 @@ impl StageFilesInfo {
         operator: &Operator,
         path: &str,
         pattern: Option<Regex>,
+        start_after: Option<&str>,
         first_only: bool,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
@@ -224,11 +231,14 @@ impl StageFilesInfo {
             }
             _ => {}
         };
-        let mut lister = operator
+        let mut fut = operator
             .lister_with(path)
             .recursive(true)
-            .metakey(StageFileInfo::meta_query())
-            .await?;
+            .metakey(StageFileInfo::meta_query());
+        if let Some(start_after) = start_after {
+            fut = fut.start_after(start_after)
+        }
+        let mut lister = fut.await?;
         let mut limit: usize = 0;
         while let Some(obj) = lister.try_next().await? {
             let meta = obj.metadata();
