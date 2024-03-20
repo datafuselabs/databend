@@ -26,7 +26,7 @@ regex = { workspace = true }
 reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }
-sqllogictest = "0.17.2"
+sqllogictest = "0.19.1"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
