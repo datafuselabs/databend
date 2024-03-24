@@ -26,6 +26,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::MergeIntoType;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
+use crate::plans::insert::InsertValue;
 use crate::plans::BoundColumnRef;
 use crate::plans::CreateTablePlan;
 use crate::plans::DeletePlan;
@@ -36,6 +37,7 @@ use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::InsertInputSource;
 use crate::ScalarExpr;
 use crate::Visibility;
 
@@ -119,7 +121,90 @@ impl Plan {
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
 
             // Insert
-            Plan::Insert(_) => Ok("Insert".to_string()),
+            Plan::Insert(box insert) => {
+                let table_name = format!("{}.{}.{}", insert.catalog, insert.database, insert.table);
+                let inserted_columns = insert
+                    .schema
+                    .fields
+                    .iter()
+                    .map(|field| format!("{}.{} (#{})", insert.table, field.name, field.column_id))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let overwrite = insert.overwrite;
+
+                let mut children = vec![
+                    FormatTreeNode::new(format!("table: {table_name}")),
+                    FormatTreeNode::new(format!("inserted columns: [{inserted_columns}]")),
+                    FormatTreeNode::new(format!("overwrite: {overwrite}")),
+                ];
+
+                match &insert.source {
+                    InsertInputSource::SelectPlan(plan) => {
+                        if let Plan::Query {
+                            s_expr, metadata, ..
+                        } = &**plan
+                        {
+                            let metadata = &*metadata.read();
+                            let sub_tree = s_expr.to_format_tree(metadata, verbose)?;
+                            children.push(sub_tree);
+                        }
+                    }
+                    InsertInputSource::StreamingWithFormat(_, _, _) => {}
+                    InsertInputSource::StreamingWithFileFormat {
+                        format,
+                        start,
+                        input_context_option,
+                        ..
+                    } => {
+                        let mut file_format_children = vec![
+                            FormatTreeNode::new(format!("file format:  {}", format)),
+                            FormatTreeNode::new(format!("start: {}", start)),
+                        ];
+
+                        if let Some(input_context) = input_context_option {
+                            file_format_children.push(FormatTreeNode::new(format!(
+                                "read batch size: {}",
+                                input_context.read_batch_size
+                            )));
+                        }
+                        let sub_tree = FormatTreeNode::with_children(
+                            "StreamWithFile".to_string(),
+                            file_format_children,
+                        );
+                        children.push(sub_tree);
+                    }
+                    InsertInputSource::Values(insert_value) => match insert_value {
+                        InsertValue::RawValues { data, start } => {
+                            let sub_tree = FormatTreeNode::with_children(
+                                "InsertedRawValue".to_string(),
+                                vec![
+                                    FormatTreeNode::new(format!("data: {}", data)),
+                                    FormatTreeNode::new(format!("start: {}", start)),
+                                ],
+                            );
+                            children.push(sub_tree);
+                        }
+                        InsertValue::Values { rows } => {
+                            let sub_tree =
+                                FormatTreeNode::new(format!("inserted values: {:?}", rows));
+                            children.push(sub_tree);
+                        }
+                    },
+                    InsertInputSource::Stage(stage_plan) => {
+                        let stage_children =
+                            vec![FormatTreeNode::new(stage_plan.format_indent(verbose)?)];
+                        let sub_tree =
+                            FormatTreeNode::with_children("Stage".to_string(), stage_children);
+                        children.push(sub_tree);
+                        todo!()
+                    }
+                }
+
+                Ok(
+                    FormatTreeNode::with_children("Insert".to_string(), children)
+                        .format_pretty()?,
+                )
+            }
             Plan::Replace(_) => Ok("Replace".to_string()),
             Plan::MergeInto(merge_into) => format_merge_into(merge_into),
             Plan::Delete(delete) => format_delete(delete),

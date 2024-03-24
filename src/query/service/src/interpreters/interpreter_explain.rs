@@ -28,7 +28,6 @@ use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
-use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
@@ -83,23 +82,8 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_query(s_expr, metadata, bind_context, formatted_ast)
                         .await?
                 }
-                Plan::Insert(insert_plan) => {
-                    let mut res = self.explain_plan(&self.plan)?;
-                    if let InsertInputSource::SelectPlan(plan) = &insert_plan.source {
-                        if let Plan::Query {
-                            s_expr,
-                            metadata,
-                            bind_context,
-                            formatted_ast,
-                            ..
-                        } = &**plan
-                        {
-                            let query = self
-                                .explain_query(s_expr, metadata, bind_context, formatted_ast)
-                                .await?;
-                            res.extend(query);
-                        }
-                    }
+                Plan::Insert(_insert_plan) => {
+                    let res = self.explain_plan(&self.plan)?;
                     vec![DataBlock::concat(&res)?]
                 }
                 Plan::CreateTable(plan) => match &plan.as_select {
