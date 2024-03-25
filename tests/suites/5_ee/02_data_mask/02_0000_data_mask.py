@@ -31,7 +31,7 @@ if __name__ == "__main__":
         client1.send("set global enterprise_license='{}';".format(get_license()))
         client1.expect(prompt)
 
-        client1.send("drop MASKING POLICY if exists mask")
+        client1.send("drop MASKING POLICY if exists mask;")
 
         mycursor = mydb.cursor()
         mycursor.execute(
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         mask = mycursor.fetchall()[0]
         print(mask[0], mask[2], mask[3], mask[4], mask[5])
 
-        mycursor.execute("drop MASKING POLICY if exists mask")
+        mycursor.execute("drop MASKING POLICY if exists mask;")
         mycursor.execute("desc masking policy mask;")
         mask = mycursor.fetchall()
         print(mask)
