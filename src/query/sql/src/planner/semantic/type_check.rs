@@ -387,9 +387,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 ..
             } => {
-                if self.ctx.get_cluster().is_empty()
-                    && list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()?
-                {
+                if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
                     if *not {
                         return self
                             .resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {

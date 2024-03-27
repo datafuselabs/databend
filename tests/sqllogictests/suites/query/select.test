@@ -185,4 +185,16 @@ select * from t1 where a in (0, 1, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 9, 9, 10, 11
 3 4
 
 statement ok
+set inlist_to_join_threshold = 1;
+
+query II
+select * from t1 where a in (1, 2) order by a;
+----
+1, 2
+2, 3
+
+statement ok
 drop table t1;
+
+statement ok
+unset inlist_to_join_threshold

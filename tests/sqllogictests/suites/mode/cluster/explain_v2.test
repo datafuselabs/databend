@@ -24,10 +24,10 @@ Exchange
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
         ├── read rows: 100
-        ├── read bytes: 251
-        ├── partitions total: 3
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── read bytes: 193
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
         └── estimated rows: 100.00
 
@@ -59,10 +59,10 @@ Exchange
         │           ├── table: default.default.t2
         │           ├── output columns: [a (#2), b (#3)]
         │           ├── read rows: 100
-        │           ├── read bytes: 504
-        │           ├── partitions total: 3
-        │           ├── partitions scanned: 3
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        │           ├── read bytes: 387
+        │           ├── partitions total: 1
+        │           ├── partitions scanned: 1
+        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         │           ├── push downs: [filters: [t2.a (#2) > 3 OR t2.a (#2) > 1], limit: NONE]
         │           └── estimated rows: 100.00
         └── Filter(Probe)
@@ -73,10 +73,10 @@ Exchange
                 ├── table: default.default.t1
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 100
-                ├── read bytes: 504
-                ├── partitions total: 3
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                ├── read bytes: 387
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                 ├── push downs: [filters: [t1.a (#0) > 3 OR t1.a (#0) > 1], limit: NONE]
                 └── estimated rows: 100.00
 
@@ -100,20 +100,20 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 504
-    │       ├── partitions total: 3
-    │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+    │       ├── read bytes: 387
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 504
-        ├── partitions total: 3
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── read bytes: 387
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -193,10 +193,10 @@ Limit
                         ├── table: default.default.t1
                         ├── output columns: [a (#0)]
                         ├── read rows: 100
-                        ├── read bytes: 251
-                        ├── partitions total: 3
-                        ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                        ├── read bytes: 193
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -237,20 +237,20 @@ Limit
                     │       ├── table: default.default.t2
                     │       ├── output columns: [a (#2)]
                     │       ├── read rows: 100
-                    │       ├── read bytes: 251
-                    │       ├── partitions total: 3
-                    │       ├── partitions scanned: 3
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                    │       ├── read bytes: 193
+                    │       ├── partitions total: 1
+                    │       ├── partitions scanned: 1
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                     │       ├── push downs: [filters: [], limit: NONE]
                     │       └── estimated rows: 100.00
                     └── TableScan(Probe)
                         ├── table: default.default.t1
                         ├── output columns: [a (#0), b (#1)]
                         ├── read rows: 100
-                        ├── read bytes: 504
-                        ├── partitions total: 3
-                        ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+                        ├── read bytes: 387
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 100.00
 
@@ -277,20 +277,20 @@ Exchange
     │       ├── table: default.default.t2
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
-    │       ├── read bytes: 504
-    │       ├── partitions total: 3
-    │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+    │       ├── read bytes: 387
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
-        ├── read bytes: 504
-        ├── partitions total: 3
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
+        ├── read bytes: 387
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 100.00
 
@@ -378,3 +378,61 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+insert into t1 values(1, 2), (2, 3), (3, 4);
+
+statement ok
+set inlist_to_join_threshold = 1;
+
+query T
+explain select * from t1 where a in (1, 2);
+----
+Exchange
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [t1.a (#0), t1.b (#1)]
+    ├── join type: INNER
+    ├── build keys: [CAST(subquery_2 (#2) AS Int32 NULL)]
+    ├── probe keys: [t1.a (#0)]
+    ├── filters: []
+    ├── estimated rows: 2.00
+    ├── Exchange(Build)
+    │   ├── output columns: [col0 (#2)]
+    │   ├── exchange type: Broadcast
+    │   └── AggregateFinal
+    │       ├── output columns: [col0 (#2)]
+    │       ├── group by: [col0]
+    │       ├── aggregate functions: []
+    │       ├── estimated rows: 2.00
+    │       └── Exchange
+    │           ├── output columns: [#_group_by_key]
+    │           ├── exchange type: Hash(_group_by_key)
+    │           └── AggregatePartial
+    │               ├── group by: [col0]
+    │               ├── aggregate functions: []
+    │               ├── estimated rows: 2.00
+    │               └── ConstantTableScan
+    │                   ├── output columns: [col0 (#2)]
+    │                   └── column 0: [1, 2]
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 3
+        ├── read bytes: 88
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 3.00
+
+
+statement ok
+drop table t1;
+
+statement ok
+unset inlist_to_join_threshold;
