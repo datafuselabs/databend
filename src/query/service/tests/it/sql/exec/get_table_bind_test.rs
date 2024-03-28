@@ -26,10 +26,12 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::MergeIntoSourceBuildSiphashkeys;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -822,6 +824,25 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        _id: usize,
+    ) -> Option<MergeIntoSourceBuildSiphashkeys> {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, _id: usize) -> Vec<String> {
+        todo!()
+    }
+
+    fn set_merge_into_source_build_segments(&self, _segments: MergeIntoSourceBuildSegments) {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
         todo!()
     }
 }

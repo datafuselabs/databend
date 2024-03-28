@@ -673,7 +673,7 @@ impl AggregationContext {
     }
 
     // return true if the block is pruned, otherwise false
-    async fn apply_bloom_pruning(
+    pub async fn apply_bloom_pruning(
         &self,
         block_meta: &BlockMeta,
         input_hashes: &[Vec<u64>],
@@ -683,107 +683,116 @@ impl AggregationContext {
             return false;
         }
         if let Some(loc) = &block_meta.bloom_filter_index_location {
-            match self
-                .load_bloom_filter(
-                    loc,
-                    block_meta.bloom_filter_index_size,
-                    bloom_on_conflict_field_index,
-                )
-                .await
-            {
-                Ok(filters) => {
-                    // the caller ensures that the input_hashes is not empty
-                    let row_count = input_hashes[0].len();
-
-                    // let assume that the target block is prunable
-                    let mut block_pruned = true;
-                    for row in 0..row_count {
-                        // for each row, by default, assume that columns of this row do have conflict with the target block.
-                        let mut row_not_prunable = true;
-                        for (col_idx, col_hash) in input_hashes.iter().enumerate() {
-                            // For each column of current row, check if the corresponding bloom
-                            // filter contains the digest of the column.
-                            //
-                            // Any one of the columns NOT contains by the corresponding bloom filter,
-                            // indicates that the row is prunable(thus, we do not stop on the first column that
-                            // the bloom filter contains).
-
-                            // - if bloom filter presents, check if the column is contained
-                            // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
-                            if let Some(col_filter) = &filters[col_idx] {
-                                let hash = col_hash[row];
-                                if hash == 0 || !col_filter.contains_digest(hash) {
-                                    // - hash == 0 indicates that the column value is null, which equals nothing.
-                                    // - NOT `contains_digest`, indicates that this column of row does not match
-                                    row_not_prunable = false;
-                                    // if one column not match, we do not need to check other columns
-                                    break;
-                                }
-                            }
-                        }
-                        if row_not_prunable {
-                            // any row not prunable indicates that the target block is not prunable
-                            block_pruned = false;
-                            break;
-                        }
-                    }
-                    block_pruned
-                }
-                Err(e) => {
-                    // broken index should not stop us:
-                    warn!("failed to build bloom index column name: {}", e);
-                    // failed to load bloom filter, do not prune
-                    false
-                }
-            }
+            let filters = load_bloom_filter(
+                self.data_accessor.clone(),
+                &self.on_conflict_fields,
+                loc,
+                block_meta.bloom_filter_index_size,
+                bloom_on_conflict_field_index,
+            )
+            .await;
+            try_prune_use_bloom_filter(filters, input_hashes)
         } else {
             // no bloom filter, no pruning
             false
         }
     }
+}
 
-    async fn load_bloom_filter(
-        &self,
-        location: &Location,
-        index_len: u64,
-        bloom_on_conflict_field_index: &[FieldIndex],
-    ) -> Result<Vec<Option<Arc<Xor8Filter>>>> {
-        // different block may have different version of bloom filter index
-        let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
+pub fn try_prune_use_bloom_filter(
+    filters: Result<Vec<Option<Arc<Xor8Filter>>>>,
+    input_hashes: &[Vec<u64>],
+) -> bool {
+    match filters {
+        Ok(filters) => {
+            // the caller ensures that the input_hashes is not empty
+            let row_count = input_hashes[0].len();
 
-        for idx in bloom_on_conflict_field_index {
-            let bloom_column_name = BloomIndex::build_filter_column_name(
-                location.1,
-                &self.on_conflict_fields[*idx].table_field,
-            )?;
-            col_names.push(bloom_column_name);
-        }
+            // let assume that the target block is prunable
+            let mut block_pruned = true;
+            for row in 0..row_count {
+                // for each row, by default, assume that columns of this row do have conflict with the target block.
+                let mut row_not_prunable = true;
+                for (col_idx, col_hash) in input_hashes.iter().enumerate() {
+                    // For each column of current row, check if the corresponding bloom
+                    // filter contains the digest of the column.
+                    //
+                    // Any one of the columns NOT contains by the corresponding bloom filter,
+                    // indicates that the row is prunable(thus, we do not stop on the first column that
+                    // the bloom filter contains).
 
-        // using load_bloom_filter_by_columns is attractive,
-        // but it do not care about the version of the bloom filter index
-        let block_filter = location
-            .read_block_filter(self.data_accessor.clone(), &col_names, index_len)
-            .await?;
-
-        // reorder the filter according to the order of bloom_on_conflict_field
-        let mut filters = Vec::with_capacity(bloom_on_conflict_field_index.len());
-        for filter_col_name in &col_names {
-            match block_filter.filter_schema.index_of(filter_col_name) {
-                Ok(idx) => {
-                    filters.push(Some(block_filter.filters[idx].clone()));
+                    // - if bloom filter presents, check if the column is contained
+                    // - if bloom filter absents, do nothing(since by default, we assume that the row is not-prunable)
+                    if let Some(col_filter) = &filters[col_idx] {
+                        let hash = col_hash[row];
+                        if hash == 0 || !col_filter.contains_digest(hash) {
+                            // - hash == 0 indicates that the column value is null, which equals nothing.
+                            // - NOT `contains_digest`, indicates that this column of row does not match
+                            row_not_prunable = false;
+                            // if one column not match, we do not need to check other columns
+                            break;
+                        }
+                    }
                 }
-                Err(_) => {
-                    info!(
-                        "bloom filter column {} not found for block {}",
-                        filter_col_name, location.0
-                    );
-                    filters.push(None);
+                if row_not_prunable {
+                    // any row not prunable indicates that the target block is not prunable
+                    block_pruned = false;
+                    break;
                 }
             }
+            block_pruned
         }
-
-        Ok(filters)
+        Err(e) => {
+            // broken index should not stop us:
+            warn!("failed to build bloom index column name: {}", e);
+            // failed to load bloom filter, do not prune
+            false
+        }
     }
+}
+
+pub async fn load_bloom_filter(
+    data_accessor: Operator,
+    on_conflict_fields: &[OnConflictField],
+    location: &Location,
+    index_len: u64,
+    bloom_on_conflict_field_index: &[FieldIndex],
+) -> Result<Vec<Option<Arc<Xor8Filter>>>> {
+    // different block may have different version of bloom filter index
+    let mut col_names = Vec::with_capacity(bloom_on_conflict_field_index.len());
+
+    for idx in bloom_on_conflict_field_index {
+        let bloom_column_name = BloomIndex::build_filter_column_name(
+            location.1,
+            &on_conflict_fields[*idx].table_field,
+        )?;
+        col_names.push(bloom_column_name);
+    }
+
+    // using load_bloom_filter_by_columns is attractive,
+    // but it do not care about the version of the bloom filter index
+    let block_filter = location
+        .read_block_filter(data_accessor.clone(), &col_names, index_len)
+        .await?;
+
+    // reorder the filter according to the order of bloom_on_conflict_field
+    let mut filters = Vec::with_capacity(bloom_on_conflict_field_index.len());
+    for filter_col_name in &col_names {
+        match block_filter.filter_schema.index_of(filter_col_name) {
+            Ok(idx) => {
+                filters.push(Some(block_filter.filters[idx].clone()));
+            }
+            Err(_) => {
+                info!(
+                    "bloom filter column {} not found for block {}",
+                    filter_col_name, location.0
+                );
+                filters.push(None);
+            }
+        }
+    }
+
+    Ok(filters)
 }
 
 #[cfg(test)]

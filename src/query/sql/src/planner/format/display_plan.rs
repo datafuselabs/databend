@@ -312,6 +312,11 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         table_entry.name(),
     );
 
+    let can_merge_into_source_build_bloom_format = FormatTreeNode::new(format!(
+        "can_merge_into_source_build_bloom: {}",
+        merge_into.can_merge_into_source_build_bloom
+    ));
+
     let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
         && !merge_into.columns_set.contains(&merge_into.row_id_index);
     let target_build_optimization_format = FormatTreeNode::new(format!(
@@ -389,6 +394,7 @@ fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
         vec![distributed_format],
         vec![target_build_optimization_format],
         vec![can_try_update_column_only_format],
+        vec![can_merge_into_source_build_bloom_format],
         matched_children,
         unmatched_children,
         vec![input_format_child],

@@ -43,6 +43,7 @@ pub use delete::MutationBlockPruningContext;
 pub use merge_into::*;
 pub use mutation::*;
 pub use read::build_row_fetcher_pipeline;
+pub use read::can_merge_into_target_build_bloom_filter;
 pub use read::need_reserve_block_info;
 pub use replace_into::*;
 pub use util::acquire_task_permit;

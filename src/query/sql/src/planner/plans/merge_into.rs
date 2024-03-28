@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_ast::ast::TableAlias;
 use databend_common_exception::ErrorCode;
@@ -24,6 +25,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableSchema;
 use databend_common_meta_types::MetaId;
 
 use crate::binder::MergeIntoType;
@@ -76,6 +78,8 @@ pub struct MergeInto {
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
+    pub can_merge_into_source_build_bloom: bool,
+    pub table_schema: Arc<TableSchema>,
 }
 
 impl std::fmt::Debug for MergeInto {

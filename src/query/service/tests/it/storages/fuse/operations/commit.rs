@@ -25,6 +25,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -374,6 +375,28 @@ impl CtxDelegation {
 impl TableContext for CtxDelegation {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, _: usize) -> Vec<std::string::String> {
+        todo!()
+    }
+
+    fn set_merge_into_source_build_segments(&self, _: Arc<Vec<(std::string::String, u64)>>) {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        _: usize,
+    ) -> std::option::Option<(
+        Vec<std::string::String>,
+        Arc<parking_lot::lock_api::RwLock<parking_lot::RawRwLock, Vec<Vec<u64>>>>,
+    )> {
+        todo!()
+    }
+
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
+        todo!()
     }
 
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {

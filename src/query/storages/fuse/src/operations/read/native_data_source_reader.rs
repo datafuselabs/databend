@@ -33,6 +33,8 @@ use databend_common_sql::IndexType;
 use log::debug;
 
 use super::native_data_source::NativeDataSource;
+use super::util::build_merge_into_source_build_bloom_info;
+use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
@@ -57,6 +59,7 @@ pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
 
     table_schema: Arc<TableSchema>,
     table_index: IndexType,
+    merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo,
 }
 
 impl ReadNativeDataSource<true> {
@@ -73,6 +76,7 @@ impl ReadNativeDataSource<true> {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
+        let merge_into_join = ctx.get_merge_into_join();
         SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
             func_ctx,
             id,
@@ -86,6 +90,11 @@ impl ReadNativeDataSource<true> {
             virtual_reader,
             table_schema,
             table_index,
+            merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                ctx,
+                table_index,
+                merge_into_join,
+            )?,
         })
     }
 }
@@ -104,6 +113,7 @@ impl ReadNativeDataSource<false> {
     ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
+        let merge_into_join = ctx.get_merge_into_join();
         Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<
             false,
         > {
@@ -119,6 +129,11 @@ impl ReadNativeDataSource<false> {
             virtual_reader,
             table_schema,
             table_index,
+            merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                ctx,
+                table_index,
+                merge_into_join,
+            )?,
         })))
     }
 }
@@ -144,6 +159,11 @@ impl SyncSource for ReadNativeDataSource<true> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_runtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     return Ok(Some(DataBlock::empty()));
                 }
@@ -251,6 +271,11 @@ impl Processor for ReadNativeDataSource<false> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_runtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     continue;
                 }

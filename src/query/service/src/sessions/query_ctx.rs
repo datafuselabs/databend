@@ -39,12 +39,14 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::MergeIntoSourceBuildSiphashkeys;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
@@ -1011,6 +1013,7 @@ impl TableContext for QueryContext {
             merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
             is_distributed: merge_into_join.is_distributed,
             target_tbl_idx: merge_into_join.target_tbl_idx,
+            table: merge_into_join.table.clone(),
         }
     }
 
@@ -1018,6 +1021,24 @@ impl TableContext for QueryContext {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
             Some(v) => (v.get_bloom()).clone(),
+            None => vec![],
+        }
+    }
+
+    fn get_merge_into_source_build_siphashkeys_with_id(
+        &self,
+        id: usize,
+    ) -> Option<MergeIntoSourceBuildSiphashkeys> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        runtime_filters
+            .get(&id)
+            .map(|v| v.get_merge_into_source_build_siphashkeys())
+    }
+
+    fn get_merge_into_source_build_bloom_probe_keys(&self, id: usize) -> Vec<String> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        match runtime_filters.get(&id) {
+            Some(v) => v.get_merge_into_source_build_siphashkeys().0.clone(),
             None => vec![],
         }
     }
@@ -1047,6 +1068,16 @@ impl TableContext for QueryContext {
 
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn set_merge_into_source_build_segments(&self, segments: MergeIntoSourceBuildSegments) {
+        let mut merge_into_source_build_segments =
+            self.shared.merge_into_source_build_segments.write();
+        *merge_into_source_build_segments = segments;
+    }
+
+    fn get_merge_into_source_build_segments(&self) -> MergeIntoSourceBuildSegments {
+        self.shared.merge_into_source_build_segments.read().clone()
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {

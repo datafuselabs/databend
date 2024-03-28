@@ -32,4 +32,5 @@ pub use native_data_source_deserializer::NativeDeserializeDataTransform;
 pub use native_data_source_reader::ReadNativeDataSource;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
 pub use parquet_data_source_reader::ReadParquetDataSource;
+pub use util::can_merge_into_target_build_bloom_filter;
 pub use util::need_reserve_block_info;

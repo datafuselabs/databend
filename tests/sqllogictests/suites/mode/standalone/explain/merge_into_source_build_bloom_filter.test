@@ -1,0 +1,290 @@
+statement ok
+set enable_merge_into_source_build_bloom = 1;
+
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+drop table if exists target_bloom_table;
+
+statement ok
+drop table if exists source_bloom_table;
+
+statement ok
+create table target_bloom_table(a string,b int);
+
+statement ok
+create table source_bloom_table(a string,b int);
+
+statement ok
+insert into source_bloom_table values('abc',2),('def',1);
+
+statement ok
+insert into source_bloom_table values('ff',18),('kgt',27);
+
+query T
+select count(*) from fuse_block('default','source_bloom_table');
+----
+2
+
+statement ok
+insert into target_bloom_table values('ak7',992),('def',213);
+
+statement ok
+insert into target_bloom_table values('abc12',22),('mkgt',73);
+
+statement ok
+insert into target_bloom_table values('ab77c',93),('dqef',107);
+
+statement ok
+insert into target_bloom_table values('falf',189),('krrgt',207);
+
+query T
+select count(*) from fuse_block('default','target_bloom_table');
+----
+4
+
+query T
+explain merge into target_bloom_table as t1 using source_bloom_table as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_bloom_table
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── can_merge_into_source_build_bloom: true
+├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
+├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS String NULL),CAST(b (#1) AS Int32 NULL))]
+└── Join(Right)
+    ├── build keys: [t2.a (#0)]
+    ├── probe keys: [t1.a (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target_bloom_table
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.source_bloom_table
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query TT
+merge into target_bloom_table as t1 using source_bloom_table as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+3 1
+
+query TT
+select * from target_bloom_table order by a,b;
+----
+ab77c 93
+abc 2
+abc12 22
+ak7 992
+def 1
+dqef 107
+falf 189
+ff 18
+kgt 27
+krrgt 207
+mkgt 73
+
+## test col order 
+statement ok
+drop table if exists target_bloom_reorder;
+
+statement ok
+drop table if exists source_bloom_reorder;
+
+statement ok
+create table target_bloom_reorder(a int,b string);
+
+statement ok
+create table source_bloom_reorder(a int,b string);
+
+statement ok
+insert into target_bloom_reorder values(1,'ab'),(2,'cd');
+
+statement ok
+insert into target_bloom_reorder values(1,'gh'),(2,'ij');
+
+statement ok
+insert into target_bloom_reorder values(3,'abc');
+
+statement ok
+insert into source_bloom_reorder values(4,'abc'),(5,'ffff');
+
+query T
+select count(*) from fuse_block('default','target_bloom_reorder');
+----
+3
+
+query T
+select count(*) from fuse_block('default','source_bloom_reorder');
+----
+1
+
+query T
+explain merge into target_bloom_reorder as t1 using source_bloom_reorder as t2 on t1.b = t2.b when matched then update * when not matched then insert *;
+----
+MergeInto:
+target_table: default.default.target_bloom_reorder
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── can_merge_into_source_build_bloom: true
+├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
+├── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
+└── Join(Right)
+    ├── build keys: [t2.b (#1)]
+    ├── probe keys: [t1.b (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target_bloom_reorder
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.source_bloom_reorder
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE  
+
+query T
+merge into target_bloom_reorder as t1 using source_bloom_reorder as t2 on t1.b = t2.b when matched then update * when not matched then insert *;
+----
+1 1
+
+query TT
+select b,a from target_bloom_reorder order by b,a;
+----
+ab 1
+abc 4
+cd 2
+ffff 5
+gh 1
+ij 2
+
+### test not null column, we can't prune now, but the sql run until to be finished.
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_200_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_400_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_random (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) engine = random;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 10;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 10;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 10;
+
+statement ok
+insert into lineitem_target_origin_200_blocks1 select * from lineitem_random limit 10;
+
+statement ok
+explain analyze MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on
+    t1.l_orderkey = t2.l_orderkey and
+    t1.l_partkey = t2.l_partkey  and t1.l_suppkey = t2.l_suppkey and
+    t1.l_linenumber = t2.l_linenumber and
+    t1.l_quantity = t2.l_quantity and
+    t1.l_extendedprice = t2.l_extendedprice and
+    t1.l_discount = t2.l_discount
+    when matched then update set
+    t1.l_orderkey = t2.l_orderkey,
+    t1.l_partkey = t2.l_partkey,
+    t1.l_suppkey = t2.l_suppkey,
+    t1.l_linenumber = t2.l_linenumber,
+    t1.l_quantity = t2.l_quantity,
+    t1.l_extendedprice = t2.l_extendedprice,
+    t1.l_discount = t2.l_discount,
+    t1.l_tax = t2.l_tax,
+    t1.l_returnflag = t2.l_returnflag,
+    t1.l_linestatus = t2.l_linestatus,
+    t1.l_shipdate = t2.l_shipdate,
+    t1.l_commitdate = t2.l_commitdate,
+    t1.l_receiptdate = t2.l_receiptdate,
+    t1.l_shipinstruct = t2.l_shipinstruct,
+    t1.l_shipmode = t2.l_shipmode,
+    t1.l_comment = t2.l_comment
+    when not matched then insert
+    values(
+    t2.l_orderkey,
+    t2.l_partkey,
+    t2.l_suppkey,
+    t2.l_linenumber,
+    t2.l_quantity,
+    t2.l_extendedprice,
+    t2.l_discount,
+    t2.l_tax,
+    t2.l_returnflag,
+    t2.l_linestatus,
+    t2.l_shipdate,
+    t2.l_commitdate,
+    t2.l_receiptdate,
+    t2.l_shipinstruct,
+    t2.l_shipmode,
+    t2.l_comment);
+
+statement ok
+set enable_merge_into_source_build_bloom = 0;
+
+statement ok
+set enable_experimental_merge_into = 0;

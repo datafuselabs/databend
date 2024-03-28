@@ -150,7 +150,6 @@ pub fn build_fuse_parquet_source_pipeline(
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
     let mut source_builder = SourcePipeBuilder::create();
-
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);

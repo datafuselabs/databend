@@ -25,14 +25,18 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
+use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
@@ -159,6 +163,35 @@ impl Interpreter for ExplainInterpreter {
                     .await?
                 }
                 Plan::MergeInto(plan) => {
+                    // if we enable merge_into_source_build_bloom, we should set the segments here
+                    if !plan.change_join_order
+                        && matches!(plan.merge_type, MergeIntoType::FullOperation)
+                        && self
+                            .ctx
+                            .get_settings()
+                            .get_enable_merge_into_source_build_bloom()?
+                    {
+                        let merge_into_join = self.ctx.get_merge_into_join();
+                        let table = merge_into_join.table.as_ref().unwrap();
+                        let fuse_table =
+                            table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+                                ErrorCode::Unimplemented(format!(
+                                    "table {}, engine type {}, does not support MERGE INTO",
+                                    table.name(),
+                                    table.get_table_info().engine(),
+                                ))
+                            })?;
+                        let base_snapshot =
+                            fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
+                                Arc::new(TableSnapshot::new_empty_snapshot(
+                                    fuse_table.schema().as_ref().clone(),
+                                ))
+                            });
+                        self.ctx.set_merge_into_source_build_segments(Arc::new(
+                            base_snapshot.segments.clone(),
+                        ));
+                    }
+
                     self.explain_analyze(
                         &plan.input,
                         &plan.meta_data,

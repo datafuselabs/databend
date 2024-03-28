@@ -61,6 +61,7 @@ target_table: default.default.t1
 ├── distributed: false
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
+├── can_merge_into_source_build_bloom: false
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
 └── Join(Right)
@@ -140,6 +141,7 @@ target_table: default.default.t1
 ├── distributed: false
 ├── target_build_optimization: false
 ├── can_try_update_column_only: true
+├── can_merge_into_source_build_bloom: false
 ├── matched update: [condition: None,update set a = a (#0)]
 ├── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
 └── Exchange(Merge)

@@ -26,6 +26,7 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
+use databend_common_catalog::merge_into_join::MergeIntoSourceBuildSegments;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
@@ -121,6 +122,9 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
+    pub(in crate::sessions) merge_into_source_build_segments:
+        Arc<RwLock<MergeIntoSourceBuildSegments>>,
+
     // Records query level data cache metrics
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 }
@@ -170,6 +174,7 @@ impl QueryContextShared {
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             merge_into_join: Default::default(),
+            merge_into_source_build_segments: Default::default(),
         }))
     }
 

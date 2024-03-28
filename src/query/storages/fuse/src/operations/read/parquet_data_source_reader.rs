@@ -33,6 +33,8 @@ use databend_common_sql::IndexType;
 use log::debug;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::util::build_merge_into_source_build_bloom_info;
+use super::util::MergeIntoSourceBuildBloomInfo;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -45,6 +47,7 @@ use crate::operations::read::runtime_filter_prunner::runtime_filter_pruner;
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
     id: usize,
+    // build table index, not probe side table index
     table_index: IndexType,
     finished: bool,
     batch_size: usize,
@@ -58,6 +61,8 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     table_schema: Arc<TableSchema>,
+
+    merge_into_source_build_bloom_info: MergeIntoSourceBuildBloomInfo,
 }
 
 impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
@@ -76,6 +81,7 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         let func_ctx = ctx.get_function_context()?;
         if BLOCKING_IO {
+            let merge_into_join = ctx.get_merge_into_join();
             SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
                 func_ctx,
                 id,
@@ -89,8 +95,14 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
+                merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                    ctx,
+                    table_index,
+                    merge_into_join,
+                )?,
             })
         } else {
+            let merge_into_join = ctx.get_merge_into_join();
             Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
                 false,
             > {
@@ -106,6 +118,11 @@ impl<const BLOCKING_IO: bool> ReadParquetDataSource<BLOCKING_IO> {
                 index_reader,
                 virtual_reader,
                 table_schema,
+                merge_into_source_build_bloom_info: build_merge_into_source_build_bloom_info(
+                    ctx,
+                    table_index,
+                    merge_into_join,
+                )?,
             })))
         }
     }
@@ -132,6 +149,11 @@ impl SyncSource for ReadParquetDataSource<true> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_runtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     return Ok(Some(DataBlock::empty()));
                 }
@@ -248,6 +270,11 @@ impl Processor for ReadParquetDataSource<false> {
                     &part,
                     &filters,
                     &self.func_ctx,
+                    self.merge_into_source_build_bloom_info
+                        .can_do_merge_into_runtime_filter_bloom,
+                    self.partitions.ctx.clone(),
+                    self.table_index,
+                    &mut self.merge_into_source_build_bloom_info,
                 )? {
                     continue;
                 }

@@ -44,6 +44,7 @@ pub enum ProfileStatisticsName {
     SpillReadBytes,
     SpillReadTime,
     RuntimeFilterPruneParts,
+    RuntimeFilterMergeIntoSourceBuildBloomPruneParts,
     MemoryUsage,
 }
 
@@ -233,6 +234,13 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 display_name: "parts pruned by runtime filter",
                 desc: "The partitions pruned by runtime filter",
                 index: ProfileStatisticsName::RuntimeFilterPruneParts as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::RuntimeFilterMergeIntoSourceBuildBloomPruneParts, ProfileDesc {
+                display_name: "parts pruned by merge into target table bloom filter",
+                desc: "The partitions pruned by merge into target table bloom filter",
+                index: ProfileStatisticsName::RuntimeFilterMergeIntoSourceBuildBloomPruneParts as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),

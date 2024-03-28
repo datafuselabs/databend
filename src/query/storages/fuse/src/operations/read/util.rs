@@ -12,19 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 use crate::operations::BlockMetaIndex;
+use crate::operations::SegmentIndex;
 use crate::FuseBlockPartInfo;
+
+pub struct MergeIntoSourceBuildBloomInfo {
+    pub can_do_merge_into_runtime_filter_bloom: bool,
+    pub segment_infos: HashMap<SegmentIndex, SegmentInfo>,
+    pub table: Option<Arc<dyn Table>>,
+    pub bloom_indexes: Vec<FieldIndex>,
+    pub bloom_fields: Vec<OnConflictField>,
+    pub init_bloom_index_info: bool,
+    pub target_table_index: usize,
+}
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
@@ -32,9 +49,29 @@ pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> 
         matches!(
             merge_into_join.merge_into_join_type,
             MergeIntoJoinType::Left
-        ) && merge_into_join.target_tbl_idx == table_idx,
+        ) && merge_into_join.target_tbl_idx == table_idx
+            && !merge_into_join.is_distributed, /* we don't support distributed mod for target build optimization for now, */
         merge_into_join.is_distributed,
     )
+}
+
+pub fn can_merge_into_target_build_bloom_filter(
+    ctx: Arc<dyn TableContext>,
+    table_idx: usize,
+) -> Result<bool> {
+    let merge_into_join = ctx.get_merge_into_join();
+    let enabled = matches!(
+        merge_into_join.merge_into_join_type,
+        MergeIntoJoinType::Right
+    ) && merge_into_join.target_tbl_idx == table_idx;
+    if enabled {
+        assert!(
+            ctx.get_settings()
+                .get_enable_merge_into_source_build_bloom()?
+        );
+        assert!(merge_into_join.table.is_some());
+    }
+    Ok(enabled)
 }
 
 pub(crate) fn add_data_block_meta(
@@ -81,4 +118,23 @@ pub(crate) fn add_data_block_meta(
         meta = Some(Box::new(internal_column_meta));
     }
     block.add_meta(meta)
+}
+
+pub fn build_merge_into_source_build_bloom_info(
+    ctx: Arc<dyn TableContext>,
+    table_index: usize,
+    merge_into_join: MergeIntoJoin,
+) -> Result<MergeIntoSourceBuildBloomInfo> {
+    let enabled_bloom_filter = can_merge_into_target_build_bloom_filter(ctx.clone(), table_index)?;
+
+    Ok(MergeIntoSourceBuildBloomInfo {
+        can_do_merge_into_runtime_filter_bloom: enabled_bloom_filter,
+        segment_infos: Default::default(),
+        table: merge_into_join.table.clone(),
+        // update bloom_indexes and bloom_field after pipeline running.
+        bloom_indexes: vec![],
+        bloom_fields: vec![],
+        init_bloom_index_info: false,
+        target_table_index: table_index,
+    })
 }

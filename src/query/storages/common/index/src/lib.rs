@@ -25,6 +25,7 @@ mod range_index;
 pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::FilterEvalResult;
+pub use filters::Xor8Filter;
 pub use index::Index;
 pub use inverted_index::InvertedIndexDirectory;
 pub use page_index::PageIndex;
