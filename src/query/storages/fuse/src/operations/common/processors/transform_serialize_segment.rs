@@ -166,14 +166,13 @@ impl Processor for TransformSerializeSegment {
                 .get_meta()
                 .cloned()
                 .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            let block_meta = BlockMeta::downcast_ref_from(&input_meta)
-                .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
-                .clone();
-
-            self.accumulator.add_with_block_meta(block_meta);
-            if self.accumulator.summary_block_count >= self.block_per_seg {
-                self.state = State::GenerateSegment;
-                return Ok(Event::Sync);
+            // ignore `MutationLogEntry::DoNothing`
+            if let Some(block_meta) = BlockMeta::downcast_ref_from(&input_meta) {
+                self.accumulator.add_with_block_meta(block_meta.clone());
+                if self.accumulator.summary_block_count >= self.block_per_seg {
+                    self.state = State::GenerateSegment;
+                    return Ok(Event::Sync);
+                }
             }
         }
 
@@ -188,11 +187,15 @@ impl Processor for TransformSerializeSegment {
                 let summary = acc.summary(self.thresholds, self.default_cluster_key_id);
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, summary);
-
-                self.state = State::SerializedSegment {
-                    data: segment_info.to_bytes()?,
-                    location: self.meta_locations.gen_segment_info_location(),
-                    segment: Arc::new(segment_info),
+                if segment_info.blocks.is_empty() {
+                    // ignore a segment without any blocks
+                    self.state = State::None;
+                } else {
+                    self.state = State::SerializedSegment {
+                        data: segment_info.to_bytes()?,
+                        location: self.meta_locations.gen_segment_info_location(),
+                        segment: Arc::new(segment_info),
+                    }
                 }
             }
             State::PreCommitSegment { location, segment } => {

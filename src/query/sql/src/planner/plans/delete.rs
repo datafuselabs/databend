@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::ComparisonOp;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
@@ -20,11 +21,12 @@ use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub struct SubqueryDesc {
-    // The s_expr is a plan tree after decorrelation subquery
     pub input_expr: SExpr,
-    // `_row_id`'s index
-    pub index: IndexType,
     pub outer_columns: ColumnSet,
+    pub predicate_columns: ColumnSet,
+    pub index: IndexType,
+    // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
+    pub compare_op: Option<ComparisonOp>,
 }
 
 #[derive(Clone, Debug)]

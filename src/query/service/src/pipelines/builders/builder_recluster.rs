@@ -226,7 +226,7 @@ impl PipelineBuilder {
             )))
         })?;
 
-        let snapshot_gen = MutationGenerator::new(recluster_sink.snapshot.clone());
+        let snapshot_gen = MutationGenerator::new(recluster_sink.snapshot.clone(), false);
         let lock = LockManager::create_table_lock(recluster_sink.table_info.clone())?;
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(

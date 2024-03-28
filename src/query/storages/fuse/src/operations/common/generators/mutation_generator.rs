@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 use uuid::Uuid;
@@ -33,13 +34,15 @@ use crate::statistics::reducers::deduct_statistics_mut;
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: ConflictResolveContext,
+    replace_snapshots: bool,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>) -> Self {
+    pub fn new(base_snapshot: Arc<TableSnapshot>, replace_snapshots: bool) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
+            replace_snapshots,
         }
     }
 }
@@ -81,14 +84,23 @@ impl SnapshotGenerator for MutationGenerator {
                     info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
-                        previous.segments.clone(),
+                        if self.replace_snapshots {
+                            vec![]
+                        } else {
+                            previous.segments.clone()
+                        },
                         ctx.appended_segments.clone(),
                         replaced,
                         removed,
                     );
+                    let dummy_stats = Statistics::default();
                     let mut new_summary = merge_statistics(
                         &ctx.merged_statistics,
-                        &previous.summary,
+                        if self.replace_snapshots {
+                            &dummy_stats
+                        } else {
+                            &previous.summary
+                        },
                         default_cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);

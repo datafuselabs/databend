@@ -24,9 +24,10 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
-use super::utils::get_not;
-use crate::operations::merge_into::mutator::utils::expr2prdicate;
-use crate::operations::merge_into::mutator::utils::get_and;
+use crate::operations::expr2prdicate;
+use crate::operations::get_and;
+use crate::operations::get_not;
+
 pub struct DeleteByExprMutator {
     expr: Option<Expr>,
     row_id_idx: usize,

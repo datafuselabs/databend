@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -23,57 +21,41 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::ROW_ID_COLUMN_ID;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_sql::binder::ColumnBindingBuilder;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::optimizer::optimize_query;
-use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::optimizer::SExpr;
-use databend_common_sql::plans::BoundColumnRef;
-use databend_common_sql::plans::ConstantExpr;
-use databend_common_sql::plans::EvalScalar;
-use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::RelOperator;
-use databend_common_sql::plans::ScalarItem;
-use databend_common_sql::plans::SubqueryDesc;
-use databend_common_sql::BindContext;
-use databend_common_sql::ColumnBinding;
-use databend_common_sql::MetadataRef;
-use databend_common_sql::ScalarExpr;
-use databend_common_sql::Visibility;
+use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::MutationGenerator;
+use databend_common_storages_fuse::operations::SubqueryMutation;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformMutationSubquery;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
-use crate::interpreters::SelectInterpreter;
 use crate::locks::LockManager;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::schedulers::build_query_pipeline;
+use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
-use crate::stream::PullingExecutorStream;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {
@@ -126,7 +108,7 @@ impl Interpreter for DeleteInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        let selection = if !self.plan.subquery_desc.is_empty() {
+        if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -134,38 +116,14 @@ impl Interpreter for DeleteInterpreter {
                     tbl.name(),
                 )));
             }
-            let table_index = self.plan.metadata.read().get_table_index(
-                Some(self.plan.database_name.as_str()),
-                self.plan.table_name.as_str(),
-            );
-            let row_id_column_binding = ColumnBindingBuilder::new(
-                ROW_ID_COL_NAME.to_string(),
-                self.plan.subquery_desc[0].index,
-                Box::new(DataType::Number(NumberDataType::UInt64)),
-                Visibility::InVisible,
-            )
-            .database_name(Some(self.plan.database_name.clone()))
-            .table_name(Some(self.plan.table_name.clone()))
-            .table_index(table_index)
-            .build();
-            let mut filters = VecDeque::new();
-            for subquery_desc in &self.plan.subquery_desc {
-                let filter = subquery_filter(
-                    self.ctx.clone(),
-                    self.plan.metadata.clone(),
-                    &row_id_column_binding,
-                    subquery_desc,
-                )
-                .await?;
-                filters.push_front(filter);
-            }
-            // Traverse `selection` and put `filters` into `selection`.
-            let mut selection = self.plan.selection.clone().unwrap();
-            replace_subquery(&mut filters, &mut selection)?;
-            Some(selection)
-        } else {
-            self.plan.selection.clone()
-        };
+
+            let mut build_res = self.delete_by_subquery(tbl.clone()).await?;
+            build_res.main_pipeline.add_lock_guard(lock_guard);
+
+            return Ok(build_res);
+        }
+
+        let selection = self.plan.selection.clone();
 
         let (filters, col_indices) = if let Some(scalar) = selection {
             // prepare the filter expression
@@ -178,15 +136,7 @@ impl Interpreter for DeleteInterpreter {
                 ));
             }
 
-            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
-                let mut col_indices = HashSet::new();
-                for subquery_desc in &self.plan.subquery_desc {
-                    col_indices.extend(subquery_desc.outer_columns.iter());
-                }
-                col_indices.into_iter().collect()
-            } else {
-                scalar.used_columns().into_iter().collect()
-            };
+            let col_indices: Vec<usize> = scalar.used_columns().into_iter().collect();
             (Some(filters), col_indices)
         } else {
             (None, vec![])
@@ -231,8 +181,7 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         };
 
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
-        if col_indices.is_empty() && !query_row_id_col {
+        if col_indices.is_empty() {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
             //   e.g.
@@ -273,7 +222,7 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?;
 
-        let physical_plan = Self::build_physical_plan(
+        let physical_plan = self.build_physical_plan(
             filters,
             partitions,
             fuse_table.get_table_info().clone(),
@@ -281,7 +230,7 @@ impl Interpreter for DeleteInterpreter {
             snapshot,
             catalog_info,
             is_distributed,
-            query_row_id_col,
+            false,
         )?;
 
         build_res =
@@ -306,8 +255,104 @@ impl Interpreter for DeleteInterpreter {
 }
 
 impl DeleteInterpreter {
+    async fn delete_by_subquery(&self, table: Arc<dyn Table>) -> Result<PipelineBuildResult> {
+        let subquery_desc = &self.plan.subquery_desc[0];
+        let input_expr = &subquery_desc.input_expr;
+        let mut outer_columns = subquery_desc.outer_columns.clone();
+        outer_columns.extend(subquery_desc.predicate_columns.iter());
+        let ctx = &self.ctx;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = if let Some(snapshot) = table.read_table_snapshot().await? {
+            snapshot
+        } else {
+            return Err(ErrorCode::from_string(format!(
+                "read table {:?} snapshot failed",
+                table.name()
+            )));
+        };
+
+        // 1. build sub query join input
+        let mut builder =
+            PhysicalPlanBuilder::new(self.plan.metadata.clone(), self.ctx.clone(), false);
+        let join_input = builder.build(input_expr, outer_columns).await?;
+
+        let pipeline_builder = PipelineBuilder::create(
+            ctx.get_function_context()?,
+            ctx.get_settings(),
+            ctx.clone(),
+            vec![],
+        );
+        let mut build_res = pipeline_builder.finalize(&join_input)?;
+
+        // 2. add TransformMutationSubquery
+        build_res.main_pipeline.add_transform(|input, output| {
+            TransformMutationSubquery::try_create(
+                ctx.get_function_context()?,
+                input,
+                output,
+                SubqueryMutation::Delete,
+                subquery_desc.compare_op,
+            )?
+            .into_processor()
+        })?;
+
+        // 3. add TransformSerializeBlock
+        let block_thresholds = table.get_block_thresholds();
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
+        build_res.main_pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeBlock::try_create(
+                ctx.clone(),
+                input,
+                output,
+                table,
+                cluster_stats_gen.clone(),
+                MutationKind::Replace,
+            )?;
+            proc.into_processor()
+        })?;
+
+        // 4. add TransformSerializeSegment
+        build_res.main_pipeline.try_resize(1)?;
+        build_res.main_pipeline.add_transform(|input, output| {
+            let proc =
+                TransformSerializeSegment::new(ctx.clone(), input, output, table, block_thresholds);
+            proc.into_processor()
+        })?;
+
+        // 5. add TableMutationAggregator
+        build_res.main_pipeline.add_transform(|input, output| {
+            let aggregator =
+                TableMutationAggregator::new(table, ctx.clone(), vec![], MutationKind::Replace);
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })?;
+
+        // 6. add CommitSink
+        let snapshot_gen = MutationGenerator::new(snapshot, true);
+        let lock = None;
+        build_res.main_pipeline.add_sink(|input| {
+            databend_common_storages_fuse::operations::CommitSink::try_create(
+                table,
+                ctx.clone(),
+                None,
+                vec![],
+                snapshot_gen.clone(),
+                input,
+                None,
+                lock.clone(),
+                None,
+                None,
+            )
+        })?;
+
+        Ok(build_res)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
+        &self,
         filters: Filters,
         partitions: Partitions,
         table_info: TableInfo,
@@ -317,6 +362,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
+        debug_assert!(self.plan.subquery_desc.is_empty());
         let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
@@ -354,160 +400,4 @@ impl DeleteInterpreter {
         plan.adjust_plan_id(&mut 0);
         Ok(plan)
     }
-}
-
-pub async fn subquery_filter(
-    ctx: Arc<QueryContext>,
-    metadata: MetadataRef,
-    row_id_column_binding: &ColumnBinding,
-    subquery_desc: &SubqueryDesc,
-) -> Result<ScalarExpr> {
-    // Select `_row_id` column
-    let input_expr = subquery_desc.input_expr.clone();
-
-    let mut s_expr = SExpr::create_unary(
-        Arc::new(RelOperator::EvalScalar(EvalScalar {
-            items: vec![ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: row_id_column_binding.clone(),
-                }),
-                index: 0,
-            }],
-        })),
-        Arc::new(input_expr),
-    );
-    // Optimize expression
-    let mut bind_context = Box::new(BindContext::new());
-    bind_context.add_column_binding(row_id_column_binding.clone());
-
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
-        .with_enable_distributed_optimization(false)
-        .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
-        .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
-
-    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
-
-    // Create `input_expr` pipeline and execute it to get `_row_id` data block.
-    let select_interpreter = SelectInterpreter::try_create(
-        ctx.clone(),
-        *bind_context,
-        s_expr,
-        metadata.clone(),
-        None,
-        false,
-    )?;
-    // Build physical plan
-    let physical_plan = select_interpreter.build_physical_plan().await?;
-    // Create pipeline for physical plan
-    let pipeline = build_query_pipeline(
-        &ctx,
-        &[row_id_column_binding.clone()],
-        &physical_plan,
-        false,
-    )
-    .await?;
-
-    // Execute pipeline
-    let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
-    let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
-    ctx.set_executor(pulling_executor.get_inner())?;
-    let stream_blocks = PullingExecutorStream::create(pulling_executor)?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
-    let row_id_array = if !stream_blocks.is_empty() {
-        let block = DataBlock::concat(&stream_blocks)?;
-        let row_id_col = block.columns()[0]
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows());
-        // Make a selection: `_row_id` IN (row_id_col)
-        // Construct array function for `row_id_col`
-        let mut row_id_array = Vec::with_capacity(row_id_col.len());
-        for row_id in row_id_col.iter() {
-            let scalar = row_id.to_owned();
-            let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            });
-            row_id_array.push(constant_scalar_expr);
-        }
-        row_id_array
-    } else {
-        vec![]
-    };
-
-    let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "array".to_string(),
-        params: vec![],
-        arguments: row_id_array,
-    });
-
-    let row_id_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
-        span: None,
-        column: row_id_column_binding.clone(),
-    });
-
-    Ok(ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "contains".to_string(),
-        params: vec![],
-        arguments: vec![array_raw_expr, row_id_expr],
-    }))
-}
-
-// return false means that doesnot replace a subquery with filter,
-// in this case we need to replace subquery's parent with filter.
-fn do_replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<bool> {
-    let data_type = selection.data_type()?;
-    let mut replace_selection_with_filter = None;
-
-    match selection {
-        ScalarExpr::FunctionCall(func) => {
-            for arg in &mut func.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-        ScalarExpr::UDFCall(udf) => {
-            for arg in &mut udf.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-
-        ScalarExpr::SubqueryExpr { .. } => {
-            if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                let filter = filters.pop_back().unwrap();
-                *selection = filter;
-            } else {
-                return Ok(false);
-            }
-        }
-        _ => {}
-    }
-
-    if let Some(filter) = replace_selection_with_filter {
-        *selection = filter;
-        replace_subquery(filters, selection)?;
-    }
-    Ok(true)
-}
-
-pub fn replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<()> {
-    let _ = do_replace_subquery(filters, selection)?;
-
-    Ok(())
 }

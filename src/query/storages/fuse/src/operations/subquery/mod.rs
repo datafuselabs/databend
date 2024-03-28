@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delete_by_expr_mutator;
-mod matched_mutator;
-mod merge_into_split_mutator;
-mod split_by_expr_mutator;
-mod update_by_expr_mutator;
-pub use delete_by_expr_mutator::DeleteByExprMutator;
-pub use matched_mutator::MatchedAggregator;
-pub use merge_into_split_mutator::MergeIntoSplitMutator;
-pub use split_by_expr_mutator::SplitByExprMutator;
-pub use update_by_expr_mutator::UpdateByExprMutator;
+mod transform_mutation_subquery;
+
+pub use transform_mutation_subquery::SubqueryMutation;
+pub use transform_mutation_subquery::TransformMutationSubquery;

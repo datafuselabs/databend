@@ -65,7 +65,7 @@ impl PipelineBuilder {
             })?;
         }
 
-        let snapshot_gen = MutationGenerator::new(plan.snapshot.clone());
+        let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), false);
         let lock = if plan.need_lock {
             Some(LockManager::create_table_lock(plan.table_info.clone())?)
         } else {

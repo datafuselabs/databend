@@ -29,10 +29,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
-use super::utils::expr2prdicate;
-use super::utils::get_and;
-use super::utils::get_not;
-use super::utils::get_or;
+use crate::operations::expr2prdicate;
+use crate::operations::get_and;
+use crate::operations::get_not;
+use crate::operations::get_or;
 
 #[derive(Clone)]
 pub struct UpdateByExprMutator {

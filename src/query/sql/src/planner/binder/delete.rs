@@ -20,6 +20,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
@@ -27,16 +28,21 @@ use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
+use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::RelOperator::Scan;
 use crate::plans::SubqueryDesc;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorWithParent;
 use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
@@ -194,15 +200,71 @@ impl Binder {
         }
         // Add row_id column to scan's column set
         scan.columns.insert(row_id_index.unwrap());
-        table_expr.plan = Arc::new(Scan(scan));
-        let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
+        table_expr.plan = Arc::new(Scan(scan.clone()));
+
+        let filter_expr =
+            SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr.clone()));
         let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone());
         let filter_expr = rewriter.rewrite(&filter_expr)?;
 
-        Ok(SubqueryDesc {
-            input_expr: filter_expr,
+        // _row_id
+        let row_id_column_binding = ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_position: None,
+            table_index: Some(scan.table_index),
+            column_name: ROW_ID_COL_NAME.to_string(),
             index: row_id_index.unwrap(),
+            data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            visibility: crate::Visibility::Visible,
+            virtual_computed_expr: None,
+        };
+        let conditions = vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: row_id_column_binding.clone(),
+        })];
+        let join = Join {
+            left_conditions: conditions.clone(),
+            right_conditions: conditions.clone(),
+            non_equi_conditions: vec![],
+            join_type: crate::plans::JoinType::Left,
+            marker_index: None,
+            from_correlated_subquery: false,
+            need_hold_hash_table: false,
+            is_lateral: false,
+            original_join_type: None,
+        }
+        .into();
+
+        // use filter children as join right child, and add filter predicate result into outer_columns
+        let input_expr = SExpr::create_binary(
+            Arc::new(join),
+            Arc::new(filter_expr.children[0].as_ref().clone()),
+            Arc::new(table_expr),
+        );
+        let predicate_columns = if let RelOperator::Filter(filter) = filter_expr.plan.as_ref() {
+            filter.used_columns()?
+        } else {
+            return Err(ErrorCode::from_string(
+                "subquery data type in delete/update statement should be boolean".to_string(),
+            ));
+        };
+
+        // add all table columns into outer columns
+        let metadata = self.metadata.read();
+        let columns = metadata.columns_by_table_index(scan.table_index);
+        for column in columns {
+            if let ColumnEntry::BaseTableColumn(column) = &column {
+                outer_columns.insert(column.column_index);
+            }
+        }
+
+        Ok(SubqueryDesc {
+            input_expr,
             outer_columns,
+            predicate_columns,
+            index: row_id_index.unwrap(),
+            compare_op: subquery_expr.compare_op,
         })
     }
 

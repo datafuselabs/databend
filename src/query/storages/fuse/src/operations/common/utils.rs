@@ -23,7 +23,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-pub(crate) fn get_and(
+pub fn get_and(
     filter1: Value<BooleanType>,
     filter2: Value<BooleanType>,
     func_ctx: &FunctionContext,
@@ -42,7 +42,7 @@ pub(crate) fn get_and(
     )
 }
 
-pub(crate) fn get_not(
+pub fn get_not(
     filter: Value<BooleanType>,
     func_ctx: &FunctionContext,
     rows: usize,
@@ -57,7 +57,7 @@ pub(crate) fn get_not(
     )
 }
 
-pub(crate) fn get_or(
+pub fn get_or(
     filter1: Value<BooleanType>,
     filter2: Value<BooleanType>,
     func_ctx: &FunctionContext,
@@ -76,7 +76,7 @@ pub(crate) fn get_or(
     )
 }
 
-pub(crate) fn expr2prdicate(evaluator: &Evaluator, filter: &Expr) -> Result<Value<BooleanType>> {
+pub fn expr2prdicate(evaluator: &Evaluator, filter: &Expr) -> Result<Value<BooleanType>> {
     Ok(evaluator
         .run(filter)
         .map_err(|e| e.add_message("eval filter failed:"))?
