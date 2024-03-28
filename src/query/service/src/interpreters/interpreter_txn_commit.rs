@@ -14,6 +14,9 @@
 
 use std::sync::Arc;
 
+use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManagerRef;
@@ -53,9 +56,7 @@ impl Interpreter for CommitInterpreter {
         let _guard = ClearTxnManagerGuard(self.ctx.txn_mgr().clone());
         let is_active = self.ctx.txn_mgr().lock().is_active();
         if is_active {
-            let catalog = self.ctx.get_default_catalog()?;
-            let req = self.ctx.txn_mgr().lock().req();
-            catalog.update_multi_table_meta(req).await?;
+            try_commit_repeatedly(self.ctx.clone())?;
             let need_purge_files = self.ctx.txn_mgr().lock().need_purge_files();
             for (stage_info, files) in need_purge_files {
                 PipelineBuilder::try_purge_files(self.ctx.clone(), &stage_info, &files).await;
@@ -71,4 +72,21 @@ impl Drop for ClearTxnManagerGuard {
     fn drop(&mut self) {
         self.0.lock().clear();
     }
+}
+
+fn try_commit_repeatedly(ctx: Arc<QueryContext>) -> Result<()> {
+    let catalog = ctx.get_default_catalog()?;
+    let req = ctx.txn_mgr().lock().req();
+    let backoff = ExponentialBackoff::default();
+
+    loop {
+        match catalog.update_multi_table_meta(req).await {
+            Ok(_) => break,
+            Err(e) if e.code() != ErrorCode::TABLE_VERSION_MISMATCHED => return Err(e),
+            Err(_) => {
+                todo!()
+            }
+        }
+    }
+    Ok(())
 }
