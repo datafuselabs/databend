@@ -21,10 +21,13 @@ use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
@@ -32,11 +35,63 @@ use opendal::Metakey;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
+use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    pub async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => {
+                self.navigate_to_snapshot(snapshot_id.as_str()).await
+            }
+            NavigationPoint::TimePoint(time_point) => {
+                let Some(location) = self.snapshot_loc().await? else {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "Empty Table has no historical data",
+                    ));
+                };
+                self.navigate_to_time_point(location, *time_point).await
+            }
+            NavigationPoint::StreamInfo(info) => self.navigate_to_stream(info).await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn navigate_to_stream(&self, stream_info: &TableInfo) -> Result<Arc<FuseTable>> {
+        let options = stream_info.options();
+        let stream_table_id = options
+            .get(OPT_KEY_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
+        if stream_table_id != self.table_info.ident.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The stream '{}' is not match the table '{}'",
+                stream_info.desc, self.table_info.desc
+            )));
+        }
+
+        let version = options
+            .get(OPT_KEY_TABLE_VER)
+            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
+            .parse::<u64>()?;
+
+        let Some(snapshot_loc) = options.get(OPT_KEY_SNAPSHOT_LOCATION) else {
+            let mut table_info = self.table_info.clone();
+            table_info.ident.seq = version;
+            table_info.meta.options.remove(OPT_KEY_SNAPSHOT_LOCATION);
+            table_info.meta.statistics = TableStatistics::default();
+            let table = FuseTable::do_create(table_info)?;
+            return Ok(table.into());
+        };
+        let (snapshot, format_version) =
+            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator()).await?;
+        self.load_table_by_snapshot(snapshot.as_ref(), format_version, Some(version))
+    }
+
     #[async_backtrace::framed]
     pub async fn navigate_to_time_point(
         &self,
@@ -53,34 +108,14 @@ impl FuseTable {
         .await
     }
 
-    #[minitrace::trace]
     #[async_backtrace::framed]
-    pub async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<FuseTable>> {
-        let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
-            loc
-        } else {
-            // not an error?
+    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
+        let Some(location) = self.snapshot_loc().await? else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "Empty Table has no historical data",
             ));
         };
 
-        match point {
-            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
-                .navigate_to_snapshot(snapshot_location, snapshot_id.as_str())
-                .await?),
-            NavigationPoint::TimePoint(time_point) => Ok(self
-                .navigate_to_time_point(snapshot_location, *time_point)
-                .await?),
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn navigate_to_snapshot(
-        &self,
-        location: String,
-        snapshot_id: &str,
-    ) -> Result<Arc<FuseTable>> {
         self.find(location, |snapshot| {
             snapshot
                 .snapshot_id
@@ -115,48 +150,65 @@ impl FuseTable {
         }
 
         if let Some((snapshot, format_version)) = instant {
-            // Load the table instance by the snapshot
-
-            // The `seq` of ident that we cloned here is JUST a place holder
-            // we should NOT use it other than a pure place holder.
-            let mut table_info = self.table_info.clone();
-
-            // There are more to be kept in snapshot, like engine_options, ordering keys...
-            // or we could just keep a clone of TableMeta in the snapshot.
-            //
-            // currently, here are what we can recovery from the snapshot:
-
-            // 1. the table schema
-            table_info.meta.schema = Arc::new(snapshot.schema.clone());
-
-            // 2. the table option `snapshot_location`
-            let loc = self
-                .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
-            table_info
-                .meta
-                .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
-
-            // 3. The statistics
-            let summary = &snapshot.summary;
-            table_info.meta.statistics = TableStatistics {
-                number_of_rows: summary.row_count,
-                data_bytes: summary.uncompressed_byte_size,
-                compressed_data_bytes: summary.compressed_byte_size,
-                index_data_bytes: summary.index_size,
-                number_of_segments: Some(snapshot.segments.len() as u64),
-                number_of_blocks: Some(summary.block_count),
-            };
-
-            // let's instantiate it
-            let table = FuseTable::do_create(table_info)?;
-            Ok(table.into())
+            self.load_table_by_snapshot(snapshot.as_ref(), format_version, None)
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(
                 "No historical data found at given point",
             ))
         }
+    }
+
+    /// Load the table instance by the snapshot
+    fn load_table_by_snapshot(
+        &self,
+        snapshot: &TableSnapshot,
+        format_version: u64,
+        table_seq: Option<u64>,
+    ) -> Result<Arc<FuseTable>> {
+        let mut table_info = self.table_info.clone();
+
+        // The `seq` of ident here is primarily JUST a place holder
+        // we should NOT use it outside of create stream.
+        table_info.ident.seq = if let Some(seq) = table_seq {
+            seq
+        } else {
+            // The table version is the version of the table when the snapshot was created.
+            // We need make sure the version greater than the table version,
+            // and less equal than the table version after the snapshot commit.
+            snapshot.prev_table_seq.map_or(0, |v| v + 1)
+        };
+
+        // There are more to be kept in snapshot, like engine_options, ordering keys...
+        // or we could just keep a clone of TableMeta in the snapshot.
+        //
+        // currently, here are what we can recovery from the snapshot:
+
+        // 1. the table schema
+        table_info.meta.schema = Arc::new(snapshot.schema.clone());
+
+        // 2. the table option `snapshot_location`
+        let loc = self
+            .meta_location_generator
+            .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+        table_info
+            .meta
+            .options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
+
+        // 3. The statistics
+        let summary = &snapshot.summary;
+        table_info.meta.statistics = TableStatistics {
+            number_of_rows: summary.row_count,
+            data_bytes: summary.uncompressed_byte_size,
+            compressed_data_bytes: summary.compressed_byte_size,
+            index_data_bytes: summary.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(summary.block_count),
+        };
+
+        // let's instantiate it
+        let table = FuseTable::do_create(table_info)?;
+        Ok(table.into())
     }
 
     #[async_backtrace::framed]
@@ -187,6 +239,7 @@ impl FuseTable {
                 self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
                     .await
             }
+            Some(NavigationPoint::StreamInfo(info)) => self.list_by_stream(info, time_point).await,
             None => self.list_by_time_point(time_point).await,
         }?;
 
@@ -266,6 +319,55 @@ impl FuseTable {
             ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
         })?;
         Ok((location, files))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn list_by_stream(
+        &self,
+        stream_info: TableInfo,
+        retention_point: DateTime<Utc>,
+    ) -> Result<(String, Vec<String>)> {
+        let options = stream_info.options();
+        let stream_table_id = options
+            .get(OPT_KEY_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
+        if stream_table_id != self.table_info.ident.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The stream '{}' is not match the table '{}'",
+                stream_info.desc, self.table_info.desc
+            )));
+        }
+
+        let snapshot_loc = options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            .ok_or_else(|| {
+                ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
+            })?
+            .parse::<String>()?;
+
+        let mut found = false;
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
+
+        let files = self
+            .list_files(prefix, |loc, modified| {
+                if loc == snapshot_loc {
+                    found = true;
+                }
+                modified <= retention_point
+            })
+            .await?;
+
+        if !found {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        }
+        Ok((snapshot_loc, files))
     }
 
     #[async_backtrace::framed]

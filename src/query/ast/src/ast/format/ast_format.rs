@@ -1755,8 +1755,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         children.push(self.children.pop().unwrap());
         self.visit_table_ref(&None, &stmt.table_database, &stmt.table);
         children.push(self.children.pop().unwrap());
-        if let Some(point) = &stmt.stream_point {
-            self.visit_stream_point(point);
+        if let Some(point) = &stmt.travel_point {
+            self.visit_time_travel_point(point);
             children.push(self.children.pop().unwrap());
         }
         if let Some(comment) = &stmt.comment {
@@ -3286,13 +3286,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
-        }
-    }
-
-    fn visit_stream_point(&mut self, point: &'ast StreamPoint) {
-        match point {
-            StreamPoint::AtStream { database, name } => self.visit_table_ref(&None, database, name),
-            StreamPoint::AtPoint(point) => self.visit_time_travel_point(point),
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => self.visit_table_ref(catalog, database, name),
         }
     }
 

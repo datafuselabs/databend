@@ -17,7 +17,6 @@ use databend_common_ast::ast::DescribeStreamStmt;
 use databend_common_ast::ast::DropStreamStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
-use databend_common_ast::ast::StreamPoint;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
@@ -29,7 +28,6 @@ use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::plans::StreamNavigation;
 use crate::BindContext;
 use crate::SelectBuilder;
 
@@ -47,7 +45,7 @@ impl Binder {
             stream,
             table_database,
             table,
-            stream_point,
+            travel_point,
             append_only,
             comment,
         } = stmt;
@@ -62,20 +60,10 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-        let navigation = match stream_point {
-            Some(StreamPoint::AtStream { database, name }) => {
-                let database = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| self.ctx.get_current_database());
-                let name = normalize_identifier(name, &self.name_resolution_ctx).name;
-                Some(StreamNavigation::AtStream { database, name })
-            }
-            Some(StreamPoint::AtPoint(point)) => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
-                Some(StreamNavigation::AtPoint(point))
-            }
-            None => None,
+        let navigation = if let Some(point) = travel_point {
+            Some(self.resolve_data_travel_point(bind_context, point).await?)
+        } else {
+            None
         };
 
         let plan = CreateStreamPlan {

@@ -508,9 +508,17 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
+    let at_stream = map(
+        rule! { "(" ~ STREAM ~ "=>" ~  #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, (catalog, database, name), _)| TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        },
+    );
 
     rule!(
-        #at_snapshot | #at_timestamp
+        #at_stream | #at_snapshot | #at_timestamp
     )(i)
 }
 

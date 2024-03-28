@@ -31,11 +31,8 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStreamPlan;
 use databend_common_sql::plans::DropStreamPlan;
-use databend_common_sql::plans::StreamNavigation;
-use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
@@ -74,14 +71,14 @@ impl StreamHandler for RealStreamHandler {
             )));
         }
 
-        let mut table_version = table_info.ident.seq;
         let table_id = table_info.ident.table_id;
         let schema = table_info.schema().clone();
         if !table.change_tracking_enabled() {
+            let table_seq = table_info.ident.seq;
             // enable change tracking.
             let req = UpsertTableOptionReq {
                 table_id,
-                seq: MatchSeq::Exact(table_version),
+                seq: MatchSeq::Exact(table_seq),
                 options: HashMap::from([
                     (
                         OPT_KEY_CHANGE_TRACKING.to_string(),
@@ -89,7 +86,7 @@ impl StreamHandler for RealStreamHandler {
                     ),
                     (
                         OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(),
-                        Some(table_version.to_string()),
+                        Some(table_seq.to_string()),
                     ),
                 ]),
             };
@@ -99,68 +96,19 @@ impl StreamHandler for RealStreamHandler {
                 .await?;
             // refreash table.
             table = table.refresh(ctx.as_ref()).await?;
-            table_version = table.get_table_info().ident.seq;
         }
 
-        let (version, snapshot_location) = match &plan.navigation {
-            Some(StreamNavigation::AtStream { database, name }) => {
-                let stream = catalog.get_table(tenant.name(), database, name).await?;
-                let stream = StreamTable::try_from_table(stream.as_ref())?;
-                let stream_opts = stream.get_table_info().options();
-                let stream_table_name = stream_opts
-                    .get(OPT_KEY_TABLE_NAME)
-                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
-                let stream_database_name = stream_opts
-                    .get(OPT_KEY_DATABASE_NAME)
-                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?;
-                let stream_table_id = stream_opts
-                    .get(OPT_KEY_TABLE_ID)
-                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
-                    .parse::<u64>()?;
-                if stream_table_name != &plan.table_name
-                    || stream_database_name != &plan.table_database
-                    || stream_table_id != table_id
-                {
-                    return Err(ErrorCode::IllegalStream(format!(
-                        "The stream '{name}' is not match the table '{}.{}'",
-                        plan.table_database, plan.table_name
-                    )));
-                }
+        table = table.navigate_since_to(&None, &plan.navigation).await?;
+        let source = FuseTable::try_from_table(table.as_ref())?;
+        let version = source.get_table_info().ident.seq;
+        if version == 0 {
+            return Err(ErrorCode::IllegalStream(
+                "The stream navigation at point has not table version".to_string(),
+            ));
+        }
+        let snapshot_location = source.snapshot_loc().await?;
 
-                let version = stream_opts
-                    .get(OPT_KEY_TABLE_VER)
-                    .ok_or_else(|| ErrorCode::IllegalStream(format!("Illegal stream '{name}'")))?
-                    .parse::<u64>()?;
-                (version, stream_opts.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
-            }
-            Some(StreamNavigation::AtPoint(point)) => {
-                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                let source = fuse_table.navigate_to(point).await?;
-                if let Some(snapshot_loc) = source.snapshot_loc().await? {
-                    let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), fuse_table.get_operator())
-                            .await?;
-                    let Some(version) = snapshot.prev_table_seq else {
-                        return Err(ErrorCode::IllegalStream(
-                            "The stream navigation at point has not table version".to_string(),
-                        ));
-                    };
-
-                    // The table version is the version of the table when the snapshot was created.
-                    // We need make sure the version greater than the table version,
-                    // and less equal than the table version after the snapshot commit.
-                    (version + 1, Some(snapshot_loc))
-                } else {
-                    unreachable!()
-                }
-            }
-            None => {
-                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                (table_version, fuse_table.snapshot_loc().await?)
-            }
-        };
-
-        if let Some(value) = table
+        if let Some(value) = source
             .get_table_info()
             .options()
             .get(OPT_KEY_CHANGE_TRACKING_BEGIN_VER)

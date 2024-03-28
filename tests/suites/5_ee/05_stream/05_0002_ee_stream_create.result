@@ -1,7 +1,11 @@
 Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'db_stream.base'
 3	INSERT	false	true
+1
+2
 Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'db_stream.base'
 3	INSERT	false	true
 Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'db_stream.base'
 Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'db_stream.base'
 Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'db_stream.base'
+3
+2

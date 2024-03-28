@@ -496,6 +496,11 @@ impl Display for Indirection {
 pub enum TimeTravelPoint {
     Snapshot(#[drive(skip)] String),
     Timestamp(Box<Expr>),
+    Stream {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        name: Identifier,
+    },
 }
 
 impl Display for TimeTravelPoint {
@@ -506,6 +511,18 @@ impl Display for TimeTravelPoint {
             }
             TimeTravelPoint::Timestamp(ts) => {
                 write!(f, "(TIMESTAMP => {ts})")?;
+            }
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => {
+                write!(f, "(STREAM => ")?;
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(name)),
+                )?;
+                write!(f, ")")?;
             }
         }
 
@@ -643,20 +660,12 @@ impl Display for TableReference {
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
 
-                if let Some(TimeTravelPoint::Snapshot(sid)) = travel_point {
-                    write!(f, " AT (SNAPSHOT => '{sid}')")?;
+                if let Some(travel) = travel_point {
+                    write!(f, " AT {}", travel)?;
                 }
 
-                if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
-                    write!(f, " AT (TIMESTAMP => {ts})")?;
-                }
-
-                if let Some(TimeTravelPoint::Snapshot(sid)) = since_point {
-                    write!(f, " SINCE (SNAPSHOT => '{sid}')")?;
-                }
-
-                if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
-                    write!(f, " SINCE (TIMESTAMP => {ts})")?;
+                if let Some(since) = since_point {
+                    write!(f, " SINCE {}", since)?;
                 }
 
                 if let Some(alias) = alias {

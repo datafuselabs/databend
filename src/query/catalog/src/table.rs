@@ -433,6 +433,7 @@ impl<T: ?Sized> TableExt for T where T: Table {}
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
+    StreamInfo(TableInfo),
 }
 
 #[derive(Debug, Copy, Clone, Default)]

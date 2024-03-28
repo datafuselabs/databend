@@ -19,6 +19,7 @@ echo "create stream db_stream.s1 on table db_stream.base at (snapshot => '$SNAPS
 SNAPSHOT_ID_2=$(echo "select snapshot_id from fuse_snapshot('db_stream','base') where row_count=2 limit 1" | $BENDSQL_CLIENT_CONNECT)
 echo "create stream db_stream.s2 on table db_stream.base at (snapshot => '$SNAPSHOT_ID_2')" | $BENDSQL_CLIENT_CONNECT
 echo "select a, change\$action, change\$is_update, change\$row_id='$BASE_ROW_ID' from db_stream.s2" | $BENDSQL_CLIENT_CONNECT
+echo "select a from db_stream.base at (stream => db_stream.s2) order by a" | $BENDSQL_CLIENT_CONNECT
 
 TIMEPOINT_1=$(echo "select timestamp from fuse_snapshot('db_stream','base') where row_count=1 limit 1" | $BENDSQL_CLIENT_CONNECT)
 echo "create stream db_stream.t1 on table db_stream.base at (timestamp => '$TIMEPOINT_1'::TIMESTAMP)" | $BENDSQL_CLIENT_CONNECT
@@ -33,6 +34,10 @@ echo "create stream db_stream.s3 on table db_stream.base at (snapshot => '$SNAPS
 echo "alter table db_stream.base set options(change_tracking = true)" | $BENDSQL_CLIENT_CONNECT
 echo "create stream db_stream.s4 on table db_stream.base at (stream => db_stream.s2)" | $BENDSQL_CLIENT_CONNECT
 echo "select a from db_stream.s2" | $BENDSQL_CLIENT_CONNECT
+
+echo "select count(*) from fuse_snapshot('db_stream', 'base')" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0; optimize table db_stream.base purge before (stream => db_stream.s2)" | $BENDSQL_CLIENT_CONNECT
+echo "select count(*) from fuse_snapshot('db_stream', 'base')" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop stream if exists db_stream.s2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stream if exists db_stream.t2" | $BENDSQL_CLIENT_CONNECT

@@ -1489,6 +1489,22 @@ impl Binder {
                     ))),
                 }
             }
+            TimeTravelPoint::Stream {
+                catalog,
+                database,
+                name,
+            } => {
+                let (catalog, database, name) =
+                    self.normalize_object_identifier_triple(catalog, database, name);
+                let stream = self.ctx.get_table(&catalog, &database, &name).await?;
+                if stream.engine() != "STREAM" {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{database}.{name} is not STREAM",
+                    )));
+                }
+                let info = stream.get_table_info().clone();
+                Ok(NavigationPoint::StreamInfo(info))
+            }
         }
     }
 

@@ -348,6 +348,29 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::text(format!(" AT (SNAPSHOT => '{sid}')"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = travel_point {
             RcDoc::text(format!(" AT (TIMESTAMP => {ts})"))
+        } else if let Some(TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        }) = travel_point
+        {
+            RcDoc::space()
+                .append(RcDoc::text("AT (STREAM => "))
+                .append(
+                    RcDoc::space()
+                        .append(if let Some(catalog) = catalog {
+                            RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                        } else {
+                            RcDoc::nil()
+                        })
+                        .append(if let Some(database) = database {
+                            RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                        } else {
+                            RcDoc::nil()
+                        })
+                        .append(RcDoc::text(name.to_string())),
+                )
+                .append(RcDoc::text(")"))
         } else {
             RcDoc::nil()
         })
@@ -355,6 +378,29 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             RcDoc::text(format!(" SINCE (SNAPSHOT => '{sid}')"))
         } else if let Some(TimeTravelPoint::Timestamp(ts)) = since_point {
             RcDoc::text(format!(" SINCE (TIMESTAMP => {ts})"))
+        } else if let Some(TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        }) = since_point
+        {
+            RcDoc::space()
+                .append(RcDoc::text("SINCE (STREAM => "))
+                .append(
+                    RcDoc::space()
+                        .append(if let Some(catalog) = catalog {
+                            RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                        } else {
+                            RcDoc::nil()
+                        })
+                        .append(if let Some(database) = database {
+                            RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                        } else {
+                            RcDoc::nil()
+                        })
+                        .append(RcDoc::text(name.to_string())),
+                )
+                .append(RcDoc::text(")"))
         } else {
             RcDoc::nil()
         })

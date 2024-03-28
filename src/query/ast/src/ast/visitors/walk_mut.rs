@@ -334,19 +334,21 @@ pub fn walk_time_travel_point_mut<V: VisitorMut>(visitor: &mut V, time: &mut Tim
     match time {
         TimeTravelPoint::Snapshot(_) => {}
         TimeTravelPoint::Timestamp(expr) => visitor.visit_expr(expr),
-    }
-}
+        TimeTravelPoint::Stream {
+            catalog,
+            database,
+            name,
+        } => {
+            if let Some(catalog) = catalog {
+                visitor.visit_identifier(catalog);
+            }
 
-pub fn walk_stream_point_mut<V: VisitorMut>(visitor: &mut V, stream: &mut StreamPoint) {
-    match stream {
-        StreamPoint::AtStream { database, name } => {
             if let Some(database) = database {
                 visitor.visit_identifier(database);
             }
 
             visitor.visit_identifier(name);
         }
-        StreamPoint::AtPoint(point) => visitor.visit_time_travel_point(point),
     }
 }
 
