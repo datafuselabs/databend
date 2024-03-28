@@ -26,7 +26,7 @@ use databend_common_storage::FileStatus;
 use log::debug;
 
 use crate::read::load_context::LoadContext;
-use crate::read::row_based::batch::RowBatch;
+use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::RowDecoder;
 
@@ -136,10 +136,10 @@ impl AccumulatingTransform for BlockBuilder {
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         let batch = data
             .get_owned_meta()
-            .and_then(RowBatch::downcast_from)
+            .and_then(RowBatchWithPosition::downcast_from)
             .unwrap();
-        if self.state.file_name != batch.path {
-            self.state.file_name = batch.path.clone();
+        if self.state.file_name != batch.start_pos.path {
+            self.state.file_name = batch.start_pos.path.clone();
         }
         let mut blocks = self.decoder.add(&mut self.state, batch)?;
         self.state.flush_status(&self.ctx.table_context)?;

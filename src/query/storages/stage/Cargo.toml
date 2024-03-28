@@ -28,12 +28,15 @@ databend-common-storages-parquet = { path = "../parquet" }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+bstr = "1.9.1"
 csv-core = "0.1.11"
 dashmap = { workspace = true }
+enum-as-inner = "0.6.0"
 log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
 
+serde_json = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 

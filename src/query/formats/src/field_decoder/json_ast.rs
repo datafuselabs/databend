@@ -63,12 +63,12 @@ impl FieldDecoder for FieldJsonAstDecoder {
 }
 
 impl FieldJsonAstDecoder {
-    pub fn create(options: &FileFormatOptionsExt, rounding_mode: bool) -> Self {
+    pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
-            is_rounding_mode: rounding_mode,
+            is_rounding_mode: options.is_rounding_mode,
         }
     }
 

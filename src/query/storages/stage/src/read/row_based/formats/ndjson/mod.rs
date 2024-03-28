@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod csv;
-mod ndjson;
+mod block_builder;
+mod format;
+mod separator;
 
-pub use csv::CsvInputFormat;
-pub use ndjson::NdJsonInputFormat;
+pub use format::NdJsonInputFormat;

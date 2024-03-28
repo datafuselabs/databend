@@ -155,7 +155,9 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_)
+                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
+            {
                 self.read_partitions_simple(ctx, stage_table_info).await
             }
             _ => self.read_partition_old(&ctx).await,
@@ -184,7 +186,9 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
-            FileFormatParams::Csv(_) if settings.get_enable_new_copy_for_text_formats()? == 1 => {
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_)
+                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
+            {
                 let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
                     stage_table_info,

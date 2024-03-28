@@ -25,9 +25,11 @@ use log::debug;
 
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::BytesBatch;
+use crate::read::row_based::batch::CSVRowBatch;
+use crate::read::row_based::batch::Position;
 use crate::read::row_based::batch::RowBatch;
+use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::csv::format::Position;
 use crate::read::row_based::formats::csv::CsvInputFormat;
 
 pub const MAX_CSV_COLUMNS: usize = 1000;
@@ -55,7 +57,7 @@ pub struct CsvReader {
 }
 
 impl SeparatorState for CsvReader {
-    fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatch>, FileStatus)> {
+    fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatchWithPosition>, FileStatus)> {
         self.separate(batch)
     }
 }
@@ -99,11 +101,7 @@ impl CsvReader {
             error_on_column_count_mismatch: format.params.error_on_column_count_mismatch,
             num_fields,
             reader,
-            pos: Position {
-                path: path.to_string(),
-                rows: 0,
-                offset: 0,
-            },
+            pos: Position::new(path.to_string()),
             rows_to_skip: format.params.headers as usize,
             field_ends: vec![0; max_fields],
             last_partial_row: vec![],
@@ -197,7 +195,7 @@ impl CsvReader {
         }
     }
 
-    fn separate(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatch>, FileStatus)> {
+    fn separate(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatchWithPosition>, FileStatus)> {
         // prepare for reading header and data
 
         let need_flush = batch.is_eof;
@@ -226,7 +224,8 @@ impl CsvReader {
         let mut buf_out_pos = 0usize;
         let mut buf_out_row_end: usize = 0;
         let last_batch_remain_len = self.last_partial_row.len();
-        let mut row_batch = RowBatch::new(&batch, self.pos.rows);
+        let pos = Position::from_bytes_batch(&batch, self.pos.rows);
+        let mut row_batch = CSVRowBatch::default();
 
         // read data
 
@@ -293,7 +292,10 @@ impl CsvReader {
                 [last_remain, buf_out].concat()
             };
 
-            Ok((vec![row_batch], file_status))
+            Ok((
+                vec![RowBatchWithPosition::new(RowBatch::Csv(row_batch), pos)],
+                file_status,
+            ))
         }
     }
 

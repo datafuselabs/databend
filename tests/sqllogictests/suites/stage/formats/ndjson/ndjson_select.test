@@ -51,3 +51,12 @@ select $1 from v order by $1
 # ndjson only supports $1
 query error column position 2 doesn't exist
 select $2 from @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson')
+----
+
+statement ok
+truncate table ontime
+
+query
+select /*+ set_var(input_read_buffer_size=100) */ count($1) from @data/ontime_200.ndjson (file_format=>'ndjson')
+----
+199

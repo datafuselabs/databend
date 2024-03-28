@@ -27,7 +27,7 @@ use databend_common_pipeline_sources::input_formats::error_utils::get_decode_err
 use databend_common_storage::FileParseError;
 
 use crate::read::load_context::LoadContext;
-use crate::read::row_based::batch::RowBatch;
+use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::csv::CsvInputFormat;
 use crate::read::row_based::processors::BlockBuilderState;
@@ -157,24 +157,29 @@ impl CsvDecoder {
 }
 
 impl RowDecoder for CsvDecoder {
-    fn add(&self, state: &mut BlockBuilderState, batch: RowBatch) -> Result<Vec<DataBlock>> {
+    fn add(
+        &self,
+        state: &mut BlockBuilderState,
+        batch: RowBatchWithPosition,
+    ) -> Result<Vec<DataBlock>> {
+        let data = batch.data.into_csv().unwrap();
         let columns = &mut state.mutable_columns;
         let mut start = 0usize;
         let mut field_end_idx = 0;
-        for (i, end) in batch.row_ends.iter().enumerate() {
-            let num_fields = batch.num_fields[i];
-            let buf = &batch.data[start..*end];
+        for (i, end) in data.row_ends.iter().enumerate() {
+            let num_fields = data.num_fields[i];
+            let buf = &data.data[start..*end];
             if let Err(e) = self.read_row(
                 buf,
                 columns,
-                &batch.field_ends[field_end_idx..field_end_idx + num_fields],
+                &data.field_ends[field_end_idx..field_end_idx + num_fields],
             ) {
                 self.load_context.error_handler.on_error(
                     e,
                     Some((columns, state.num_rows)),
                     &mut state.file_status,
-                    &batch.path,
-                    i + batch.start_row_id,
+                    &batch.start_pos.path,
+                    i + batch.start_pos.rows,
                 )?
             } else {
                 state.num_rows += 1;

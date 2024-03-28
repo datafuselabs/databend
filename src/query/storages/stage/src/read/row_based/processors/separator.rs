@@ -61,7 +61,7 @@ impl AccumulatingTransform for Separator {
         let (row_batches, file_status) = state.append(batch)?;
         let row_batches = row_batches
             .into_iter()
-            .filter(|b| b.rows() > 0 || b.size() > 0)
+            .filter(|b| b.data.rows() > 0 || b.data.size() > 0)
             .collect::<Vec<_>>();
         if batch_meta.is_eof {
             if file_status.error.is_some() {
@@ -76,7 +76,7 @@ impl AccumulatingTransform for Separator {
             Ok(vec![])
         } else {
             for b in row_batches.iter() {
-                process_values.rows += b.rows();
+                process_values.rows += b.data.rows();
             }
             self.ctx
                 .table_context

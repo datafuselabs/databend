@@ -21,18 +21,22 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::FileStatus;
 
 use super::batch::BytesBatch;
-use super::batch::RowBatch;
+use super::batch::RowBatchWithPosition;
 use super::processors::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::formats::CsvInputFormat;
+use crate::read::row_based::formats::NdJsonInputFormat;
 
 pub trait SeparatorState: Send + Sync {
-    fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatch>, FileStatus)>;
+    fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatchWithPosition>, FileStatus)>;
 }
 
 pub trait RowDecoder: Send + Sync {
-    fn add(&self, block_builder: &mut BlockBuilderState, batch: RowBatch)
-    -> Result<Vec<DataBlock>>;
+    fn add(
+        &self,
+        block_builder: &mut BlockBuilderState,
+        batch: RowBatchWithPosition,
+    ) -> Result<Vec<DataBlock>>;
 
     fn flush(&self, columns: Vec<Column>, _num_rows: usize) -> Vec<Column> {
         columns
@@ -51,6 +55,7 @@ pub trait RowBasedFileFormat: Sync + Send {
 pub fn create_row_based_file_format(params: &FileFormatParams) -> Arc<dyn RowBasedFileFormat> {
     match params {
         FileFormatParams::Csv(p) => Arc::new(CsvInputFormat { params: p.clone() }),
+        FileFormatParams::NdJson(p) => Arc::new(NdJsonInputFormat { params: p.clone() }),
         _ => {
             unreachable!("Unsupported row based file format")
         }

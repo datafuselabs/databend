@@ -15,30 +15,33 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::NdJsonFileFormatParams;
 
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::csv::block_builder::CsvDecoder;
-use crate::read::row_based::formats::csv::separator::CsvReader;
+use crate::read::row_based::formats::ndjson::block_builder::NdJsonDecoder;
+use crate::read::row_based::formats::ndjson::separator::NdJsonRowSeparator;
 
 #[derive(Clone)]
-pub struct CsvInputFormat {
-    pub(crate) params: CsvFileFormatParams,
+pub struct NdJsonInputFormat {
+    pub(crate) params: NdJsonFileFormatParams,
 }
 
-impl RowBasedFileFormat for CsvInputFormat {
+impl RowBasedFileFormat for NdJsonInputFormat {
     fn try_create_separator(
         &self,
-        load_ctx: Arc<LoadContext>,
+        _load_ctx: Arc<LoadContext>,
         path: &str,
     ) -> Result<Box<dyn SeparatorState>> {
-        Ok(Box::new(CsvReader::try_create(load_ctx, path, self)?))
+        Ok(Box::new(NdJsonRowSeparator::try_create(path)?))
     }
 
     fn try_create_decoder(&self, load_ctx: Arc<LoadContext>) -> Result<Arc<dyn RowDecoder>> {
-        Ok(Arc::new(CsvDecoder::create(self.clone(), load_ctx.clone())))
+        Ok(Arc::new(NdJsonDecoder::create(
+            self.clone(),
+            load_ctx.clone(),
+        )))
     }
 }
