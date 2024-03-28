@@ -56,7 +56,7 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
         let tenant = self.ctx.get_tenant();
         let req = GetShareGrantTenantsReq {
             share_name: ShareNameIdent {
-                tenant: tenant.name().to_string(),
+                tenant,
                 share_name: self.plan.share_name.clone(),
             },
         };

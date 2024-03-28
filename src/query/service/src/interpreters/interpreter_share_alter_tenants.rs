@@ -57,7 +57,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
         if self.plan.is_add {
             let req = AddShareAccountsReq {
                 share_name: ShareNameIdent {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     share_name: self.plan.share.clone(),
                 },
                 if_exists: self.plan.if_exists,
@@ -76,7 +76,7 @@ impl Interpreter for AlterShareTenantsInterpreter {
         } else {
             let req = RemoveShareAccountsReq {
                 share_name: ShareNameIdent {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     share_name: self.plan.share.clone(),
                 },
                 if_exists: self.plan.if_exists,

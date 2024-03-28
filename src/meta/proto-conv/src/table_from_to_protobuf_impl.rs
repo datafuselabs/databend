@@ -24,6 +24,8 @@ use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -95,8 +97,13 @@ impl FromToProto for mt::TableNameIdent {
     fn from_pb(p: pb::TableNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let non_empty = NonEmptyString::new(p.tenant.clone())
+            .map_err(|_e| Incompatible::new("tenant is empty"))?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let v = Self {
-            tenant: p.tenant,
+            tenant,
             db_name: p.db_name,
             table_name: p.table_name,
         };
@@ -107,7 +114,7 @@ impl FromToProto for mt::TableNameIdent {
         let p = pb::TableNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
+            tenant: self.tenant.name().to_string(),
             db_name: self.db_name.clone(),
             table_name: self.table_name.clone(),
         };

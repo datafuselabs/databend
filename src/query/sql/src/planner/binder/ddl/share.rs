@@ -107,7 +107,7 @@ impl Binder {
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
-            tenant: self.ctx.get_tenant().name().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
             comment: comment.as_ref().cloned(),
         };
@@ -125,7 +125,7 @@ impl Binder {
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
-            tenant: self.ctx.get_tenant().name().to_string(),
+            tenant: self.ctx.get_tenant(),
             share,
         };
         Ok(Plan::DropShare(Box::new(plan)))

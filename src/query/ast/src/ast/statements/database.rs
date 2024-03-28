@@ -97,7 +97,8 @@ impl Display for CreateDatabaseStmt {
             write!(
                 f,
                 " FROM SHARE {}.{}",
-                from_share.tenant, from_share.share_name
+                from_share.tenant.name(),
+                from_share.share_name
             )?;
         }
 

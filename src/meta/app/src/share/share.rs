@@ -29,18 +29,19 @@ use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
+use crate::tenant::Tenant;
 
 // serde is required by `DatabaseType`
 /// A share that is created by `tenant` and is named with `share_name`.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share_name: String,
 }
 
 impl Display for ShareNameIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'/'{}'", self.tenant, self.share_name)
+        write!(f, "'{}'/'{}'", self.tenant.name(), self.share_name)
     }
 }
 
@@ -717,7 +718,7 @@ pub struct ShareIdent {
     pub seq: u64,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShareInfo {
     pub ident: ShareIdent,
     pub name_ident: ShareNameIdent,
@@ -838,12 +839,12 @@ mod kvapi_key_impl {
 
         /// It belongs to a tenant
         fn parent(&self) -> Option<String> {
-            Some(Tenant::new(&self.tenant).to_string_key())
+            Some(self.tenant.to_string_key())
         }
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
+                .push_str(self.tenant.name())
                 .push_str(&self.share_name)
                 .done()
         }
@@ -851,9 +852,11 @@ mod kvapi_key_impl {
         fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
-            let tenant = p.next_str()?;
+            let tenant = p.next_nonempty()?;
             let share_name = p.next_str()?;
             p.done()?;
+
+            let tenant = Tenant::new_nonempty(tenant);
 
             Ok(ShareNameIdent { tenant, share_name })
         }

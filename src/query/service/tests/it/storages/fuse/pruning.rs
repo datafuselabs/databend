@@ -91,7 +91,7 @@ async fn test_block_pruner() -> Result<()> {
     let create_table_plan = CreateTablePlan {
         catalog: "default".to_owned(),
         create_option: CreateOption::Create,
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         schema: test_schema.clone(),

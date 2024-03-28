@@ -304,7 +304,7 @@ impl TestFixture {
     pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.default_tenant().name().to_string(),
+            tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
@@ -329,7 +329,7 @@ impl TestFixture {
     pub fn normal_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.default_tenant().name().to_string(),
+            tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
@@ -365,7 +365,7 @@ impl TestFixture {
     pub fn variant_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.default_tenant().name().to_string(),
+            tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
@@ -401,7 +401,7 @@ impl TestFixture {
     pub fn string_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.default_tenant().name().to_string(),
+            tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
@@ -446,7 +446,7 @@ impl TestFixture {
     pub fn computed_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.default_tenant().name().to_string(),
+            tenant: self.default_tenant(),
             catalog: self.default_catalog_name(),
             database: self.default_db_name(),
             table: self.default_table_name(),
@@ -505,7 +505,7 @@ impl TestFixture {
         let db_name = gen_db_name(&self.prefix);
         let plan = CreateDatabasePlan {
             catalog: "default".to_owned(),
-            tenant: tenant.to_nonempty(),
+            tenant: tenant.clone(),
             create_option: CreateOption::Create,
             database: db_name,
             meta: DatabaseMeta {

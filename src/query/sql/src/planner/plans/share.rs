@@ -30,6 +30,7 @@ use databend_common_meta_app::share::ShareEndpointIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 
 // Create Share endpoint Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,7 +110,7 @@ impl From<DropShareEndpointPlan> for DropShareEndpointReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSharePlan {
     pub if_not_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share: String,
     pub comment: Option<String>,
 }
@@ -131,7 +132,7 @@ impl From<CreateSharePlan> for CreateShareReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSharePlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub share: String,
 }
 

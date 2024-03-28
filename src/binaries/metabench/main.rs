@@ -37,6 +37,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -177,7 +178,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
 }
 
 async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
-    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
 
@@ -215,7 +216,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     print_res(i, "create_table", &res);
 
     let res = client
-        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
+        .get_table(GetTableReq::new(&tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);
@@ -256,12 +257,12 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 }
 
 async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
-    let tenant = || format!("tenant-{}-{}", prefix, client_num);
+    let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
 
     let res = client
-        .get_table(GetTableReq::new(tenant(), db_name(), table_name()))
+        .get_table(GetTableReq::new(&tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);

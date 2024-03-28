@@ -16,6 +16,7 @@ use std::any::type_name;
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaAPIError;
@@ -97,6 +98,12 @@ impl From<InvalidReply> for KVAppError {
     fn from(e: InvalidReply) -> Self {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
+    }
+}
+
+impl From<TenantIsEmpty> for KVAppError {
+    fn from(value: TenantIsEmpty) -> Self {
+        KVAppError::AppError(AppError::from(value))
     }
 }
 

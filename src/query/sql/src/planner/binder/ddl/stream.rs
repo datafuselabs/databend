@@ -80,7 +80,7 @@ impl Binder {
 
         let plan = CreateStreamPlan {
             create_option: *create_option,
-            tenant: tenant.name().to_string(),
+            tenant,
             catalog,
             database,
             stream_name,

@@ -244,7 +244,7 @@ impl StreamHandler for RealStreamHandler {
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: plan.if_exists,
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     table_name: stream_name.clone(),
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().ident.db_id,

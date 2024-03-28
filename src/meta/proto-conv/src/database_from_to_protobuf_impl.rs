@@ -21,6 +21,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::share;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -31,16 +33,24 @@ use crate::VER;
 
 impl FromToProto for mt::DatabaseNameIdent {
     type PB = pb::DatabaseNameIdent;
+
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
+
     fn from_pb(p: pb::DatabaseNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let non_empty = NonEmptyString::new(p.tenant.clone())
+            .map_err(|_e| Incompatible::new("tenant is empty"))?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let v = Self {
-            tenant: p.tenant,
+            tenant,
             db_name: p.db_name,
         };
+
         Ok(v)
     }
 
@@ -48,7 +58,7 @@ impl FromToProto for mt::DatabaseNameIdent {
         let p = pb::DatabaseNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
+            tenant: self.tenant.name().to_string(),
             db_name: self.db_name.clone(),
         };
         Ok(p)

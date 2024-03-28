@@ -33,7 +33,6 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
@@ -100,7 +99,7 @@ impl Interpreter for CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = Tenant::new_or_err(&self.plan.tenant, "CreateTableInterpreter::execute2")?;
+        let tenant = &self.plan.tenant;
 
         let has_computed_column = self
             .plan
@@ -115,7 +114,7 @@ impl Interpreter for CreateTableInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
-        let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
+        let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
@@ -125,7 +124,7 @@ impl Interpreter for CreateTableInterpreter {
             // If a database has lot of tables, list_tables will be slow.
             // So We check get it when max_tables_per_database != 0
             let tables = catalog
-                .list_tables(&self.plan.tenant, &self.plan.database)
+                .list_tables(self.plan.tenant.name(), &self.plan.database)
                 .await?;
             if tables.len() >= quota.max_tables_per_database as usize {
                 return Err(ErrorCode::TenantQuotaExceeded(format!(
@@ -372,7 +371,7 @@ impl CreateTableInterpreter {
         let req = CreateTableReq {
             create_option: self.plan.create_option,
             name_ident: TableNameIdent {
-                tenant: self.plan.tenant.to_string(),
+                tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.to_string(),
                 table_name: self.plan.table.to_string(),
             },
@@ -438,7 +437,7 @@ impl CreateTableInterpreter {
         let req = CreateTableReq {
             create_option: self.plan.create_option,
             name_ident: TableNameIdent {
-                tenant: self.plan.tenant.to_string(),
+                tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.to_string(),
                 table_name: self.plan.table.to_string(),
             },

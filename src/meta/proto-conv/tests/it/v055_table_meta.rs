@@ -22,6 +22,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::share;
+use databend_common_meta_app::tenant::Tenant;
 use maplit::btreemap;
 use maplit::btreeset;
 use minitrace::func_name;
@@ -124,7 +125,7 @@ fn test_decode_v51_database_meta() -> anyhow::Result<()> {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(share::ShareNameIdent {
-            tenant: "tenant".to_string(),
+            tenant: Tenant::new_literal("tenant"),
             share_name: "share".to_string(),
         }),
     };

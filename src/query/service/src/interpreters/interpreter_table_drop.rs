@@ -107,7 +107,7 @@ impl Interpreter for DropTableInterpreter {
         let resp = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: self.plan.if_exists,
-                tenant: tenant.name().to_string(),
+                tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
                 db_id: db.get_db_info().ident.db_id,

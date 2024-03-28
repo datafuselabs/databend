@@ -14,6 +14,7 @@
 
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum StreamNavigation {
@@ -24,7 +25,7 @@ pub enum StreamNavigation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateStreamPlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub stream_name: String,

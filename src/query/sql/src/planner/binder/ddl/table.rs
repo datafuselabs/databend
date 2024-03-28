@@ -646,7 +646,7 @@ impl Binder {
 
         let plan = CreateTablePlan {
             create_option: *create_option,
-            tenant: self.ctx.get_tenant().name().to_string(),
+            tenant: self.ctx.get_tenant(),
             catalog: catalog.clone(),
             database: database.clone(),
             table,
@@ -728,7 +728,7 @@ impl Binder {
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
             create_option: CreateOption::Create,
-            tenant: self.ctx.get_tenant().name().to_string(),
+            tenant: self.ctx.get_tenant(),
             catalog,
             database,
             table,
@@ -788,7 +788,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, table);
 
         Ok(Plan::UndropTable(Box::new(UndropTablePlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             catalog,
             database,
             table,
@@ -826,7 +826,7 @@ impl Binder {
         match action {
             AlterTableAction::RenameTable { new_table } => {
                 Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-                    tenant: tenant.name().to_string(),
+                    tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
                     new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
@@ -1042,7 +1042,7 @@ impl Binder {
         }
 
         Ok(Plan::RenameTable(Box::new(RenameTablePlan {
-            tenant: tenant.name().to_string(),
+            tenant,
             if_exists: *if_exists,
             catalog,
             database: db_name,

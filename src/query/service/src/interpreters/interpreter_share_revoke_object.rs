@@ -55,7 +55,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = RevokeShareObjectReq {
             share_name: ShareNameIdent {
-                tenant: tenant.name().to_string(),
+                tenant,
                 share_name: self.plan.share.clone(),
             },
             object: self.plan.object.clone(),

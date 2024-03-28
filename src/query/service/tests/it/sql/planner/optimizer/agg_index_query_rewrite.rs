@@ -62,7 +62,7 @@ struct TestSuite {
 fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
     CreateTablePlan {
         create_option: CreateOption::Create,
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: "default".to_string(),
         table: "t".to_string(),

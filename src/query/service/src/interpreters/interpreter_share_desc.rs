@@ -56,7 +56,7 @@ impl Interpreter for DescShareInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GetShareGrantObjectReq {
             share_name: ShareNameIdent {
-                tenant: self.ctx.get_tenant().name().to_string(),
+                tenant: self.ctx.get_tenant(),
                 share_name: self.plan.share.clone(),
             },
         };

@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::share::*;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
 use enumflags2::BitFlags;
@@ -137,9 +138,11 @@ impl ShareApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant = "tenant1";
+        let tenant = Tenant::new_literal(tenant);
+
         let share1 = "share1";
         let share_name = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             share_name: share1.to_string(),
         };
         let share_id: u64;
@@ -147,7 +150,7 @@ impl ShareApiTestSuite {
         info!("--- show share when there are no share");
         {
             let req = ShowSharesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant.name().to_string(),
             };
 
             let res = mt.show_shares(req).await;
@@ -183,7 +186,7 @@ impl ShareApiTestSuite {
         info!("--- show share again");
         {
             let req = ShowSharesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant.name().to_string(),
             };
 
             let res = mt.show_shares(req).await;
@@ -475,22 +478,26 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
-        let tenant2 = "tenant2";
+        let tenant_name1 = "tenant1";
+        let tenant_name2 = "tenant2";
+
+        let tenant1 = Tenant::new_literal(tenant_name1);
+        let tenant2 = Tenant::new_literal(tenant_name2);
+
         let share1 = "share1";
         let share2 = "share2";
         let account = "account1";
         let account2 = "account2";
         let share_name = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant1.clone(),
             share_name: share1.to_string(),
         };
         let share_name2 = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant1.clone(),
             share_name: share2.to_string(),
         };
         let share_name3 = ShareNameIdent {
-            tenant: tenant2.to_string(),
+            tenant: tenant2.clone(),
             share_name: share2.to_string(),
         };
         let comment1 = "comment1";
@@ -622,7 +629,7 @@ impl ShareApiTestSuite {
                 share_name: share_name3.clone(),
                 share_on,
                 if_exists,
-                accounts: vec![tenant.to_string()],
+                accounts: vec![tenant_name1.to_string()],
             };
 
             // get share meta and check account has been added
@@ -635,7 +642,7 @@ impl ShareApiTestSuite {
         info!("--- show share check account information");
         {
             let req = ShowSharesReq {
-                tenant: tenant.to_string(),
+                tenant: tenant_name1.to_string(),
             };
 
             let res = mt.show_shares(req).await;
@@ -766,7 +773,10 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+
+        let tenant = Tenant::new_literal(tenant_name);
+
         let share1 = "share1";
         let db_name = "db1";
         let tbl_name = "table1";
@@ -774,7 +784,7 @@ impl ShareApiTestSuite {
         let tbl2_name = "table2";
 
         let share_name = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             share_name: share1.to_string(),
         };
         let share_id: u64;
@@ -805,7 +815,7 @@ impl ShareApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                 },
                 meta: DatabaseMeta::default(),
@@ -818,7 +828,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
@@ -832,7 +842,7 @@ impl ShareApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db2_name.to_string(),
                 },
                 meta: DatabaseMeta::default(),
@@ -841,7 +851,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                     table_name: tbl2_name.to_string(),
                 },
@@ -857,7 +867,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db2_name.to_string(),
                     table_name: tbl2_name.to_string(),
                 },
@@ -908,7 +918,7 @@ impl ShareApiTestSuite {
         {
             let req = GrantShareObjectReq {
                 share_name: ShareNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     share_name: "share2".to_string(),
                 },
                 object: ShareGrantObjectName::Database("db2".to_string()),
@@ -1195,13 +1205,15 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let share1 = "share1";
         let db_name = "db1";
         let tbl_name = "table1";
 
         let share_name = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             share_name: share1.to_string(),
         };
 
@@ -1253,7 +1265,7 @@ impl ShareApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                 },
                 meta: DatabaseMeta::default(),
@@ -1265,7 +1277,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
@@ -1325,7 +1337,9 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant1 = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let share1 = "share1";
         let share2 = "share2";
         let share3 = "share3";
@@ -1334,22 +1348,22 @@ impl ShareApiTestSuite {
         let share_id;
 
         let share_name1 = ShareNameIdent {
-            tenant: tenant1.to_string(),
+            tenant: tenant.clone(),
             share_name: share1.to_string(),
         };
         let share_name2 = ShareNameIdent {
-            tenant: tenant1.to_string(),
+            tenant: tenant.clone(),
             share_name: share2.to_string(),
         };
         let share_name3 = ShareNameIdent {
-            tenant: tenant1.to_string(),
+            tenant: tenant.clone(),
             share_name: share3.to_string(),
         };
 
         info!("--- get unknown object");
         {
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Database("db".to_string()),
             };
 
@@ -1362,7 +1376,7 @@ impl ShareApiTestSuite {
             );
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Table("db".to_string(), "table".to_string()),
             };
 
@@ -1406,7 +1420,7 @@ impl ShareApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant1.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                 },
                 meta: DatabaseMeta::default(),
@@ -1418,7 +1432,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant1.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
@@ -1467,7 +1481,7 @@ impl ShareApiTestSuite {
         info!("--- get_grant_privileges_of_object of db and table");
         {
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Database(db_name.to_string()),
             };
 
@@ -1479,7 +1493,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges[0].grant_on, grant_on);
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
             };
 
@@ -1493,11 +1507,12 @@ impl ShareApiTestSuite {
 
         info!("--- drop share1 and check objects");
         {
-            let tenant2 = "tenant1";
+            let tenant_name2 = "tenant1";
+            let tenant2 = Tenant::new_literal(tenant_name2);
             let db2 = "db2";
 
             let db_name2 = DatabaseNameIdent {
-                tenant: tenant2.to_string(),
+                tenant: tenant2.clone(),
                 db_name: db2.to_string(),
             };
 
@@ -1506,7 +1521,7 @@ impl ShareApiTestSuite {
                 share_name: share_name1.clone(),
                 share_on: Utc::now(),
                 if_exists: false,
-                accounts: vec![tenant2.to_string()],
+                accounts: vec![tenant_name2.to_string()],
             };
             let res = mt.add_share_tenants(req).await;
             assert!(res.is_ok());
@@ -1573,7 +1588,7 @@ impl ShareApiTestSuite {
 
             // get_grant_privileges_of_object of db and table again
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Database(db_name.to_string()),
             };
 
@@ -1583,7 +1598,7 @@ impl ShareApiTestSuite {
             assert_eq!(res.privileges.len(), 1);
 
             let req = GetObjectGrantPrivilegesReq {
-                tenant: tenant1.to_string(),
+                tenant: tenant_name.to_string(),
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
             };
 
@@ -1603,7 +1618,9 @@ impl ShareApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let tenant = "tenant1";
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_literal(tenant_name);
+
         let share1 = "drop_share_database_and_table_share";
         let share2 = "drop_share_database_and_table_share2";
         let db_name = "drop_share_database_and_table_db";
@@ -1614,11 +1631,11 @@ impl ShareApiTestSuite {
         let table_id: u64;
 
         let share_name = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             share_name: share1.to_string(),
         };
         let share_name2 = ShareNameIdent {
-            tenant: tenant.to_string(),
+            tenant: tenant.clone(),
             share_name: share2.to_string(),
         };
 
@@ -1656,7 +1673,7 @@ impl ShareApiTestSuite {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                 },
                 meta: DatabaseMeta::default(),
@@ -1669,7 +1686,7 @@ impl ShareApiTestSuite {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
                 name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
@@ -1789,7 +1806,7 @@ impl ShareApiTestSuite {
 
             let plan = DropTableByIdReq {
                 if_exists: false,
-                tenant: tenant.to_string(),
+                tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: table_id,
                 db_id,
@@ -1810,7 +1827,7 @@ impl ShareApiTestSuite {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
                 name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
+                    tenant: tenant.clone(),
                     db_name: db_name.to_string(),
                 },
             })

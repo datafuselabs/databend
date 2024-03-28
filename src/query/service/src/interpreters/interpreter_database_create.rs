@@ -21,7 +21,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
@@ -54,7 +53,7 @@ impl CreateDatabaseInterpreter {
         let share_specs = ShareEndpointManager::instance()
             .get_inbound_shares(
                 tenant,
-                Some(share_name.tenant.clone()),
+                Some(share_name.tenant.name().to_string()),
                 Some(share_name.clone()),
             )
             .await?;
@@ -109,7 +108,7 @@ impl Interpreter for CreateDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_database_execute");
 
-        let tenant = Tenant::new_nonempty(self.plan.tenant.clone());
+        let tenant = self.plan.tenant.clone();
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;

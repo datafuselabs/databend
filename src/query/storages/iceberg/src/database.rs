@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::DataOperator;
 use futures::StreamExt;
 use opendal::EntryMode;
@@ -48,8 +49,8 @@ impl IcebergDatabase {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
+                tenant: Tenant::new_literal("dummy"),
                 db_name: db_name.to_string(),
-                ..Default::default()
             },
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),

@@ -40,7 +40,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
 
     let create_table_plan = CreateTablePlan {
         create_option: CreateOption::Create,
-        tenant: fixture.default_tenant().name().to_string(),
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),

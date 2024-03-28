@@ -84,7 +84,7 @@ impl Interpreter for ShowSharesInterpreter {
             kinds.push("OUTBOUND".to_string());
             created_owns.push(entry.create_on.to_string());
             database_names.push(entry.database_name.unwrap_or_default());
-            from.push(entry.share_name.tenant.clone());
+            from.push(entry.share_name.tenant.name().to_string());
             to.push(
                 entry
                     .accounts

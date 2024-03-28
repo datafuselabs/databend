@@ -84,7 +84,7 @@ impl Interpreter for DropViewInterpreter {
 
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             let db = catalog
-                .get_database(&self.plan.tenant, &self.plan.database)
+                .get_database(self.plan.tenant.name(), &self.plan.database)
                 .await?;
             catalog
                 .drop_table_by_id(DropTableByIdReq {

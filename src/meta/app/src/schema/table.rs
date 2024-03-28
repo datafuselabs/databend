@@ -21,6 +21,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
@@ -36,6 +37,7 @@ use crate::schema::database::DatabaseNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
+use crate::tenant::Tenant;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -65,27 +67,27 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableNameIdent {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub db_name: String,
     pub table_name: String,
 }
 
 impl TableNameIdent {
     pub fn new(
-        tenant: impl Into<String>,
+        tenant: Tenant,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> TableNameIdent {
         TableNameIdent {
-            tenant: tenant.into(),
+            tenant,
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
     }
 
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.tenant
     }
 
@@ -106,7 +108,9 @@ impl Display for TableNameIdent {
         write!(
             f,
             "'{}'.'{}'.'{}'",
-            self.tenant, self.db_name, self.table_name
+            self.tenant.name(),
+            self.db_name,
+            self.table_name
         )
     }
 }
@@ -171,7 +175,7 @@ mod database_type {
     impl From<crate::share::ShareNameIdent> for ShareNameIdent {
         fn from(value: crate::share::ShareNameIdent) -> Self {
             Self {
-                tenant: value.tenant,
+                tenant: value.tenant.name().to_string(),
                 share_name: value.share_name,
             }
         }
@@ -487,7 +491,7 @@ pub struct CreateTableReq {
 }
 
 impl CreateTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -504,7 +508,7 @@ impl Display for CreateTableReq {
             CreateOption::Create => write!(
                 f,
                 "create_table:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -512,7 +516,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateIfNotExists => write!(
                 f,
                 "create_table_if_not_exists:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -520,7 +524,7 @@ impl Display for CreateTableReq {
             CreateOption::CreateOrReplace => write!(
                 f,
                 "create_or_replace_table:{}/{}-{}={}",
-                self.tenant(),
+                self.tenant().name(),
                 self.db_name(),
                 self.table_name(),
                 self.table_meta
@@ -544,7 +548,7 @@ pub struct CreateTableReply {
 pub struct DropTableByIdReq {
     pub if_exists: bool,
 
-    pub tenant: String,
+    pub tenant: Tenant,
 
     pub tb_id: MetaId,
 
@@ -581,7 +585,7 @@ pub struct UndropTableReq {
 }
 
 impl UndropTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -597,7 +601,7 @@ impl Display for UndropTableReq {
         write!(
             f,
             "undrop_table:{}/{}-{}",
-            self.tenant(),
+            self.tenant().name(),
             self.db_name(),
             self.table_name()
         )
@@ -616,7 +620,7 @@ pub struct RenameTableReq {
 }
 
 impl RenameTableReq {
-    pub fn tenant(&self) -> &str {
+    pub fn tenant(&self) -> &Tenant {
         &self.name_ident.tenant
     }
     pub fn db_name(&self) -> &str {
@@ -632,7 +636,7 @@ impl Display for RenameTableReq {
         write!(
             f,
             "rename_table:{}/{}-{}=>{}-{}",
-            self.tenant(),
+            self.tenant().name(),
             self.db_name(),
             self.table_name(),
             self.new_db_name,
@@ -804,19 +808,21 @@ impl Deref for GetTableReq {
 }
 
 impl From<(&str, &str, &str)> for GetTableReq {
+    /// For testing only
     fn from(db_table: (&str, &str, &str)) -> Self {
-        Self::new(db_table.0, db_table.1, db_table.2)
+        let tenant = Tenant::new_or_err(db_table.0, func_name!()).unwrap();
+        Self::new(&tenant, db_table.1, db_table.2)
     }
 }
 
 impl GetTableReq {
     pub fn new(
-        tenant: impl Into<String>,
+        tenant: &Tenant,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> GetTableReq {
         GetTableReq {
-            inner: TableNameIdent::new(tenant, db_name, table_name),
+            inner: TableNameIdent::new(tenant.clone(), db_name, table_name),
         }
     }
 }
@@ -835,10 +841,10 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant: &Tenant, db_name: impl Into<String>) -> ListTableReq {
         ListTableReq {
             inner: DatabaseNameIdent {
-                tenant: tenant.into(),
+                tenant: tenant.clone(),
                 db_name: db_name.into(),
             },
         }
@@ -883,7 +889,7 @@ pub struct ListDroppedTableResp {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableReq {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub drop_ids: Vec<DroppedId>,
 }
 

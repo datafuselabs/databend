@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -3611,18 +3612,30 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         rule! {
             FROM ~ SHARE ~ #ident ~ "." ~ #ident
         },
-        |(_, _, tenant, _, share_name)| {
+        |(_x, _y, tenant, _z, share_name)| {
             CreateDatabaseOption::FromShare(ShareNameIdent {
-                tenant: tenant.to_string(),
+                // TODO: non-safe new() that does not return an error
+                tenant: Tenant::new(tenant.to_string()),
                 share_name: share_name.to_string(),
             })
         },
     );
 
-    rule!(
+    let (i, opt) = rule!(
         #create_db_engine
         | #share_from
-    )(i)
+    )(i)?;
+
+    if let CreateDatabaseOption::FromShare(ident) = &opt {
+        if ident.tenant.name().is_empty() {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::Other("tenant is empty string"),
+            )));
+        }
+    }
+
+    Ok((i, opt))
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {

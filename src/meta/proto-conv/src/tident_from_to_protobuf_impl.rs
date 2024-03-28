@@ -38,12 +38,6 @@ where R: TenantResource
     fn from_pb(p: pb::TIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        if p.tenant.is_empty() {
-            return Err(Incompatible {
-                reason: "tenant is empty".to_string(),
-            });
-        }
-
         let non_empty = NonEmptyString::new(p.tenant.clone())
             .map_err(|_e| Incompatible::new("tenant is empty"))?;
 

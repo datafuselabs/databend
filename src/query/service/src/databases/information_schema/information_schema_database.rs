@@ -18,6 +18,7 @@ use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
 use databend_common_storages_information_schema::KeywordsTable;
@@ -59,7 +60,7 @@ impl InformationSchemaDatabase {
                 seq: 0,
             },
             name_ident: DatabaseNameIdent {
-                tenant: "".to_string(),
+                tenant: Tenant::new_literal("dummy"),
                 db_name: db.to_string(),
             },
             meta: DatabaseMeta {

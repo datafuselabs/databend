@@ -40,7 +40,7 @@ pub type TableOptions = BTreeMap<String, String>;
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
     pub create_option: CreateOption,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
@@ -236,7 +236,7 @@ impl AnalyzeTablePlan {
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub if_exists: bool,
     pub catalog: String,
     pub database: String,
@@ -389,7 +389,7 @@ impl TruncateTablePlan {
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTablePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,

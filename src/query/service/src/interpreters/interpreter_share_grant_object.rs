@@ -55,7 +55,7 @@ impl Interpreter for GrantShareObjectInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let req = GrantShareObjectReq {
             share_name: ShareNameIdent {
-                tenant: tenant.name().to_string(),
+                tenant,
                 share_name: self.plan.share.clone(),
             },
             object: self.plan.object.clone(),

@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
@@ -45,7 +46,7 @@ impl From<hms::Database> for HiveDatabase {
             database_info: DatabaseInfo {
                 ident: DatabaseIdent { db_id: 0, seq: 0 },
                 name_ident: DatabaseNameIdent {
-                    tenant: "TODO".to_owned(),
+                    tenant: Tenant::new_literal("dummy"),
                     db_name: hms_database.name.unwrap_or_default().to_string(),
                 },
                 meta: DatabaseMeta {

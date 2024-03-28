@@ -2565,7 +2565,9 @@ CreateDatabase(
         options: [],
         from_share: Some(
             ShareNameIdent {
-                tenant: "a",
+                tenant: Tenant {
+                    tenant: "a",
+                },
                 share_name: "s",
             },
         ),

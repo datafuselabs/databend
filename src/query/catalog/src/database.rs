@@ -37,6 +37,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::tenant::Tenant;
 use dyn_clone::DynClone;
 
 use crate::table::Table;
@@ -60,7 +61,7 @@ pub trait Database: DynClone + Sync + Send {
 
     fn get_db_info(&self) -> &DatabaseInfo;
 
-    fn get_tenant(&self) -> &String {
+    fn get_tenant(&self) -> &Tenant {
         &self.get_db_info().name_ident.tenant
     }
 

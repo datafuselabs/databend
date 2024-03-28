@@ -18,6 +18,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::share;
+use databend_common_meta_app::tenant::Tenant;
 use maplit::btreemap;
 use minitrace::func_name;
 
@@ -54,7 +55,7 @@ fn test_decode_v5_database_meta() -> anyhow::Result<()> {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(share::ShareNameIdent {
-            tenant: "tenant".to_string(),
+            tenant: Tenant::new_literal("tenant"),
             share_name: "share".to_string(),
         }),
     };

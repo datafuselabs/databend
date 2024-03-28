@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::BackgroundJobTable;
 use databend_common_storages_system::BackgroundTaskTable;
 use databend_common_storages_system::BacktraceTable;
@@ -157,7 +158,7 @@ impl SystemDatabase {
                 seq: 0,
             },
             name_ident: DatabaseNameIdent {
-                tenant: "".to_string(),
+                tenant: Tenant::new_literal("dummy"),
                 db_name: "system".to_string(),
             },
             meta: DatabaseMeta {

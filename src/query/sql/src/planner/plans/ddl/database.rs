@@ -19,13 +19,13 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseNameIdent;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app::tenant::Tenant;
 
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabasePlan {
     pub create_option: CreateOption,
-    pub tenant: NonEmptyString,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub meta: DatabaseMeta,
@@ -36,7 +36,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             create_option: p.create_option,
             name_ident: DatabaseNameIdent {
-                tenant: p.tenant.to_string(),
+                tenant: p.tenant.clone(),
                 db_name: p.database,
             },
             meta: p.meta,
@@ -49,7 +49,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             create_option: p.create_option,
             name_ident: DatabaseNameIdent {
-                tenant: p.tenant.to_string(),
+                tenant: p.tenant.clone(),
                 db_name: p.database.clone(),
             },
             meta: p.meta.clone(),
@@ -61,7 +61,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabasePlan {
     pub if_exists: bool,
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
 }
@@ -93,7 +93,7 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabasePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub entities: Vec<RenameDatabaseEntity>,
 }
 
@@ -108,7 +108,7 @@ pub struct RenameDatabaseEntity {
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabasePlan {
-    pub tenant: String,
+    pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
 }

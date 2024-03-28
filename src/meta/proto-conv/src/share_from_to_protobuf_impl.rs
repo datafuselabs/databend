@@ -21,6 +21,8 @@ use std::collections::BTreeSet;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::share as mt;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 use enumflags2::BitFlags;
 
@@ -62,8 +64,13 @@ impl FromToProto for mt::ShareNameIdent {
     fn from_pb(p: pb::ShareNameIdent) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let non_empty = NonEmptyString::new(p.tenant.clone())
+            .map_err(|_e| Incompatible::new("tenant is empty"))?;
+
+        let tenant = Tenant::new_nonempty(non_empty);
+
         let v = Self {
-            tenant: p.tenant,
+            tenant,
             share_name: p.share_name,
         };
         Ok(v)
@@ -73,7 +80,7 @@ impl FromToProto for mt::ShareNameIdent {
         let p = pb::ShareNameIdent {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.tenant.clone(),
+            tenant: self.tenant.name().to_string(),
             share_name: self.share_name.clone(),
         };
         Ok(p)

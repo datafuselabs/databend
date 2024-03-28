@@ -194,16 +194,11 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        if req.name_ident.tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while create database)",
-            ));
-        }
         info!("Create database from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -217,17 +212,12 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
-        if req.name_ident.tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while drop database)",
-            ));
-        }
         info!("Drop database from req:{:?}", req);
 
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -237,20 +227,15 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
-        if req.name_ident.tenant.is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while rename database)",
-            ));
-        }
         info!("Rename table from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .exists_database(req.name_ident.tenant.name(), &req.name_ident.db_name)
             .await?
             || self
                 .immutable_catalog
-                .exists_database(&req.name_ident.tenant, &req.new_db_name)
+                .exists_database(req.name_ident.tenant.name(), &req.new_db_name)
                 .await?
         {
             return self.immutable_catalog.rename_database(req).await;
@@ -418,16 +403,11 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while create table)",
-            ));
-        }
         info!("Create table from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
+            .exists_database(req.tenant().name(), req.db_name())
             .await?
         {
             return self.immutable_catalog.create_table(req).await;
@@ -443,16 +423,11 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while undrop table)",
-            ));
-        }
         info!("Undrop table from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
+            .exists_database(req.tenant().name(), req.db_name())
             .await?
         {
             return self.immutable_catalog.undrop_table(req).await;
@@ -462,16 +437,11 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn undrop_database(&self, req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while undrop database)",
-            ));
-        }
         info!("Undrop database from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
+            .exists_database(req.tenant().name(), req.db_name())
             .await?
         {
             return self.immutable_catalog.undrop_database(req).await;
@@ -481,20 +451,15 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        if req.tenant().is_empty() {
-            return Err(ErrorCode::TenantIsEmpty(
-                "Tenant can not empty(while rename table)",
-            ));
-        }
         info!("Rename table from req:{:?}", req);
 
         if self
             .immutable_catalog
-            .exists_database(req.tenant(), req.db_name())
+            .exists_database(req.tenant().name(), req.db_name())
             .await?
             || self
                 .immutable_catalog
-                .exists_database(req.tenant(), &req.new_db_name)
+                .exists_database(req.tenant().name(), &req.new_db_name)
                 .await?
         {
             return Err(ErrorCode::Unimplemented(
