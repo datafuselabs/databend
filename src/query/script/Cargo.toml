@@ -1,0 +1,23 @@
+[package]
+name = "databend-common-script"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+databend-common-ast = { path = "../ast" }
+databend-common-exception = { path = "../../common/exception" }
+
+# Crates.io dependencies
+derive-visitor = { workspace = true }
+minitrace = { workspace = true }
+
+[dev-dependencies]
+goldenfile = "1.4"
+unindent = "0.2.3"

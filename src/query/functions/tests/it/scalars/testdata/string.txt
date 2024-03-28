@@ -361,12 +361,12 @@ output         : 'a\'b'
 
 
 ast            : quote('a\"b')
-raw expr       : quote('a\"b')
-checked expr   : quote<String>("a\\\"b")
-optimized expr : "a\\\\\\\"b"
+raw expr       : quote('a"b')
+checked expr   : quote<String>("a\"b")
+optimized expr : "a\\\"b"
 output type    : String
-output domain  : {"a\\\\\\\"b"..="a\\\\\\\"b"}
-output         : 'a\\\"b'
+output domain  : {"a\\\"b"..="a\\\"b"}
+output         : 'a\"b'
 
 
 ast            : quote('a\bb')

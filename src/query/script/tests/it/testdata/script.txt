@@ -1,0 +1,660 @@
+---------- Input ----------
+CREATE TABLE t1 (a INT, b INT, c INT);
+INSERT INTO t1 VALUES (1, 2, 3);
+DROP TABLE t1;
+---------- IR -------------
+QUERY CREATE TABLE t1 (a Int32, b Int32, c Int32), __unused_result0(0)
+QUERY INSERT INTO t1 VALUES (1, 2, 3), __unused_result1(1)
+QUERY DROP TABLE t1, __unused_result2(2)
+---------- QUERY ---------
+QUERY: CREATE TABLE t1 (a Int32, b Int32, c Int32)
+BLOCK: (): 
+QUERY: INSERT INTO t1 VALUES (1, 2, 3)
+BLOCK: (): 
+QUERY: DROP TABLE t1
+BLOCK: (): 
+---------- Output ---------
+None
+
+
+---------- Input ----------
+LET x := 1;
+LET y := x + 1;
+LET z RESULTSET := SELECT :y + 1;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT :0 + 1, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, y(3)
+QUERY SELECT :3 + 1, z(6)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+---------- Output ---------
+None
+
+
+---------- Input ----------
+RETURN;
+---------- IR -------------
+RETURN
+---------- QUERY ---------
+---------- Output ---------
+None
+
+
+---------- Input ----------
+LET x := 1;
+LET sum := 0;
+FOR x IN x TO x + 2 DO
+    sum := sum + x;
+END FOR;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT 0, __expr_result4(4)
+ITER __expr_result4(4), __expr_result_iter5(5)
+READ __expr_result_iter5(5), $0, sum(3)
+QUERY SELECT * FROM generate_series(:0, :0 + 2, 1), __for_index_set8(8)
+ITER __for_index_set8(8), __for_index_iter9(9)
+__LOOP6(6):
+JUMP_IF_ENDED __for_index_iter9(9), __LOOP_END7(7)
+READ __for_index_iter9(9), $0, x(10)
+QUERY SELECT :3 + :10, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, sum(3)
+NEXT __for_index_iter9(9)
+GOTO __LOOP6(6)
+__LOOP_END7(7):
+QUERY SELECT :3, __expr_result14(14)
+ITER __expr_result14(14), __expr_result_iter15(15)
+READ __expr_result_iter15(15), $0, __return_val13(13)
+RETURN __return_val13(13)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT * FROM generate_series(1, 1 + 2, 1)
+BLOCK: ($0): (1), (2), (3)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 2
+BLOCK: ($0): (3)
+QUERY: SELECT 3 + 3
+BLOCK: ($0): (6)
+QUERY: SELECT 6
+BLOCK: ($0): (6)
+---------- Output ---------
+Some(Var(UInt64(6)))
+
+
+---------- Input ----------
+LET sum := 0;
+FOR x IN REVERSE -1 TO 1 DO
+    sum := sum + x;
+END FOR;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT 0, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, sum(0)
+QUERY SELECT * FROM generate_series(1, - 1, -1), __for_index_set5(5)
+ITER __for_index_set5(5), __for_index_iter6(6)
+__LOOP3(3):
+JUMP_IF_ENDED __for_index_iter6(6), __LOOP_END4(4)
+READ __for_index_iter6(6), $0, x(7)
+QUERY SELECT :0 + :7, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, sum(0)
+NEXT __for_index_iter6(6)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT * FROM generate_series(1, - 1, -1)
+BLOCK: ($0): (1), (0), (-1)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 0
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + -1
+BLOCK: ($0): (0)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+---------- Output ---------
+Some(Var(UInt64(0)))
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT * FROM numbers(3);
+LET sum := 0;
+FOR row IN x DO
+    sum := sum + row.number;
+END FOR;
+RETURN sum;
+---------- IR -------------
+QUERY SELECT * FROM numbers(3), x(0)
+QUERY SELECT 0, __expr_result2(2)
+ITER __expr_result2(2), __expr_result_iter3(3)
+READ __expr_result_iter3(3), $0, sum(1)
+ITER x(0), row(6)
+__LOOP4(4):
+JUMP_IF_ENDED row(6), __LOOP_END5(5)
+READ row(6), "number", __row.number7(7)
+QUERY SELECT :1 + :7, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, sum(1)
+NEXT row(6)
+GOTO __LOOP4(4)
+__LOOP_END5(5):
+QUERY SELECT :1, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT * FROM numbers(3)
+BLOCK: (number): (0), (1), (2)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0 + 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 2
+BLOCK: ($0): (3)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
+LET x := 1;
+WHILE x < 3 DO
+    x := x + 1;
+END WHILE;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+__LOOP3(3):
+QUERY SELECT NOT is_true(:0 < 3), __expr_result6(6)
+ITER __expr_result6(6), __expr_result_iter7(7)
+READ __expr_result_iter7(7), $0, __break_condition5(5)
+JUMP_IF_TRUE __break_condition5(5), __LOOP_END4(4)
+QUERY SELECT :0 + 1, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, x(0)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT NOT is_true(1 < 3)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT NOT is_true(2 < 3)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+QUERY: SELECT NOT is_true(3 < 3)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
+LET x := 1;
+REPEAT
+    x := x + 1;
+UNTIL x = 3
+END REPEAT;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+__LOOP3(3):
+QUERY SELECT :0 + 1, __expr_result5(5)
+ITER __expr_result5(5), __expr_result_iter6(6)
+READ __expr_result_iter6(6), $0, x(0)
+QUERY SELECT is_true(:0 = 3), __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, __break_condition7(7)
+JUMP_IF_TRUE __break_condition7(7), __LOOP_END4(4)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result11(11)
+ITER __expr_result11(11), __expr_result_iter12(12)
+READ __expr_result_iter12(12), $0, __return_val10(10)
+RETURN __return_val10(10)
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT is_true(2 = 3)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 2 + 1
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(3 = 3)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+---------- Output ---------
+Some(Var(UInt64(3)))
+
+
+---------- Input ----------
+LOOP
+    LET x := 0;
+    LOOP
+        LET y := x;
+        IF y < 2 THEN
+            x := x + 1;
+            CONTINUE;
+        ELSE
+            BREAK loop_label;
+        END IF;
+    END LOOP;
+END LOOP loop_label;
+---------- IR -------------
+loop_label_LOOP(0):
+QUERY SELECT 0, __expr_result3(3)
+ITER __expr_result3(3), __expr_result_iter4(4)
+READ __expr_result_iter4(4), $0, x(2)
+__LOOP5(5):
+QUERY SELECT :2, __expr_result8(8)
+ITER __expr_result8(8), __expr_result_iter9(9)
+READ __expr_result_iter9(9), $0, y(7)
+QUERY SELECT is_true(:7 < 2), __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __condition12(12)
+JUMP_IF_TRUE __condition12(12), __IF_THEN10(10)
+GOTO loop_label_LOOP_END(1)
+GOTO __IF_END11(11)
+__IF_THEN10(10):
+QUERY SELECT :2 + 1, __expr_result15(15)
+ITER __expr_result15(15), __expr_result_iter16(16)
+READ __expr_result_iter16(16), $0, x(2)
+GOTO __LOOP5(5)
+GOTO __IF_END11(11)
+__IF_END11(11):
+GOTO __LOOP5(5)
+__LOOP_END6(6):
+GOTO loop_label_LOOP(0)
+loop_label_LOOP_END(1):
+---------- QUERY ---------
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT is_true(0 < 2)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 0 + 1
+BLOCK: ($0): (1)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT is_true(1 < 2)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 1 + 1
+BLOCK: ($0): (2)
+QUERY: SELECT 2
+BLOCK: ($0): (2)
+QUERY: SELECT is_true(2 < 2)
+BLOCK: ($0): (FALSE)
+---------- Output ---------
+None
+
+
+---------- Input ----------
+LET x := 0;
+LOOP
+    LET x := 1;
+    BREAK;
+END LOOP;
+RETURN x;
+---------- IR -------------
+QUERY SELECT 0, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+__LOOP3(3):
+QUERY SELECT 1, __expr_result6(6)
+ITER __expr_result6(6), __expr_result_iter7(7)
+READ __expr_result_iter7(7), $0, x(5)
+GOTO __LOOP_END4(4)
+GOTO __LOOP3(3)
+__LOOP_END4(4):
+QUERY SELECT :0, __expr_result9(9)
+ITER __expr_result9(9), __expr_result_iter10(10)
+READ __expr_result_iter10(10), $0, __return_val8(8)
+RETURN __return_val8(8)
+---------- QUERY ---------
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT 0
+BLOCK: ($0): (0)
+---------- Output ---------
+Some(Var(UInt64(0)))
+
+
+---------- Input ----------
+LET x := 1;
+CASE x
+    WHEN 1 THEN RETURN 'ONE';
+    WHEN 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT is_true(1 = 1)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 'ONE'
+BLOCK: ($0): ('ONE')
+---------- Output ---------
+Some(Var(String("ONE")))
+
+
+---------- Input ----------
+LET x := 2;
+CASE x
+    WHEN 1 THEN RETURN 'ONE';
+    WHEN 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 2, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 2
+BLOCK: ($0): (2)
+QUERY: SELECT is_true(2 = 1)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT is_true(2 = 2)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 'TWO'
+BLOCK: ($0): ('TWO')
+---------- Output ---------
+Some(Var(String("TWO")))
+
+
+---------- Input ----------
+LET x := 3;
+CASE x
+    WHEN 1 THEN RETURN 'ONE';
+    WHEN 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 3, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(3 = 1)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT is_true(3 = 2)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 'OTHER'
+BLOCK: ($0): ('OTHER')
+---------- Output ---------
+Some(Var(String("OTHER")))
+
+
+---------- Input ----------
+LET x := 1;
+CASE
+    WHEN x = 1 THEN RETURN 'ONE';
+    WHEN x = 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 1, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 1
+BLOCK: ($0): (1)
+QUERY: SELECT is_true(1 = 1)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 'ONE'
+BLOCK: ($0): ('ONE')
+---------- Output ---------
+Some(Var(String("ONE")))
+
+
+---------- Input ----------
+LET x := 2;
+CASE
+    WHEN x = 1 THEN RETURN 'ONE';
+    WHEN x = 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 2, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 2
+BLOCK: ($0): (2)
+QUERY: SELECT is_true(2 = 1)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT is_true(2 = 2)
+BLOCK: ($0): (TRUE)
+QUERY: SELECT 'TWO'
+BLOCK: ($0): ('TWO')
+---------- Output ---------
+Some(Var(String("TWO")))
+
+
+---------- Input ----------
+LET x := 3;
+CASE
+    WHEN x = 1 THEN RETURN 'ONE';
+    WHEN x = 2 THEN RETURN 'TWO';
+    ELSE RETURN 'OTHER';
+END CASE;
+---------- IR -------------
+QUERY SELECT 3, __expr_result1(1)
+ITER __expr_result1(1), __expr_result_iter2(2)
+READ __expr_result_iter2(2), $0, x(0)
+QUERY SELECT is_true(:0 = 1), __expr_result7(7)
+ITER __expr_result7(7), __expr_result_iter8(8)
+READ __expr_result_iter8(8), $0, __condition6(6)
+JUMP_IF_TRUE __condition6(6), __IF_THEN3(3)
+QUERY SELECT is_true(:0 = 2), __expr_result10(10)
+ITER __expr_result10(10), __expr_result_iter11(11)
+READ __expr_result_iter11(11), $0, __condition9(9)
+JUMP_IF_TRUE __condition9(9), __IF_THEN4(4)
+QUERY SELECT 'OTHER', __expr_result13(13)
+ITER __expr_result13(13), __expr_result_iter14(14)
+READ __expr_result_iter14(14), $0, __return_val12(12)
+RETURN __return_val12(12)
+GOTO __IF_END5(5)
+__IF_THEN3(3):
+QUERY SELECT 'ONE', __expr_result16(16)
+ITER __expr_result16(16), __expr_result_iter17(17)
+READ __expr_result_iter17(17), $0, __return_val15(15)
+RETURN __return_val15(15)
+GOTO __IF_END5(5)
+__IF_THEN4(4):
+QUERY SELECT 'TWO', __expr_result19(19)
+ITER __expr_result19(19), __expr_result_iter20(20)
+READ __expr_result_iter20(20), $0, __return_val18(18)
+RETURN __return_val18(18)
+GOTO __IF_END5(5)
+__IF_END5(5):
+---------- QUERY ---------
+QUERY: SELECT 3
+BLOCK: ($0): (3)
+QUERY: SELECT is_true(3 = 1)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT is_true(3 = 2)
+BLOCK: ($0): (FALSE)
+QUERY: SELECT 'OTHER'
+BLOCK: ($0): ('OTHER')
+---------- Output ---------
+Some(Var(String("OTHER")))
+
+

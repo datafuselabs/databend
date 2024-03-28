@@ -19,19 +19,22 @@ use crate::ast::*;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
-use crate::parser::query::*;
 use crate::parser::statement::*;
 use crate::parser::token::*;
 use crate::rule;
 
+pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
+    semicolon_terminated_list1(script_stmt)(i)
+}
+
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
-    let let_query_stmt = map(
+    let let_stmt_stmt = map(
         consumed(rule! {
-            LET ~^#ident ~ RESULTSET ~ ^":=" ~ ^#query
+            LET ~^#ident ~ RESULTSET ~ ^":=" ~ ^#statement_body
         }),
-        |(span, (_, name, _, _, query))| ScriptStatement::LetQuery {
+        |(span, (_, name, _, _, stmt))| ScriptStatement::LetStatement {
             span: transform_span(span.tokens),
-            declare: QueryDeclare { name, query },
+            declare: StatementDeclare { name, stmt },
         },
     );
     let let_var_stmt = map(
@@ -45,6 +48,15 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
                 data_type,
                 default,
             },
+        },
+    );
+    let run_stmt = map(
+        consumed(rule! {
+            #statement_body
+        }),
+        |(span, stmt)| ScriptStatement::RunStatement {
+            span: transform_span(span.tokens),
+            stmt,
         },
     );
     let assign_stmt = map(
@@ -199,19 +211,11 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             }
         },
     );
-    let sql_stmt = map(
-        consumed(rule! {
-            #statement_body
-        }),
-        |(span, stmt)| ScriptStatement::SQLStatement {
-            span: transform_span(span.tokens),
-            stmt,
-        },
-    );
 
     rule!(
-        #let_query_stmt
+        #let_stmt_stmt
         | #let_var_stmt
+        | #run_stmt
         | #assign_stmt
         | #return_stmt
         | #for_loop_stmt
@@ -223,6 +227,5 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #continue_stmt
         | #case_stmt
         | #if_stmt
-        | #sql_stmt
     )(i)
 }

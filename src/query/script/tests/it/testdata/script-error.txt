@@ -1,0 +1,150 @@
+---------- Input ----------
+LET x := y + 1;
+---------- Output ----------
+error: 
+  --> SQL:1:10
+  |
+1 | LET x := y + 1;
+  |          ^ `y` is not defined
+
+
+---------- Input ----------
+LET x := 1;
+LET x RESULTSET := SELECT 1;
+---------- Output ----------
+error: 
+  --> SQL:2:5
+  |
+1 | LET x := 1;
+2 | LET x RESULTSET := SELECT 1;
+  |     ^ `x` is already defined as a different kind of variable
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT 1;
+LET x := 1;
+---------- Output ----------
+error: 
+  --> SQL:2:5
+  |
+1 | LET x RESULTSET := SELECT 1;
+2 | LET x := 1;
+  |     ^ `x` is already defined as a different kind of variable
+
+
+---------- Input ----------
+LET x RESULTSET := SELECT 1;
+LET y := x;
+---------- Output ----------
+error: 
+  --> SQL:2:10
+  |
+1 | LET x RESULTSET := SELECT 1;
+2 | LET y := x;
+  |          ^ `x` is not a scalar variable
+
+
+---------- Input ----------
+LET x := 1;
+LET y := x.a;
+---------- Output ----------
+error: 
+  --> SQL:2:10
+  |
+1 | LET x := 1;
+2 | LET y := x.a;
+  |          ^ `x` is not a row variable
+
+
+---------- Input ----------
+LET x := 'min';
+LET y := IDENTIFIER(:x)([1,2]);
+---------- Output ----------
+error: 
+  --> SQL:2:10
+  |
+1 | LET x := 'min';
+2 | LET y := IDENTIFIER(:x)([1,2]);
+  |          ^^^^^^^^^^^^^^ variable is not allowed in this context
+
+
+---------- Input ----------
+LET x := 1;
+LET y := :x + 1;
+---------- Output ----------
+error: 
+  --> SQL:2:10
+  |
+1 | LET x := 1;
+2 | LET y := :x + 1;
+  |          ^^ variable doesn't need to be quoted in this context, try removing the colon
+
+
+---------- Input ----------
+LET x := 1;
+FOR row IN x DO
+    BREAK;
+END FOR;
+---------- Output ----------
+error: 
+  --> SQL:2:12
+  |
+1 | LET x := 1;
+2 | FOR row IN x DO
+  |            ^ `x` is not a set
+
+
+---------- Input ----------
+BREAK;
+---------- Output ----------
+error: 
+  --> SQL:1:1
+  |
+1 | BREAK;
+  | ^^^^^ not in a loop
+
+
+---------- Input ----------
+CONTINUE;
+---------- Output ----------
+error: 
+  --> SQL:1:1
+  |
+1 | CONTINUE;
+  | ^^^^^^^^ not in a loop
+
+
+---------- Input ----------
+LOOP
+    BREAK foo;
+END LOOP bar;
+---------- Output ----------
+error: 
+  --> SQL:2:11
+  |
+1 | LOOP
+2 |     BREAK foo;
+  |           ^^^ `foo` is not defined
+
+
+---------- Input ----------
+LOOP
+    CONTINUE foo;
+END LOOP bar;
+---------- Output ----------
+error: 
+  --> SQL:2:14
+  |
+1 | LOOP
+2 |     CONTINUE foo;
+  |              ^^^ `foo` is not defined
+
+
+---------- Input ----------
+LOOP
+    CONTINUE;
+END LOOP;
+---------- Output ----------
+max steps exceeded: 1000
+
+

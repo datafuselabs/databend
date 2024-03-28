@@ -60,7 +60,7 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 
 
 query T
-select parse_json('{ "test" : "\\"abc\"测试⚠️✅❌မြန်မာဘာသာ" } ')
+select parse_json('{ "test" : "\\"abc\\"测试⚠️✅❌မြန်မာဘာသာ" } ')
 ----
 {"test":"\"abc\"测试⚠️✅❌မြန်မာဘာသာ"}
 

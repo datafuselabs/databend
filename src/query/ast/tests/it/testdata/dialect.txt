@@ -1,4 +1,498 @@
 ---------- Input ----------
+'a'
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+"a"
+---------- Output ---------
+"a"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+`a`
+---------- Output ---------
+`a`
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '`',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a''b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a""b'
+---------- Output ---------
+'a""b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a\'b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a"b'
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a`b'
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
+"a''b"
+---------- Output ---------
+"a''b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a''b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a""b"
+---------- Output ---------
+"a""b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a\"b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a'b"
+---------- Output ---------
+"a'b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..5,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..5,
+                ),
+                name: "a'b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a\"b"
+---------- Output ---------
+"a\""b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..6,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..6,
+                ),
+                name: "a\\\"b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+"a`b"
+---------- Output ---------
+"a`b"
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..5,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..5,
+                ),
+                name: "a`b",
+                quote: Some(
+                    '"',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a'
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+"a"
+---------- Output ---------
+'a'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..3,
+    ),
+    value: String(
+        "a",
+    ),
+}
+
+
+---------- Input ----------
+`a`
+---------- Output ---------
+`a`
+---------- AST ------------
+ColumnRef {
+    span: Some(
+        0..3,
+    ),
+    column: ColumnRef {
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                span: Some(
+                    0..3,
+                ),
+                name: "a",
+                quote: Some(
+                    '`',
+                ),
+                is_hole: false,
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+'a''b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a""b'
+---------- Output ---------
+'a""b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a\'b'
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+'a"b'
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+'a`b'
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
+"a''b"
+---------- Output ---------
+'a\'\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a''b",
+    ),
+}
+
+
+---------- Input ----------
+"a""b"
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+"a'b"
+---------- Output ---------
+'a\'b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a'b",
+    ),
+}
+
+
+---------- Input ----------
+"a\"b"
+---------- Output ---------
+'a"b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..6,
+    ),
+    value: String(
+        "a\"b",
+    ),
+}
+
+
+---------- Input ----------
+"a`b"
+---------- Output ---------
+'a`b'
+---------- AST ------------
+Literal {
+    span: Some(
+        0..5,
+    ),
+    value: String(
+        "a`b",
+    ),
+}
+
+
+---------- Input ----------
 a
 ---------- Output ---------
 a

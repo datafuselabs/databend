@@ -14,7 +14,7 @@ onlyif mysql
 query T
 select quote('a\"b')
 ----
-a\\\"b
+a\"b
 
 onlyif mysql
 query T

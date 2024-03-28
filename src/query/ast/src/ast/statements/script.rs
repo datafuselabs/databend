@@ -19,7 +19,6 @@ use databend_common_exception::Span;
 
 use crate::ast::Expr;
 use crate::ast::Identifier;
-use crate::ast::Query;
 use crate::ast::Statement;
 use crate::ast::TypeName;
 
@@ -64,15 +63,15 @@ impl Display for VariableDeclare {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct QueryDeclare {
+pub struct StatementDeclare {
     pub name: Identifier,
-    pub query: Query,
+    pub stmt: Statement,
 }
 
-impl Display for QueryDeclare {
+impl Display for StatementDeclare {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let QueryDeclare { name, query } = self;
-        write!(f, "{name} RESULTSET := {query}")
+        let StatementDeclare { name, stmt } = self;
+        write!(f, "{name} RESULTSET := {stmt}")
     }
 }
 
@@ -82,9 +81,13 @@ pub enum ScriptStatement {
         span: Span,
         declare: VariableDeclare,
     },
-    LetQuery {
+    LetStatement {
         span: Span,
-        declare: QueryDeclare,
+        declare: StatementDeclare,
+    },
+    RunStatement {
+        span: Span,
+        stmt: Statement,
     },
     Assign {
         span: Span,
@@ -149,17 +152,14 @@ pub enum ScriptStatement {
         results: Vec<Vec<ScriptStatement>>,
         else_result: Option<Vec<ScriptStatement>>,
     },
-    SQLStatement {
-        span: Span,
-        stmt: Statement,
-    },
 }
 
 impl Display for ScriptStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ScriptStatement::LetVar { declare, .. } => write!(f, "LET {declare}"),
-            ScriptStatement::LetQuery { declare, .. } => write!(f, "LET {declare}"),
+            ScriptStatement::LetStatement { declare, .. } => write!(f, "LET {declare}"),
+            ScriptStatement::RunStatement { stmt, .. } => write!(f, "{stmt}"),
             ScriptStatement::Assign { name, value, .. } => write!(f, "{name} := {value}"),
             ScriptStatement::Return { value, .. } => {
                 if let Some(value) = value {
@@ -352,7 +352,6 @@ impl Display for ScriptStatement {
                 }
                 write!(f, "END IF")
             }
-            ScriptStatement::SQLStatement { stmt, .. } => write!(f, "{stmt}"),
         }
     }
 }

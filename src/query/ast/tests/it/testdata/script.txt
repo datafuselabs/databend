@@ -41,11 +41,11 @@ LET t1 RESULTSET := SELECT * FROM numbers(100)
 ---------- Output ---------
 LET t1 RESULTSET := SELECT * FROM numbers(100)
 ---------- AST ------------
-LetQuery {
+LetStatement {
     span: Some(
         0..46,
     ),
-    declare: QueryDeclare {
+    declare: StatementDeclare {
         name: Identifier {
             span: Some(
                 4..6,
@@ -54,70 +54,72 @@ LetQuery {
             quote: None,
             is_hole: false,
         },
-        query: Query {
-            span: Some(
-                20..46,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        20..46,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    select_list: [
-                        StarColumns {
-                            qualified: [
-                                Star(
-                                    Some(
-                                        27..28,
+        stmt: Query(
+            Query {
+                span: Some(
+                    20..46,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            20..46,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            27..28,
+                                        ),
                                     ),
-                                ),
-                            ],
-                            column_filter: None,
-                        },
-                    ],
-                    from: [
-                        TableFunction {
-                            span: Some(
-                                34..46,
-                            ),
-                            lateral: false,
-                            name: Identifier {
-                                span: Some(
-                                    34..41,
-                                ),
-                                name: "numbers",
-                                quote: None,
-                                is_hole: false,
+                                ],
+                                column_filter: None,
                             },
-                            params: [
-                                Literal {
+                        ],
+                        from: [
+                            TableFunction {
+                                span: Some(
+                                    34..46,
+                                ),
+                                lateral: false,
+                                name: Identifier {
                                     span: Some(
-                                        42..45,
+                                        34..41,
                                     ),
-                                    value: UInt64(
-                                        100,
-                                    ),
+                                    name: "numbers",
+                                    quote: None,
+                                    is_hole: false,
                                 },
-                            ],
-                            named_params: [],
-                            alias: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
+                                params: [
+                                    Literal {
+                                        span: Some(
+                                            42..45,
+                                        ),
+                                        value: UInt64(
+                                            100,
+                                        ),
+                                    },
+                                ],
+                                named_params: [],
+                                alias: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        ),
     },
 }
 
@@ -1312,7 +1314,7 @@ Loop {
         0..52,
     ),
     body: [
-        SQLStatement {
+        RunStatement {
             span: Some(
                 9..42,
             ),
@@ -1455,7 +1457,7 @@ select :a + 1
 ---------- Output ---------
 SELECT :a + 1
 ---------- AST ------------
-SQLStatement {
+RunStatement {
     span: Some(
         0..13,
     ),
@@ -1519,7 +1521,7 @@ select IDENTIFIER(:b)
 ---------- Output ---------
 SELECT IDENTIFIER(:b)
 ---------- AST ------------
-SQLStatement {
+RunStatement {
     span: Some(
         0..21,
     ),
@@ -1582,7 +1584,7 @@ select a.IDENTIFIER(:b).c + minus(:d)
 ---------- Output ---------
 SELECT a.IDENTIFIER(:b).c + minus(:d)
 ---------- AST ------------
-SQLStatement {
+RunStatement {
     span: Some(
         0..37,
     ),

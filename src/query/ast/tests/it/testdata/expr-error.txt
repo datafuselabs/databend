@@ -87,18 +87,18 @@ error:
 
 
 ---------- Input ----------
-G.E.B IS NOT NULL AND
-    col1 NOT BETWEEN col2 AND
-        AND 1 + col3 DIV sum(col4)
+G.E.B IS NOT NULL
+AND col1 NOT BETWEEN col2 AND
+AND 1 + col3 DIV sum(col4)
 ---------- Output ---------
 error: 
-  --> SQL:3:9
+  --> SQL:3:1
   |
-1 | G.E.B IS NOT NULL AND
+1 | G.E.B IS NOT NULL
   | - while parsing expression
-2 |     col1 NOT BETWEEN col2 AND
+2 | AND col1 NOT BETWEEN col2 AND
   |          --- while parsing `[NOT] BETWEEN ... AND ...`
-3 |         AND 1 + col3 DIV sum(col4)
-  |         ^^^ expected more tokens for expression
+3 | AND 1 + col3 DIV sum(col4)
+  | ^^^ expected more tokens for expression
 
 

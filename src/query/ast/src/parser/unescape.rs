@@ -28,6 +28,7 @@ pub fn unescape_string(s: &str, quote: char) -> Option<String> {
                 Some('r') => s.push('\r'),
                 Some('t') => s.push('\t'),
                 Some('\'') => s.push('\''),
+                Some('"') => s.push('"'),
                 Some('\\') => s.push('\\'),
                 Some('u') => s.push(unescape_unicode(&mut chars)?),
                 Some('x') => s.push(unescape_byte(&mut chars)?),

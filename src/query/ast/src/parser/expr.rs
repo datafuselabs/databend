@@ -1480,21 +1480,17 @@ pub fn literal_string(i: Input) -> IResult<String> {
             QuotedString
         },
         |token| {
-            if token
-                .text()
-                .chars()
-                .next()
-                .filter(|c| i.dialect.is_string_quote(*c))
-                .is_some()
-            {
-                let str = &token.text()[1..token.text().len() - 1];
-                let unescaped = unescape_string(str, '\'').ok_or(nom::Err::Failure(
-                    ErrorKind::Other("invalid escape or unicode"),
-                ))?;
-                Ok(unescaped)
-            } else {
-                Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
+            if let Some(quote) = token.text().chars().next() {
+                if i.dialect.is_string_quote(quote) {
+                    let str = &token.text()[1..token.text().len() - 1];
+                    let unescaped = unescape_string(str, quote).ok_or(nom::Err::Failure(
+                        ErrorKind::Other("invalid escape or unicode"),
+                    ))?;
+                    return Ok(unescaped);
+                }
             }
+
+            Err(nom::Err::Error(ErrorKind::ExpectToken(QuotedString)))
         },
     )(i)
 }

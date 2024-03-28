@@ -320,10 +320,10 @@ pub enum SetOperator {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OrderByExpr {
     pub expr: Expr,
-    // Optional `ASC` or `DESC`
+    /// `ASC` or `DESC`
     #[drive(skip)]
     pub asc: Option<bool>,
-    // Optional `NULLS FIRST` or `NULLS LAST`
+    /// `NULLS FIRST` or `NULLS LAST`
     #[drive(skip)]
     pub nulls_first: Option<bool>,
 }
@@ -352,16 +352,16 @@ impl Display for OrderByExpr {
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectTarget {
-    // Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
+    /// Expression with alias, e.g. `SELECT t.a, b AS a, a+1 AS b FROM t`
     AliasedExpr {
         expr: Box<Expr>,
         alias: Option<Identifier>,
     },
 
-    // Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
-    // Columns("pattern_str")
-    // Columns(lambda expression)
-    // For simplicity, star wildcard is involved.
+    /// Qualified star name, e.g. `SELECT t.*  exclude a, columns(expr) FROM t`.
+    /// Columns("pattern_str")
+    /// Columns(lambda expression)
+    /// For simplicity, star wildcard is involved.
     StarColumns {
         qualified: QualifiedName,
         column_filter: Option<ColumnFilter>,
