@@ -35,10 +35,13 @@ rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
 st_geom_point -> st_makegeompoint
+st_geometryfromewkb -> st_geometryfromwkb
 st_geometryfromewkt -> st_geometryfromwkt
 st_geometryfromtext -> st_geometryfromwkt
+st_geomfromewkb -> st_geometryfromwkb
 st_geomfromewkt -> st_geometryfromwkt
 st_geomfromtext -> st_geometryfromwkt
+st_geomfromwkb -> st_geometryfromwkb
 st_geomfromwkt -> st_geometryfromwkt
 st_make_line -> st_makeline
 str_to_date -> to_date
@@ -3495,6 +3498,14 @@ Functions overloads:
 17 sqrt(Float32 NULL) :: Float64 NULL
 18 sqrt(Float64) :: Float64
 19 sqrt(Float64 NULL) :: Float64 NULL
+0 st_geometryfromwkb(String) :: Geometry
+1 st_geometryfromwkb(String NULL) :: Geometry NULL
+2 st_geometryfromwkb(Binary) :: Geometry
+3 st_geometryfromwkb(Binary NULL) :: Geometry NULL
+4 st_geometryfromwkb(String, Int32) :: Geometry
+5 st_geometryfromwkb(String NULL, Int32 NULL) :: Geometry NULL
+6 st_geometryfromwkb(Binary, Int32) :: Geometry
+7 st_geometryfromwkb(Binary NULL, Int32 NULL) :: Geometry NULL
 0 st_geometryfromwkt(String) :: Geometry
 1 st_geometryfromwkt(String NULL) :: Geometry NULL
 2 st_geometryfromwkt(String, Int32) :: Geometry
