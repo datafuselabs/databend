@@ -665,7 +665,7 @@ impl Binder {
                 let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
                 // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
                 let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-                let optimized_plan = optimize(opt_ctx, select_plan)?;
+                let optimized_plan = optimize(opt_ctx, select_plan).await?;
                 Some(Box::new(optimized_plan))
             } else {
                 None

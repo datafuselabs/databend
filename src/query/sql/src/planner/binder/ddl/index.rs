@@ -319,7 +319,7 @@ impl Binder {
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-            Ok(optimize(opt_ctx, select_plan)?)
+            Ok(optimize(opt_ctx, select_plan).await?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };

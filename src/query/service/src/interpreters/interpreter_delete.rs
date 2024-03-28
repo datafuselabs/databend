@@ -386,7 +386,7 @@ pub async fn subquery_filter(
         .with_enable_join_reorder(unsafe { !ctx.get_settings().get_disable_join_reorder()? })
         .with_enable_dphyp(ctx.get_settings().get_enable_dphyp()?);
 
-    s_expr = optimize_query(opt_ctx, s_expr.clone())?;
+    s_expr = optimize_query(opt_ctx, s_expr.clone()).await?;
 
     // Create `input_expr` pipeline and execute it to get `_row_id` data block.
     let select_interpreter = SelectInterpreter::try_create(

@@ -181,7 +181,7 @@ impl Binder {
                     }
                 }
 
-                let optimized_plan = optimize(opt_ctx, select_plan)?;
+                let optimized_plan = optimize(opt_ctx, select_plan).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
             }
         };

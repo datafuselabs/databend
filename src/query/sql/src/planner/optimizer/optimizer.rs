@@ -148,7 +148,8 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
-pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
+#[async_backtrace::framed]
+pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
             s_expr,
@@ -158,7 +159,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             formatted_ast,
             ignore_result,
         } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(opt_ctx, *s_expr)?),
+            s_expr: Box::new(optimize_query(opt_ctx, *s_expr).await?),
             bind_context,
             metadata,
             rewrite_kind,
@@ -185,7 +186,7 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             _ => {
                 if config.optimized || !config.logical {
-                    let optimized_plan = optimize(opt_ctx.clone(), *plan)?;
+                    let optimized_plan = Box::pin(optimize(opt_ctx.clone(), *plan)).await?;
                     Ok(Plan::Explain {
                         kind,
                         config,
@@ -197,13 +198,13 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
         },
         Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
-            plan: Box::new(optimize(opt_ctx, *plan)?),
+            plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
         Plan::CopyIntoLocation(CopyIntoLocationPlan { stage, path, from }) => {
             Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
                 stage,
                 path,
-                from: Box::new(optimize(opt_ctx, *from)?),
+                from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
             }))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
@@ -218,14 +219,15 @@ pub fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             );
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan),
+        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx.clone(), plan).await,
 
         // Pass through statements.
         _ => Ok(plan),
     }
 }
 
-pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
+#[async_backtrace::framed]
+pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     let enable_distributed_query = opt_ctx.enable_distributed_optimization
         && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
 
@@ -345,12 +347,13 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
     Ok(cascades.memo)
 }
 
-fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+#[async_backtrace::framed]
+async fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
     // optimize source :fix issue #13733
     // reason: if there is subquery,windowfunc exprs etc. see
     // src/planner/semantic/lowering.rs `as_raw_expr()`, we will
     // get dummy index. So we need to use optimizer to solve this.
-    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone())?;
+    let mut right_source = optimize_query(opt_ctx.clone(), plan.input.child(1)?.clone()).await?;
 
     // if it's not distributed execution, we should reserve
     // exchange to merge source data.
