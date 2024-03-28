@@ -36,6 +36,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use log::warn;
@@ -164,6 +165,7 @@ where TablesTable<T>: HistoryAware
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
             TableField::new("comment", TableDataType::String),
+            TableField::new("view_query", TableDataType::String),
         ])
     }
 
@@ -387,6 +389,23 @@ where TablesTable<T>: HistoryAware
             .map(|v| v.get_table_info().meta.comment.clone())
             .collect();
 
+        let view_query: Vec<String> = database_tables
+            .iter()
+            .map(|v| -> String {
+                let tbl_info = v.get_table_info();
+                match tbl_info.engine() {
+                    "VIEW" => {
+                        let query = tbl_info.options().get(QUERY);
+                        match query {
+                            Some(query) => query.clone(),
+                            None => String::from(""),
+                        }
+                    }
+                    _ => String::from(""),
+                }
+            })
+            .collect();
+
         DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -407,6 +426,7 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(number_of_blocks),
             StringType::from_opt_data(owner),
             StringType::from_data(comment),
+            StringType::from_data(view_query),
         ])
     }
 

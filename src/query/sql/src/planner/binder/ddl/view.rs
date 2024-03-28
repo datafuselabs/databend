@@ -188,6 +188,8 @@ impl Binder {
             };
         }
 
+        select_builder.with_column("view_query");
+
         select_builder
             .with_order_by("catalog")
             .with_order_by("database")

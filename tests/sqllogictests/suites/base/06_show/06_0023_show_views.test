@@ -29,21 +29,21 @@ use showview
 query T
 SHOW VIEWS
 ----
-v1
-v2
-v3
+v1 SELECT * FROM showview.t1
+v2 SELECT * FROM showview.t2
+v3 SELECT * FROM showview.t3
 
 query T
 SHOW VIEWS LIKE 'v%'
 ----
-v1
-v2
-v3
+v1 SELECT * FROM showview.t1
+v2 SELECT * FROM showview.t2
+v3 SELECT * FROM showview.t3
 
 query T
 SHOW VIEWS LIKE 'v2'
 ----
-v2
+v2 SELECT * FROM showview.t2
 
 statement ok
 SHOW VIEWS LIKE 'v'
@@ -51,9 +51,9 @@ SHOW VIEWS LIKE 'v'
 query T
 SHOW VIEWS WHERE name LIKE 'v%'
 ----
-v1
-v2
-v3
+v1 SELECT * FROM showview.t1
+v2 SELECT * FROM showview.t2
+v3 SELECT * FROM showview.t3
 
 statement ok
 SHOW VIEWS WHERE name = 'v%' AND 1 = 0
@@ -61,14 +61,14 @@ SHOW VIEWS WHERE name = 'v%' AND 1 = 0
 query T
 SHOW VIEWS WHERE name = 'v2' OR 1 = 1
 ----
-v1
-v2
-v3
+v1 SELECT * FROM showview.t1
+v2 SELECT * FROM showview.t2
+v3 SELECT * FROM showview.t3
 
 query T
 SHOW VIEWS WHERE name = 'v2' AND 1 = 1
 ----
-v2
+v2 SELECT * FROM showview.t2
 
 statement ok
 USE default
