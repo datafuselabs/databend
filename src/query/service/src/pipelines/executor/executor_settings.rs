@@ -15,26 +15,31 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_settings::Settings;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {
-    pub enable_new_executor: bool,
     pub query_id: Arc<String>,
-    pub max_execute_time_in_seconds: Duration,
     pub max_threads: u64,
+    pub enable_new_executor: bool,
+    pub max_execute_time_in_seconds: Duration,
+    pub executor_node_id: String,
 }
 
 impl ExecutorSettings {
-    pub fn try_create(settings: &Settings, query_id: String) -> Result<ExecutorSettings> {
-        let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
+    pub fn try_create(ctx: Arc<dyn TableContext>) -> Result<ExecutorSettings> {
+        let query_id = ctx.get_id();
+        let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()?;
+        let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
+
         Ok(ExecutorSettings {
             enable_new_executor: settings.get_enable_experimental_queries_executor()?,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
+            executor_node_id: ctx.get_cluster().local_id.clone(),
         })
     }
 }

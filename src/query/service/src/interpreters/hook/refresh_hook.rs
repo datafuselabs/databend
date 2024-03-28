@@ -131,9 +131,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
                     }
 
                     let settings = ctx_cloned.get_settings();
-                    let query_id = ctx_cloned.get_id();
                     build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
                         let mut pipelines = build_res.sources_pipelines;
@@ -159,9 +158,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc, need_lock: bool) 
                     }
 
                     let settings = ctx_cloned.get_settings();
-                    let query_id = ctx_cloned.get_id();
                     build_res.set_max_threads(settings.get_max_threads()? as usize);
-                    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
                         let mut pipelines = build_res.sources_pipelines;

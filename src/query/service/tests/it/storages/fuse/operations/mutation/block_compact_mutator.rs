@@ -129,8 +129,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute()?;

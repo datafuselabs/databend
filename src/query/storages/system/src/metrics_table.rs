@@ -15,6 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -29,9 +32,6 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_metrics::reset_global_prometheus_registry;
-use databend_common_metrics::MetricSample;
-use databend_common_metrics::MetricValue;
 use databend_common_pipeline_core::Pipeline;
 
 use crate::SyncOneBlockSystemTable;
@@ -54,10 +54,7 @@ impl SyncSystemTable for MetricsTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_id = ctx.get_cluster().local_id.clone();
 
-        let mut samples = {
-            let registry = databend_common_metrics::load_global_prometheus_registry();
-            databend_common_metrics::dump_metric_samples(&registry)?
-        };
+        let mut samples = GLOBAL_METRICS_REGISTRY.dump_sample()?;
         samples.extend(self.custom_metric_samples()?);
 
         let mut nodes: Vec<String> = Vec::with_capacity(samples.len());
@@ -83,7 +80,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
-        reset_global_prometheus_registry();
+        GLOBAL_METRICS_REGISTRY.reset();
         Ok(())
     }
 }

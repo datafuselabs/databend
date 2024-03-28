@@ -12,21 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(lazy_cell)]
+mod counter;
+mod gauge;
+mod histogram;
 
-use databend_common_base::mem_allocator::GlobalAllocator;
-
-mod fixed_heap;
-mod memory;
-mod metrics;
-mod pool;
-mod pool_retry;
-mod progress;
-mod range_merger;
-mod runtime;
-mod stoppable;
-mod string;
-
-// runtime tests depends on the memory stat collector.
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+pub use counter::FamilyCounter;
+pub use gauge::FamilyGauge;
+pub use histogram::FamilyHistogram;

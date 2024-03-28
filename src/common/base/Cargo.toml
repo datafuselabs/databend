@@ -46,6 +46,8 @@ pprof = { version = "0.11.1", features = [
     "protobuf-codec",
     "protobuf",
 ] }
+prometheus-client = { workspace = true }
+prometheus-parse = "0.2.3"
 regex = { workspace = true }
 replace_with = "0.1.7"
 semver = { workspace = true }

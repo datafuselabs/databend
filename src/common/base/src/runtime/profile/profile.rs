@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::ProfileStatisticsName;
 use crate::runtime::ThreadTracker;
 
@@ -44,6 +45,7 @@ pub struct Profile {
     pub title: Arc<String>,
 
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
+    pub metrics_registry: Option<Arc<ScopedRegistry>>,
 }
 
 impl Clone for Profile {
@@ -56,6 +58,7 @@ impl Clone for Profile {
             plan_parent_id: self.plan_parent_id,
             labels: self.labels.clone(),
             title: self.title.clone(),
+            metrics_registry: self.metrics_registry.clone(),
             statistics: std::array::from_fn(|idx| {
                 AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
             }),
@@ -75,6 +78,7 @@ impl Profile {
         plan_parent_id: Option<u32>,
         title: Arc<String>,
         labels: Arc<Vec<ProfileLabel>>,
+        metrics_registry: Option<Arc<ScopedRegistry>>,
     ) -> Profile {
         Profile {
             pid,
@@ -85,6 +89,7 @@ impl Profile {
             title,
             labels,
             statistics: Self::create_items(),
+            metrics_registry,
         }
     }
 

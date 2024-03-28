@@ -23,7 +23,6 @@ databend-common-functions = { path = "../../functions" }
 databend-common-meta-api = { path = "../../../meta/api" }
 databend-common-meta-app = { path = "../../../meta/app" }
 databend-common-meta-types = { path = "../../../meta/types" }
-databend-common-metrics = { path = "../../../common/metrics" }
 databend-common-pipeline-core = { path = "../../pipeline/core" }
 databend-common-pipeline-sources = { path = "../../pipeline/sources" }
 databend-common-sql = { path = "../../sql" }

@@ -14,8 +14,8 @@
 
 use std::sync::LazyLock;
 
-use crate::register_counter;
-use crate::Counter;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::Counter;
 
 pub static OPENAI_COMPLETION_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("openai_completion_count"));

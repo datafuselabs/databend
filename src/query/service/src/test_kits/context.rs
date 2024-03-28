@@ -44,8 +44,7 @@ pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> 
 }
 
 pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
-    let query_id = ctx.get_id();
-    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings(), query_id)?;
+    let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);

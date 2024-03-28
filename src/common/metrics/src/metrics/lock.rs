@@ -14,10 +14,11 @@
 
 use std::sync::LazyLock;
 
-use crate::register_counter;
-use crate::register_counter_family;
-use crate::Counter;
-use crate::Family;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::FamilyCounter;
+
 use crate::VecLabels;
 
 const METRIC_CREATED_LOCK_NUMS: &str = "created_lock_nums";
@@ -25,9 +26,9 @@ const METRIC_ACQUIRED_LOCK_NUMS: &str = "acquired_lock_nums";
 const METRIC_START_LOCK_HOLDER_NUMS: &str = "start_lock_holder_nums";
 const METRIC_SHUTDOWN_LOCK_HOLDER_NUMS: &str = "shutdown_lock_holder_nums";
 
-static CREATED_LOCK_NUMS: LazyLock<Family<VecLabels, Counter>> =
+static CREATED_LOCK_NUMS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_CREATED_LOCK_NUMS));
-static ACQUIRED_LOCK_NUMS: LazyLock<Family<VecLabels, Counter>> =
+static ACQUIRED_LOCK_NUMS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_ACQUIRED_LOCK_NUMS));
 static START_LOCK_HOLDER_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter(METRIC_START_LOCK_HOLDER_NUMS));

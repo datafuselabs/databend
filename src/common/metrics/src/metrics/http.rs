@@ -15,21 +15,22 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use crate::register_counter;
-use crate::register_counter_family;
-use crate::register_histogram_family_in_seconds;
-use crate::Counter;
-use crate::Family;
-use crate::Histogram;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_histogram_family_in_seconds;
+use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::FamilyHistogram;
+
 use crate::VecLabels;
 
-static QUERY_HTTP_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+static QUERY_HTTP_REQUESTS_COUNT: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("query_http_requests_count"));
-static QUERY_HTTP_RESPONSE_DURATION: LazyLock<Family<VecLabels, Histogram>> =
+static QUERY_HTTP_RESPONSE_DURATION: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| register_histogram_family_in_seconds("query_http_response_duration_seconds"));
-static QUERY_HTTP_SLOW_REQUESTS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+static QUERY_HTTP_SLOW_REQUESTS_COUNT: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("query_http_slow_requests_count"));
-static QUERY_HTTP_RESPONSE_ERRORS_COUNT: LazyLock<Family<VecLabels, Counter>> =
+static QUERY_HTTP_RESPONSE_ERRORS_COUNT: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("query_http_response_errors_count"));
 static QUERY_HTTP_RESPONSE_PANICS_COUNT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("query_http_response_panics_count"));

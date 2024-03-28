@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -38,7 +35,7 @@ use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
-    shutdown_flag_sender: Sender<(Option<ErrorCode>, Vec<Arc<Profile>>)>,
+    shutdown_flag_sender: Sender<(Option<ErrorCode>, Vec<PlanProfile>)>,
     join_handle: Option<JoinHandle<()>>,
 }
 
@@ -117,7 +114,7 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>, profiles: Vec<Arc<Profile>>) {
+    pub fn shutdown(&mut self, error: Option<ErrorCode>, profiles: Vec<PlanProfile>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
@@ -174,25 +171,12 @@ impl StatisticsSender {
         Ok(())
     }
 
-    async fn send_profile(profiles: Vec<Arc<Profile>>, flight_sender: &FlightSender) -> Result<()> {
-        let mut merged_profiles = HashMap::new();
-
-        for proc_profile in profiles {
-            if proc_profile.plan_id.is_some() {
-                match merged_profiles.entry(proc_profile.plan_id) {
-                    Entry::Vacant(v) => {
-                        v.insert(PlanProfile::create(&proc_profile));
-                    }
-                    Entry::Occupied(mut v) => {
-                        v.get_mut().accumulate(&proc_profile);
-                    }
-                };
-            }
-        }
-
-        if !merged_profiles.is_empty() {
-            let data_packet =
-                DataPacket::QueryProfiles(merged_profiles.into_values().collect::<Vec<_>>());
+    async fn send_profile(
+        plans_profile: Vec<PlanProfile>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        if !plans_profile.is_empty() {
+            let data_packet = DataPacket::QueryProfiles(plans_profile);
             flight_sender.send(data_packet).await?;
         }
 

@@ -14,17 +14,16 @@
 
 use std::sync::LazyLock;
 
-use crate::register_counter_family;
-use crate::register_gauge_family;
-use crate::Counter;
-use crate::Family;
-use crate::Gauge;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_gauge_family;
+use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::FamilyGauge;
 
-static CLUSTER_CLUSTER_HEARTBEAT_COUNT: LazyLock<Family<Vec<(&'static str, String)>, Counter>> =
+static CLUSTER_CLUSTER_HEARTBEAT_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("cluster_heartbeat_count"));
-static CLUSTER_CLUSTER_ERROR_COUNT: LazyLock<Family<Vec<(&'static str, String)>, Counter>> =
+static CLUSTER_CLUSTER_ERROR_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("cluster_error_count"));
-static CLUSTER_DISCOVERED_NODE_GAUGE: LazyLock<Family<Vec<(&'static str, String)>, Gauge>> =
+static CLUSTER_DISCOVERED_NODE_GAUGE: LazyLock<FamilyGauge<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_gauge_family("cluster_discovered_node"));
 
 pub fn metric_incr_cluster_heartbeat_count(

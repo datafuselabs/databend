@@ -14,10 +14,10 @@
 
 use std::sync::LazyLock;
 
-use crate::register_counter;
-use crate::register_histogram_in_milliseconds;
-use crate::Counter;
-use crate::Histogram;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
+use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::Histogram;
 
 // Common metrics.
 static OMIT_FILTER_ROWGROUPS: LazyLock<Counter> =

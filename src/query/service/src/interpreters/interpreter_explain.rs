@@ -393,9 +393,8 @@ impl ExplainInterpreter {
         mut build_res: PipelineBuildResult,
     ) -> Result<HashMap<u32, PlanProfile>> {
         let settings = self.ctx.get_settings();
-        let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings, query_id.clone())?;
+        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
 
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
@@ -404,29 +403,15 @@ impl ExplainInterpreter {
 
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
                 executor.execute()?;
-                self.ctx.add_query_profiles(
-                    &executor
-                        .get_inner()
-                        .get_profiles()
-                        .iter()
-                        .filter(|x| x.plan_id.is_some())
-                        .map(|x| PlanProfile::create(x))
-                        .collect::<Vec<_>>(),
-                );
+                self.ctx
+                    .add_query_profiles(&executor.get_inner().get_plans_profile());
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
                 while (executor.pull_data()?).is_some() {}
-                self.ctx.add_query_profiles(
-                    &executor
-                        .get_inner()
-                        .get_profiles()
-                        .iter()
-                        .filter(|x| x.plan_id.is_some())
-                        .map(|x| PlanProfile::create(x))
-                        .collect::<Vec<_>>(),
-                );
+                self.ctx
+                    .add_query_profiles(&executor.get_inner().get_plans_profile());
             }
         }
 

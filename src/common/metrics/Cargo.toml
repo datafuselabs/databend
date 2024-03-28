@@ -15,15 +15,11 @@ enable-histogram = ["metrics/enable-histogram"]
 
 [dependencies]
 # Workspace dependencies
-databend-common-exception = { path = "../exception" }
+databend-common-base = { path = "../base" }
 
 # Crates.io dependencies
 metrics = { workspace = true }
-metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
-parking_lot = { workspace = true }
 prometheus-client = { workspace = true }
-prometheus-parse = "0.2.3"
-serde = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.15.1"

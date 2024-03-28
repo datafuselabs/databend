@@ -111,6 +111,7 @@ impl Node {
                     .as_ref()
                     .map(|x| x.labels.clone())
                     .unwrap_or(Arc::new(vec![])),
+                scope.as_ref().map(|x| x.metrics_registry.clone()),
             )));
 
             // Node mem stat
@@ -122,6 +123,9 @@ impl Node {
                     .map(|x| vec![x.clone()])
                     .unwrap_or_default(),
             ));
+
+            // Node tracking metrics
+            tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
             tracking_payload
         };

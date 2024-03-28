@@ -49,8 +49,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         Ok(Box::pin(PullingExecutorStream::create(executor)?))

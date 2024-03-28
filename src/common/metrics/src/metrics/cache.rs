@@ -14,30 +14,28 @@
 
 use std::sync::LazyLock;
 
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
+use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::FamilyHistogram;
 use prometheus_client::encoding::EncodeLabelSet;
-
-use crate::register_counter_family;
-use crate::register_histogram_family_in_milliseconds;
-use crate::Counter;
-use crate::Family;
-use crate::Histogram;
 
 #[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
 struct CacheLabels {
     cache_name: String,
 }
 
-static CACHE_ACCESS_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+static CACHE_ACCESS_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_access_count"));
-static CACHE_MISS_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+static CACHE_MISS_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_miss_count"));
-static CACHE_MISS_LOAD_MILLISECOND: LazyLock<Family<CacheLabels, Histogram>> =
+static CACHE_MISS_LOAD_MILLISECOND: LazyLock<FamilyHistogram<CacheLabels>> =
     LazyLock::new(|| register_histogram_family_in_milliseconds("cache_miss_load_millisecond"));
-static CACHE_HIT_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+static CACHE_HIT_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_hit_count"));
-static CACHE_POPULATION_PENDING_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+static CACHE_POPULATION_PENDING_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_pending_count"));
-static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<Family<CacheLabels, Counter>> =
+static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_overflow_count"));
 
 pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {

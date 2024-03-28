@@ -25,6 +25,7 @@
 #![feature(slice_swap_unchecked)]
 #![feature(lint_reasons)]
 #![feature(variant_count)]
+#![feature(lazy_cell)]
 
 pub mod base;
 pub mod containers;

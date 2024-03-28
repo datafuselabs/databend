@@ -101,14 +101,8 @@ pub trait Interpreter: Sync + Send {
         let query_ctx = ctx.clone();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             let mut has_profiles = false;
-            if let Ok(profiles) = may_error {
-                query_ctx.add_query_profiles(
-                    &profiles
-                        .iter()
-                        .filter(|x| x.plan_id.is_some())
-                        .map(|x| PlanProfile::create(x))
-                        .collect::<Vec<_>>(),
-                );
+            if let Ok(plans_profile) = may_error {
+                query_ctx.add_query_profiles(plans_profile);
 
                 let query_profiles = query_ctx.get_query_profiles();
 
@@ -150,9 +144,8 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("executing pipeline");
 
         let settings = ctx.get_settings();
-        let query_id = ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
 
         if build_res.main_pipeline.is_complete_pipeline()? {
             let mut pipelines = build_res.sources_pipelines;

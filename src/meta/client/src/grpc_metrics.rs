@@ -15,17 +15,16 @@
 use std::error::Error;
 use std::sync::LazyLock;
 
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
+use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::FamilyHistogram;
+use databend_common_base::runtime::metrics::Gauge;
 use databend_common_meta_types::MetaError;
-use databend_common_metrics::register_counter_family;
-use databend_common_metrics::register_gauge;
-use databend_common_metrics::register_histogram_family_in_milliseconds;
-use databend_common_metrics::Counter;
-use databend_common_metrics::Family;
-use databend_common_metrics::Gauge;
-use databend_common_metrics::Histogram;
 use databend_common_metrics::VecLabels;
 
-pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<Family<VecLabels, Histogram>> =
+pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| {
         register_histogram_family_in_milliseconds("meta_grpc_client_request_duration_ms")
     });
@@ -33,13 +32,13 @@ pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<Family<VecLabels, Hist
 pub static META_GRPC_CLIENT_REQUEST_INFLIGHT: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("meta_grpc_client_request_inflight"));
 
-pub static META_GRPC_CLIENT_REQUEST_SUCCESS: LazyLock<Family<VecLabels, Counter>> =
+pub static META_GRPC_CLIENT_REQUEST_SUCCESS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_client_request_success"));
 
-pub static META_GRPC_CLIENT_REQUEST_FAILED: LazyLock<Family<VecLabels, Counter>> =
+pub static META_GRPC_CLIENT_REQUEST_FAILED: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_client_request_fail"));
 
-pub static META_GRPC_MAKE_CLIENT_FAIL: LazyLock<Family<VecLabels, Counter>> =
+pub static META_GRPC_MAKE_CLIENT_FAIL: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_make_client_fail"));
 
 const LABEL_ENDPOINT: &str = "endpoint";

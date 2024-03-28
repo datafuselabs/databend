@@ -16,7 +16,6 @@ databend-common-base = { path = "../base" }
 databend-common-exception = { path = "../exception" }
 databend-common-expression = { path = "../../query/expression" }
 databend-common-meta-app = { path = "../../meta/app" }
-databend-common-metrics = { path = "../metrics" }
 databend-enterprise-storage-encryption = { path = "../../query/ee_features/storage_encryption" }
 
 anyhow = { workspace = true }

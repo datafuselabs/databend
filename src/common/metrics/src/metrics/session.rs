@@ -15,12 +15,12 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use crate::register_counter;
-use crate::register_gauge;
-use crate::register_histogram_in_milliseconds;
-use crate::Counter;
-use crate::Gauge;
-use crate::Histogram;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
+use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::Gauge;
+use databend_common_base::runtime::metrics::Histogram;
 
 pub static SESSION_CONNECT_NUMBERS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("session_connect_numbers"));

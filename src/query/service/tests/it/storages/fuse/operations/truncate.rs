@@ -23,7 +23,6 @@ use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
@@ -189,7 +188,7 @@ async fn truncate_table(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result
     table.truncate(ctx.clone(), &mut pipeline).await?;
     if !pipeline.is_empty() {
         pipeline.set_max_threads(1);
-        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings(), ctx.get_id())?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         executor.execute()?;

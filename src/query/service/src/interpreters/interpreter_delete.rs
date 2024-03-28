@@ -409,9 +409,7 @@ pub async fn subquery_filter(
     .await?;
 
     // Execute pipeline
-    let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
     let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
     ctx.set_executor(pulling_executor.get_inner())?;
     let stream_blocks = PullingExecutorStream::create(pulling_executor)?

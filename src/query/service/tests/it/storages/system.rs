@@ -298,9 +298,11 @@ async fn test_metrics_table() -> Result<()> {
 
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None, true).await?;
-    let counter1 = databend_common_metrics::register_counter("test_metrics_table_count");
-    let histogram1 =
-        databend_common_metrics::register_histogram_in_milliseconds("test_metrics_table_histogram");
+    let counter1 =
+        databend_common_base::runtime::metrics::register_counter("test_metrics_table_count");
+    let histogram1 = databend_common_base::runtime::metrics::register_histogram_in_milliseconds(
+        "test_metrics_table_histogram",
+    );
 
     counter1.inc();
     histogram1.observe(2.0);

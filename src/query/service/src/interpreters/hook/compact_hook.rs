@@ -134,9 +134,8 @@ async fn compact_table(
 
     // execute the compact pipeline (for table with cluster keys, re-cluster will also be executed)
     let settings = ctx.get_settings();
-    let query_id = ctx.get_id();
     build_res.set_max_threads(settings.get_max_threads()? as usize);
-    let settings = ExecutorSettings::try_create(&settings, query_id)?;
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
 
     if build_res.main_pipeline.is_complete_pipeline()? {
         let mut pipelines = build_res.sources_pipelines;

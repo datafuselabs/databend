@@ -718,10 +718,7 @@ impl QueryCoordinator {
             }
         }
 
-        let query_id = info.query_ctx.get_id();
-        let executor_settings =
-            ExecutorSettings::try_create(&info.query_ctx.get_settings(), query_id)?;
-
+        let executor_settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
         assert!(self.fragment_exchanges.is_empty());
@@ -752,7 +749,7 @@ impl QueryCoordinator {
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let res = executor.execute().err();
-            let profiles = executor.get_inner().get_profiles();
+            let profiles = executor.get_inner().get_plans_profile();
             statistics_sender.shutdown(res, profiles);
             query_ctx
                 .get_exchange_manager()

@@ -15,11 +15,10 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
-use databend_common_metrics::load_global_prometheus_registry;
-use databend_common_metrics::render_prometheus_metrics;
 use poem::IntoResponse;
 
 use crate::servers::Server;
@@ -32,8 +31,9 @@ pub struct MetricService {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn metrics_handler() -> impl IntoResponse {
-    let registry = load_global_prometheus_registry();
-    render_prometheus_metrics(&registry)
+    GLOBAL_METRICS_REGISTRY
+        .render_metrics()
+        .unwrap_or_else(|e| e.message())
 }
 
 impl MetricService {

@@ -166,8 +166,7 @@ impl Interpreter for ReclusterTableInterpreter {
             assert!(build_res.main_pipeline.is_complete_pipeline()?);
             build_res.set_max_threads(max_threads);
 
-            let query_id = ctx.get_id();
-            let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+            let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
 
             let mut pipelines = build_res.sources_pipelines;
             pipelines.push(build_res.main_pipeline);

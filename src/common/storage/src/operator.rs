@@ -16,12 +16,14 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::GLOBAL_TASK;
@@ -41,7 +43,6 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
-use databend_common_metrics::load_global_prometheus_registry;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
 use once_cell::sync::OnceCell;
@@ -159,8 +160,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
 /// multiple times. PrometheusClientLayer is not a singleton itself, but the metrics in it are singletons
 /// behind Arc, so we can safely clone it.
 fn load_prometheus_client_layer() -> PrometheusClientLayer {
+    let mut register = GLOBAL_METRICS_REGISTRY.inner_mut();
     PROMETHEUS_CLIENT_LAYER_INSTANCE
-        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
+        .get_or_init(|| PrometheusClientLayer::new(register.deref_mut()))
         .clone()
 }
 

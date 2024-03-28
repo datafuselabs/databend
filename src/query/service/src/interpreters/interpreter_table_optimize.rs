@@ -210,8 +210,7 @@ impl OptimizeTableInterpreter {
             if !compact_pipeline.is_empty() {
                 compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-                let query_id = self.ctx.get_id();
-                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
                 let executor =
                     PipelineCompleteExecutor::try_create(compact_pipeline, executor_settings)?;
 

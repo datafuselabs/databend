@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,6 +33,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::PlanProfile;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -52,7 +55,7 @@ use crate::pipelines::executor::WorkersCondvar;
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
 pub type FinishedCallback =
-    Box<dyn FnOnce(&Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
+    Box<dyn FnOnce(&Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> + Send + Sync + 'static>;
 
 pub struct QueryPipelineExecutor {
     threads_num: usize,
@@ -201,7 +204,7 @@ impl QueryPipelineExecutor {
         }))
     }
 
-    fn on_finished(&self, error: &Result<Vec<Arc<Profile>>, ErrorCode>) -> Result<()> {
+    fn on_finished(&self, error: &Result<Vec<PlanProfile>, ErrorCode>) -> Result<()> {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
@@ -277,7 +280,8 @@ impl QueryPipelineExecutor {
             return Err(error);
         }
 
-        self.on_finished(&Ok(self.graph.get_proc_profiles()))?;
+        // self.settings.query_id
+        self.on_finished(&Ok(self.get_plans_profile()))?;
         Ok(())
     }
 
@@ -446,6 +450,41 @@ impl QueryPipelineExecutor {
 
     pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
         self.graph.get_proc_profiles()
+    }
+
+    pub fn get_plans_profile(&self) -> Vec<PlanProfile> {
+        let mut plans_profile: HashMap<u32, PlanProfile> = HashMap::<u32, PlanProfile>::new();
+
+        for profile in self.get_profiles() {
+            if let Some(plan_id) = &profile.plan_id {
+                match plans_profile.entry(*plan_id) {
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().accumulate(&profile);
+                    }
+                    Entry::Vacant(v) => {
+                        let plan_profile = v.insert(PlanProfile::create(&profile));
+                        if let Some(metrics_registry) = &profile.metrics_registry {
+                            match metrics_registry.dump_sample() {
+                                Ok(metrics) => {
+                                    plan_profile.add_metrics(
+                                        self.settings.executor_node_id.clone(),
+                                        metrics,
+                                    );
+                                }
+                                Err(error) => {
+                                    warn!(
+                                        "Dump {:?} plan metrics error, cause {:?}",
+                                        plan_profile.name, error
+                                    );
+                                }
+                            }
+                        }
+                    }
+                };
+            };
+        }
+
+        plans_profile.into_values().collect::<Vec<_>>()
     }
 }
 

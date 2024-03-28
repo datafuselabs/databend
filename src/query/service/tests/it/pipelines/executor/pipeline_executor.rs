@@ -45,6 +45,7 @@ async fn test_always_call_on_finished() -> Result<()> {
         max_execute_time_in_seconds: Default::default(),
         enable_new_executor: false,
         max_threads: 8,
+        executor_node_id: "".to_string(),
     };
 
     {

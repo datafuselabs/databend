@@ -21,35 +21,49 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
+use crate::runtime::metrics::registry::DatabendMetric;
+use crate::runtime::metrics::registry::ScopedRegistry;
+use crate::runtime::metrics::sample::MetricSample;
+use crate::runtime::metrics::sample::MetricValue;
+
 #[derive(Debug)]
 pub struct Counter {
     value: Arc<AtomicU64>,
+    index: usize,
 }
 
 impl Clone for Counter {
     fn clone(&self) -> Self {
         Self {
+            index: self.index,
             value: self.value.clone(),
         }
     }
 }
 
-impl Default for Counter {
-    fn default() -> Self {
+impl Counter {
+    pub fn create(index: usize) -> Counter {
         Counter {
+            index,
             value: Arc::new(AtomicU64::new(0)),
         }
     }
-}
 
-impl Counter {
     /// Increase the [`Counter`] by 1, returning the previous value.
     pub fn inc(&self) -> u64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.value.fetch_add(1, Ordering::Relaxed);
+        });
+
         self.value.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Increase the [`Counter`] by `v`, returning the previous value.
     pub fn inc_by(&self, v: u64) -> u64 {
+        ScopedRegistry::op(self.index, |m: &Self| {
+            m.value.fetch_add(v, Ordering::Relaxed);
+        });
+
         self.value.fetch_add(v, Ordering::Relaxed)
     }
 
@@ -75,5 +89,19 @@ impl EncodeMetric for Counter {
 
     fn metric_type(&self) -> MetricType {
         Self::TYPE
+    }
+}
+
+impl DatabendMetric for Counter {
+    fn reset_metric(&self) {
+        self.value.store(0, Ordering::Release);
+    }
+
+    fn sample(&self, name: &str, samples: &mut Vec<MetricSample>) {
+        samples.push(MetricSample {
+            name: name.to_string(),
+            labels: Default::default(),
+            value: MetricValue::Counter(self.get() as f64),
+        });
     }
 }
