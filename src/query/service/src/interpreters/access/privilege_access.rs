@@ -765,6 +765,19 @@ impl AccessChecker for PrivilegeAccess {
                     | InsertInputSource::Values(_) => {}
                 }
             }
+            Plan::InsertMultiTable(plan) => {
+                let target_table_privileges = if plan.overwrite {
+                    vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete]
+                } else {
+                    vec![UserPrivilegeType::Insert]
+                };
+                for target in plan.whens.iter().flat_map(|when|when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e|e.intos.iter())){
+                    for privilege in target_table_privileges.clone() {
+                    self.validate_table_access(&target.catalog, &target.database, &target.table, privilege, false).await?;
+                    }
+                }
+                self.check(ctx, &plan.input_source).await?;
+            }
             Plan::Replace(plan) => {
                 //plan.delete_when is Expr no need to check privileges.
                 let privileges = vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete];

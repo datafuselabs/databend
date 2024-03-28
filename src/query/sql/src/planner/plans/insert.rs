@@ -21,12 +21,13 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_sources::input_formats::InputContext;
+use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::Plan;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source with 'FORMAT <format_name>;

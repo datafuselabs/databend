@@ -163,7 +163,10 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
+        let catalog = self
+            .shared
+            .catalog_manager
+            .build_catalog(catalog_info, self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);

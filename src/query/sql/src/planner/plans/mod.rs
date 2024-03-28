@@ -34,6 +34,7 @@ mod merge_into;
 mod udf;
 
 mod copy_into_location;
+mod insert_multi_table;
 pub mod operator;
 mod plan;
 mod presign;
@@ -67,6 +68,7 @@ pub use exchange::*;
 pub use filter::*;
 pub use insert::Insert;
 pub use insert::InsertInputSource;
+pub use insert_multi_table::*;
 pub use join::*;
 pub use kill::KillPlan;
 pub use limit::*;

@@ -15,5 +15,6 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod decimal;
+mod display;
 mod parser;
 mod token;

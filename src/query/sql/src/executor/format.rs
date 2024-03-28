@@ -251,6 +251,19 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::Duplicate(_) => Ok(FormatTreeNode::new("Duplicate".to_string())),
+        PhysicalPlan::Shuffle(_) => Ok(FormatTreeNode::new("Shuffle".to_string())),
+        PhysicalPlan::ChunkFilter(_) => Ok(FormatTreeNode::new("ChunkFilter".to_string())),
+        PhysicalPlan::ChunkProject(_) => Ok(FormatTreeNode::new("ChunkProject".to_string())),
+        PhysicalPlan::ChunkCastSchema(_) => Ok(FormatTreeNode::new("ChunkCastSchema".to_string())),
+        PhysicalPlan::ChunkFillAndReorder(_) => {
+            Ok(FormatTreeNode::new("ChunkFillAndReorder".to_string()))
+        }
+        PhysicalPlan::ChunkAppendData(_) => Ok(FormatTreeNode::new("ChunkAppendData".to_string())),
+        PhysicalPlan::ChunkMerge(_) => Ok(FormatTreeNode::new("ChunkMerge".to_string())),
+        PhysicalPlan::ChunkCommitInsert(_) => {
+            Ok(FormatTreeNode::new("ChunkCommitInsert".to_string()))
+        }
     }
 }
 

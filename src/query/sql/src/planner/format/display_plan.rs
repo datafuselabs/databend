@@ -120,6 +120,7 @@ impl Plan {
 
             // Insert
             Plan::Insert(_) => Ok("Insert".to_string()),
+            Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
             Plan::MergeInto(merge_into) => format_merge_into(merge_into),
             Plan::Delete(delete) => format_delete(delete),

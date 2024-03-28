@@ -135,11 +135,15 @@ impl CatalogManager {
     }
 
     /// build_catalog builds a catalog from catalog info.
-    pub fn build_catalog(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    pub fn build_catalog(
+        &self,
+        info: &CatalogInfo,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
 
         if typ == CatalogType::Default {
-            return Ok(self.default_catalog.clone());
+            return self.get_default_catalog(txn_mgr);
         }
 
         let creator = self
@@ -181,7 +185,7 @@ impl CatalogManager {
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
 
-        self.build_catalog(&info)
+        self.build_catalog(&info, txn_mgr)
     }
 
     /// Create a new catalog.
@@ -240,7 +244,7 @@ impl CatalogManager {
         tenant: &str,
         txn_mgr: TxnManagerRef,
     ) -> Result<Vec<Arc<dyn Catalog>>> {
-        let mut catalogs = vec![self.get_default_catalog(txn_mgr)?];
+        let mut catalogs = vec![self.get_default_catalog(txn_mgr.clone())?];
 
         // insert external catalogs.
         for ctl in self.external_catalogs.values() {
@@ -251,7 +255,7 @@ impl CatalogManager {
         let infos = self.meta.list_catalogs(ListCatalogReq::new(tenant)).await?;
 
         for info in infos {
-            catalogs.push(self.build_catalog(&info)?);
+            catalogs.push(self.build_catalog(&info, txn_mgr.clone())?);
         }
 
         Ok(catalogs)

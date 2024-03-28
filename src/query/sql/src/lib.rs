@@ -20,6 +20,7 @@
 #![feature(extend_one)]
 #![feature(lazy_cell)]
 #![feature(if_let_guard)]
+#![feature(iter_next_chunk)]
 
 pub mod evaluator;
 pub mod executor;

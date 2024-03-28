@@ -374,7 +374,6 @@ impl BindContext {
         result: &mut Vec<NameResolutionResult>,
     ) {
         let mut bind_context: &BindContext = self;
-
         loop {
             for column_binding in bind_context.columns.iter() {
                 if Self::match_column_binding(database, table, column, column_binding) {

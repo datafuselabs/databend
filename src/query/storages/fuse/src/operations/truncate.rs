@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -49,6 +50,7 @@ impl FuseTable {
                     let meta = CommitMeta {
                         conflict_resolve_context: ConflictResolveContext::None,
                         abort_operation: AbortOperation::default(),
+                        table_id: self.get_id(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)

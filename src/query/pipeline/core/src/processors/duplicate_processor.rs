@@ -24,25 +24,22 @@ use crate::processors::Processor;
 
 pub struct DuplicateProcessor {
     input: Arc<InputPort>,
-    output1: Arc<OutputPort>,
-    output2: Arc<OutputPort>,
+    outputs: Vec<Arc<OutputPort>>,
 
-    /// Whether two outputs should finish together.
+    /// Whether all outputs should finish together.
     force_finish_together: bool,
 }
 
-/// This processor duplicate the input data to two outputs.
+/// This processor duplicate the input data to multiple outputs.
 impl DuplicateProcessor {
     pub fn create(
         input: Arc<InputPort>,
-        output1: Arc<OutputPort>,
-        output2: Arc<OutputPort>,
+        outputs: Vec<Arc<OutputPort>>,
         force_finish_together: bool,
     ) -> Self {
         DuplicateProcessor {
             input,
-            output1,
-            output2,
+            outputs,
             force_finish_together,
         }
     }
@@ -59,39 +56,36 @@ impl Processor for DuplicateProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let is_finished1 = self.output1.is_finished();
-        let is_finished2 = self.output2.is_finished();
-        let one_finished = is_finished1 || is_finished2;
-        let all_finished = is_finished1 && is_finished2;
+        let all_finished = self.outputs.iter().all(|x| x.is_finished());
 
-        let can_push1 = self.output1.can_push();
-        let can_push2 = self.output2.can_push();
-
-        if all_finished || (self.force_finish_together && one_finished) {
+        if all_finished
+            || (self.force_finish_together && self.outputs.iter().any(|x| x.is_finished()))
+        {
             self.input.finish();
-            self.output1.finish();
-            self.output2.finish();
+            self.outputs.iter_mut().for_each(|x| x.finish());
             return Ok(Event::Finished);
         }
 
         if self.input.is_finished() {
-            self.output1.finish();
-            self.output2.finish();
+            self.outputs.iter_mut().for_each(|x| x.finish());
             return Ok(Event::Finished);
         }
 
-        if (!is_finished1 && !can_push1) || (!is_finished2 && !can_push2) {
+        if self
+            .outputs
+            .iter()
+            .any(|x| !x.is_finished() && !x.can_push())
+        {
             return Ok(Event::NeedConsume);
         }
 
         self.input.set_need_data();
         if self.input.has_data() {
             let block = self.input.pull_data().unwrap();
-            if !is_finished1 {
-                self.output1.push_data(block.clone());
-            }
-            if !is_finished2 {
-                self.output2.push_data(block);
+            for output in self.outputs.iter() {
+                if !output.is_finished() {
+                    output.push_data(block.clone());
+                }
             }
             return Ok(Event::NeedConsume);
         }

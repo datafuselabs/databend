@@ -25,25 +25,29 @@ use crate::operations::common::SnapshotChanges;
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub abort_operation: AbortOperation,
+    pub table_id: u64,
 }
 
 impl CommitMeta {
-    pub fn empty() -> Self {
+    pub fn empty(table_id: u64) -> Self {
         CommitMeta {
             conflict_resolve_context: ConflictResolveContext::ModifiedSegmentExistsInLatest(
                 SnapshotChanges::default(),
             ),
             abort_operation: AbortOperation::default(),
+            table_id,
         }
     }
 
     pub fn new(
         conflict_resolve_context: ConflictResolveContext,
         abort_operation: AbortOperation,
+        table_id: u64,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             abort_operation,
+            table_id,
         }
     }
 }

@@ -74,6 +74,7 @@ pub struct TableMutationAggregator {
     kind: MutationKind,
     start_time: Instant,
     finished_tasks: usize,
+    table_id: u64,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -125,6 +126,7 @@ impl TableMutationAggregator {
             kind,
             finished_tasks: 0,
             start_time: Instant::now(),
+            table_id: table.get_id(),
         }
     }
 
@@ -291,6 +293,7 @@ impl TableMutationAggregator {
         let meta = CommitMeta::new(
             conflict_resolve_context,
             std::mem::take(&mut self.abort_operation),
+            self.table_id,
         );
         Ok(meta)
     }

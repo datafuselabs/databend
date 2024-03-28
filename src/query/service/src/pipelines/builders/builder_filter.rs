@@ -12,50 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::filter::build_select_expr;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::Filter;
 
-use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::PipelineBuilder;
-
 impl PipelineBuilder {
     pub(crate) fn build_filter(&mut self, filter: &Filter) -> Result<()> {
         self.build_pipeline(&filter.input)?;
-
-        let predicate = filter
-            .predicates
-            .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
-            .try_reduce(|lhs, rhs| {
-                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-            })
-            .transpose()
-            .unwrap_or_else(|| {
-                Err(ErrorCode::Internal(
-                    "Invalid empty predicate list".to_string(),
-                ))
-            })?;
-        assert_eq!(predicate.data_type(), &DataType::Boolean);
-
-        let max_block_size = self.settings.get_max_block_size()? as usize;
-        let (select_expr, has_or) = build_select_expr(&predicate).into();
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformFilter::create(
-                input,
-                output,
-                select_expr.clone(),
-                has_or,
-                filter.projections.clone(),
-                self.func_ctx.clone(),
-                max_block_size,
-            )))
-        })?;
+        self.main_pipeline.add_transform(
+            self.filter_transform_builder(&filter.predicates, filter.projections.clone())?,
+        )?;
 
         Ok(())
     }

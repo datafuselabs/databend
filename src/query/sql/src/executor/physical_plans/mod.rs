@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod common;
+mod physical_multi_table_insert;
 pub use common::*;
+pub use physical_multi_table_insert::*;
 mod physical_aggregate_expand;
 pub use physical_aggregate_expand::AggregateExpand;
 mod physical_aggregate_final;

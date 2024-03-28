@@ -29,8 +29,11 @@ async fn test_duplicate_output_finish() -> Result<()> {
         let input = InputPort::create();
         let output1 = OutputPort::create();
         let output2 = OutputPort::create();
-        let mut processor =
-            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), false);
+        let mut processor = DuplicateProcessor::create(
+            input.clone(),
+            vec![output1.clone(), output2.clone()],
+            false,
+        );
 
         let upstream_output = OutputPort::create();
         let downstream_input1 = InputPort::create();
@@ -58,7 +61,7 @@ async fn test_duplicate_output_finish() -> Result<()> {
         let output1 = OutputPort::create();
         let output2 = OutputPort::create();
         let mut processor =
-            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), true);
+            DuplicateProcessor::create(input.clone(), vec![output1.clone(), output2.clone()], true);
 
         let upstream_output = OutputPort::create();
         let downstream_input1 = InputPort::create();
@@ -80,8 +83,11 @@ async fn test_duplicate_output_finish() -> Result<()> {
         let input = InputPort::create();
         let output1 = OutputPort::create();
         let output2 = OutputPort::create();
-        let mut processor =
-            DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), false);
+        let mut processor = DuplicateProcessor::create(
+            input.clone(),
+            vec![output1.clone(), output2.clone()],
+            false,
+        );
 
         let upstream_output = OutputPort::create();
         let downstream_input1 = InputPort::create();
@@ -107,7 +113,7 @@ async fn test_duplicate_processor() -> Result<()> {
     let output1 = OutputPort::create();
     let output2 = OutputPort::create();
     let mut processor =
-        DuplicateProcessor::create(input.clone(), output1.clone(), output2.clone(), true);
+        DuplicateProcessor::create(input.clone(), vec![output1.clone(), output2.clone()], true);
 
     let upstream_output = OutputPort::create();
     let downstream_input1 = InputPort::create();

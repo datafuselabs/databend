@@ -81,11 +81,12 @@ impl TransformMergeCommitMeta {
         }
     }
 
-    fn merge_commit_meta(
+    pub fn merge_commit_meta(
         l: CommitMeta,
         r: CommitMeta,
         default_cluster_key_id: Option<u32>,
     ) -> CommitMeta {
+        assert_eq!(l.table_id, r.table_id, "table id mismatch");
         CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
@@ -112,6 +113,7 @@ impl TransformMergeCommitMeta {
                     .chain(r.abort_operation.bloom_filter_indexes)
                     .collect(),
             },
+            table_id: l.table_id,
         }
     }
 }
@@ -130,9 +132,15 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         let to_merged = std::mem::take(&mut self.to_merged);
-        let merged = to_merged.into_iter().fold(CommitMeta::empty(), |acc, x| {
-            Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
-        });
+        if to_merged.is_empty() {
+            return Ok(vec![]);
+        }
+        let table_id = to_merged[0].table_id;
+        let merged = to_merged
+            .into_iter()
+            .fold(CommitMeta::empty(table_id), |acc, x| {
+                Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
+            });
         Ok(vec![merged.into()])
     }
 }

@@ -63,6 +63,7 @@ pub struct ReclusterAggregator {
 
     removed_segment_indexes: Vec<usize>,
     removed_statistics: Statistics,
+    table_id: u64,
 }
 
 #[async_trait::async_trait]
@@ -135,6 +136,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
         let meta = CommitMeta::new(
             conflict_resolve_context,
             std::mem::take(&mut self.abort_operation),
+            self.table_id,
         );
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
@@ -164,6 +166,7 @@ impl ReclusterAggregator {
             removed_statistics,
             start_time: Instant::now(),
             abort_operation: AbortOperation::default(),
+            table_id: table.get_id(),
         }
     }
 

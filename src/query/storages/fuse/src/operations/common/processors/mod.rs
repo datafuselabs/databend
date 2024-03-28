@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod multi_table_insert_commit;
+pub use multi_table_insert_commit::CommitMultiTableInsert;
 mod sink_commit;
 mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;

@@ -72,7 +72,7 @@ SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 
 45
 
 query II
-SELECT unique1, first_value(unique1) over (order by unique1 rows between 1 preceding and unbounded following) first FROM tenk1 order by unique1
+SELECT unique1, first_value(unique1) over (order by unique1 rows between 1 preceding and unbounded following) FROM tenk1 order by unique1
 ----
 0 0
 1 0

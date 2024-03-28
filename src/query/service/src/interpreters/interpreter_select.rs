@@ -155,7 +155,7 @@ impl SelectInterpreter {
         //              └─────────┘    └─────────┘    └─────────┘
 
         // 1. Duplicate the pipes.
-        pipeline.duplicate(false)?;
+        pipeline.duplicate(false, 2)?;
         // 2. Reorder the pipes.
         let output_len = pipeline.output_len();
         debug_assert!(output_len % 2 == 0);

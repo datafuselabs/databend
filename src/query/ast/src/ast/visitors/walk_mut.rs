@@ -563,5 +563,6 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::AlterNotification(stmt) => visitor.visit_alter_notification(stmt),
         Statement::DropNotification(stmt) => visitor.visit_drop_notification(stmt),
         Statement::DescribeNotification(stmt) => visitor.visit_describe_notification(stmt),
+        Statement::InsertMultiTable(_) => {}
     }
 }

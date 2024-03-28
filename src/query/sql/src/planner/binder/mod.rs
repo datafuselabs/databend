@@ -28,6 +28,7 @@ mod distinct;
 mod explain;
 mod having;
 mod insert;
+mod insert_multi_table;
 mod internal_column_factory;
 mod join;
 mod kill;

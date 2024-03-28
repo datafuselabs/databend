@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -175,6 +176,35 @@ impl FuseTable {
         res
     }
 
+    pub fn build_new_table_meta(
+        old_meta: &TableMeta,
+        new_snapshot_location: &str,
+        new_snapshot: &TableSnapshot,
+    ) -> Result<TableMeta> {
+        let mut new_table_meta = old_meta.clone();
+        // 1.1 set new snapshot location
+        new_table_meta.options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+            new_snapshot_location.to_owned(),
+        );
+        // remove legacy options
+        Self::remove_legacy_options(&mut new_table_meta.options);
+
+        // 1.2 setup table statistics
+        let stats = &new_snapshot.summary;
+        // update statistics
+        new_table_meta.statistics = TableStatistics {
+            number_of_rows: stats.row_count,
+            data_bytes: stats.uncompressed_byte_size,
+            compressed_data_bytes: stats.compressed_byte_size,
+            index_data_bytes: stats.index_size,
+            number_of_segments: Some(new_snapshot.segments.len() as u64),
+            number_of_blocks: Some(stats.block_count),
+        };
+        new_table_meta.updated_on = Utc::now();
+        Ok(new_table_meta)
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
@@ -189,28 +219,8 @@ impl FuseTable {
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
-        let mut new_table_meta = table_info.meta.clone();
-        // 1.1 set new snapshot location
-        new_table_meta.options.insert(
-            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-            snapshot_location.clone(),
-        );
-        // remove legacy options
-        Self::remove_legacy_options(&mut new_table_meta.options);
-
-        // 1.2 setup table statistics
-        let stats = &snapshot.summary;
-        // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: stats.row_count,
-            data_bytes: stats.uncompressed_byte_size,
-            compressed_data_bytes: stats.compressed_byte_size,
-            index_data_bytes: stats.index_size,
-            number_of_segments: Some(snapshot.segments.len() as u64),
-            number_of_blocks: Some(stats.block_count),
-        };
-        new_table_meta.updated_on = Utc::now();
-
+        let new_table_meta =
+            Self::build_new_table_meta(&table_info.meta, &snapshot_location, &snapshot)?;
         // 2. prepare the request
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;

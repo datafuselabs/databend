@@ -117,6 +117,15 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
+            PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
+            PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
+            PhysicalPlan::ChunkFilter(_) => "ChunkFilter".fmt(f)?,
+            PhysicalPlan::ChunkProject(_) => "ChunkProject".fmt(f)?,
+            PhysicalPlan::ChunkCastSchema(_) => "ChunkCastSchema".fmt(f)?,
+            PhysicalPlan::ChunkFillAndReorder(_) => "ChunkFillAndReorder".fmt(f)?,
+            PhysicalPlan::ChunkAppendData(_) => "ChunkAppendData".fmt(f)?,
+            PhysicalPlan::ChunkMerge(_) => "ChunkMerge".fmt(f)?,
+            PhysicalPlan::ChunkCommitInsert(_) => "ChunkCommitInsert".fmt(f)?,
         }
 
         for node in self.node.children() {

@@ -2061,7 +2061,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
         ),
         rule!(
-            #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2286,6 +2288,89 @@ pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
             },
         )(i)
     }
+}
+
+pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ (FIRST | ALL) ~ (#when_clause)+ ~ (#else_clause)? ~ #query
+            },
+            |(_, overwrite, kind, when_clauses, opt_else, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: matches!(kind.kind, FIRST),
+                    when_clauses,
+                    else_clause: opt_else,
+                    into_clauses: vec![],
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statement> {
+    move |i| {
+        map(
+            rule! {
+                INSERT ~ OVERWRITE? ~ ALL ~ (#into_clause)+ ~ #query
+            },
+            |(_, overwrite, _, into_clauses, source)| {
+                Statement::InsertMultiTable(InsertMultiTableStmt {
+                    overwrite: overwrite.is_some(),
+                    is_first: false,
+                    when_clauses: vec![],
+                    else_clause: None,
+                    into_clauses,
+                    source,
+                })
+            },
+        )(i)
+    }
+}
+
+fn when_clause(i: Input) -> IResult<WhenClause> {
+    map(
+        rule! {
+            WHEN ~ ^#expr ~ THEN ~ (#into_clause)+
+        },
+        |(_, expr, _, into_clauses)| WhenClause {
+            condition: expr,
+            into_clauses,
+        },
+    )(i)
+}
+
+fn into_clause(i: Input) -> IResult<IntoClause> {
+    map(
+        rule! {
+            INTO
+            ~ #dot_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ (VALUES ~ "(" ~ #comma_separated_list1(ident) ~ ")" )?
+        },
+        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
+            catalog,
+            database,
+            table,
+            target_columns: opt_target_columns
+                .map(|(_, columns, _)| columns)
+                .unwrap_or_default(),
+            source_columns: opt_source_columns
+                .map(|(_, _, columns, _)| columns)
+                .unwrap_or_default(),
+        },
+    )(i)
+}
+
+fn else_clause(i: Input) -> IResult<ElseClause> {
+    map(
+        rule! {
+            ELSE ~ (#into_clause)+
+        },
+        |(_, into_clauses)| ElseClause { into_clauses },
+    )(i)
 }
 
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {

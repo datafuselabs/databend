@@ -116,3 +116,187 @@ SELECT * FROM t_consume_append_only_6; -- empty
 
 statement ok
 drop database test_txn_stream;
+
+# multi table INSERT
+statement ok
+create or replace database test_txn_stream;
+
+statement ok
+use test_txn_stream;
+
+statement ok
+CREATE TABLE t_append_only(a INT);
+
+statement ok
+CREATE STREAM s_append_only ON TABLE t_append_only APPEND_ONLY=true;
+
+statement ok
+CREATE STREAM s_append_only_1 ON TABLE t_append_only APPEND_ONLY=true;
+
+statement ok
+INSERT INTO t_append_only VALUES(2), (3);
+
+statement ok
+CREATE TABLE t_consume_append_only_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_2(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_3(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_4(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_5(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_6(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_1_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_2_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_3_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_4_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_5_1(b INT);
+
+statement ok
+CREATE TABLE t_consume_append_only_6_1(b INT);
+
+query I
+select a from s_append_only;
+----
+2
+3
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO t_append_only VALUES(4), (5);
+
+statement ok
+INSERT ALL INTO t_consume_append_only_1  INTO t_consume_append_only_1_1 SELECT a FROM s_append_only;
+
+statement ok
+INSERT ALL INTO t_consume_append_only_2  INTO t_consume_append_only_2_1 SELECT a FROM s_append_only;
+
+statement ok
+INSERT INTO t_append_only VALUES(6), (7);
+
+statement ok
+INSERT ALL INTO t_consume_append_only_3  INTO t_consume_append_only_3_1 SELECT a FROM s_append_only;
+
+statement ok
+INSERT ALL INTO t_consume_append_only_4  INTO t_consume_append_only_4_1 SELECT a FROM s_append_only_1;
+
+statement ok
+COMMIT;
+
+statement ok
+INSERT ALL INTO t_consume_append_only_5  INTO t_consume_append_only_5_1 SELECT a FROM s_append_only;
+
+statement ok
+INSERT ALL INTO t_consume_append_only_6  INTO t_consume_append_only_6_1 SELECT a FROM s_append_only_1;
+
+query I
+SELECT * FROM t_consume_append_only_1 order by b;  -- 2,3,4,5
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM t_consume_append_only_1_1 order by b;  -- 2,3,4,5
+----
+2
+3
+4
+5
+
+
+
+query I
+SELECT * FROM t_consume_append_only_2 order by b; -- 2,3,4,5
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM t_consume_append_only_2_1 order by b; -- 2,3,4,5
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM t_consume_append_only_3 order by b; -- 2,3,4,5
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM t_consume_append_only_3_1 order by b; -- 2,3,4,5
+----
+2
+3
+4
+5
+
+query I
+SELECT * FROM t_consume_append_only_4 order by b; -- 2,3,4,5,6,7
+----
+2
+3
+4
+5
+6
+7
+
+query I
+SELECT * FROM t_consume_append_only_4_1 order by b; -- 2,3,4,5,6,7
+----
+2
+3
+4
+5
+6
+7
+
+query I
+SELECT * FROM t_consume_append_only_5 order by b; -- 6,7
+----
+6
+7
+
+query I
+SELECT * FROM t_consume_append_only_5_1 order by b; -- 6,7
+----
+6
+7
+
+query I
+SELECT * FROM t_consume_append_only_6; -- empty
+----
+
+query I
+SELECT * FROM t_consume_append_only_6_1; -- empty
+----
+
+statement ok
+drop database test_txn_stream;
