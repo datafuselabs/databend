@@ -66,6 +66,7 @@ use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
 use log::info;
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -88,6 +89,20 @@ use crate::test_kits::execute_pipeline;
 use crate::test_kits::ClusterDescriptor;
 use crate::test_kits::ConfigBuilder;
 use crate::GlobalServices;
+
+static TRACING_INITIALIZED: Lazy<Mutex<()>> = Lazy::new(|| {
+    // This code block is executed only once, regardless of how many times it's called
+    env_logger::init();
+    Mutex::new(())
+});
+
+fn ensure_tracing_initialized() {
+    // The lock is acquired here to ensure thread-safe access, but since we're only
+    // interested in initializing the tracing subscriber, which itself is thread-safe
+    // and meant to be called once, the lock is not used further.
+    let _guard = TRACING_INITIALIZED.lock();
+    // At this point, tracing_subscriber::fmt::init() has already been called once.
+}
 
 pub struct TestFixture {
     pub(crate) default_ctx: Arc<QueryContext>,
@@ -203,6 +218,7 @@ impl TestFixture {
     /// Register the cluster to the metastore.
     async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
         set_panic_hook();
+        ensure_tracing_initialized();
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
@@ -849,6 +865,12 @@ impl TestFixture {
         let res = self.execute_query(query).await?;
         res.try_collect::<Vec<DataBlock>>().await?;
         Ok(())
+    }
+
+    pub async fn execute_command_v2(&self, query: &str) -> Result<Vec<DataBlock>> {
+        let res = self.execute_query(query).await?;
+        let res = res.try_collect::<Vec<DataBlock>>().await?;
+        Ok(res)
     }
 
     pub async fn execute_query(&self, query: &str) -> Result<SendableDataBlockStream> {

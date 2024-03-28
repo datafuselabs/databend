@@ -12,11 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(unwrap_infallible)]
-mod aggregating_index;
-mod background_service;
-mod ddl_basic;
-mod inverted_index;
-mod license;
-mod storages;
-mod stream;
+mod ddl_basic_01_create_udf;

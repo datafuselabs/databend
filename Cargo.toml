@@ -169,6 +169,7 @@ reqwest = { version = "0.11.19", default-features = false, features = [
 reqwest-hickory-resolver = "0.0.2"
 semver = "1.0.14"
 serfig = "0.1.0"
+env_logger = "0.10.0"
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
@@ -203,6 +204,11 @@ arrow-schema = { version = "50", features = ["serde"] }
 arrow-select = { version = "50" }
 parquet = { version = "50", features = ["async"] }
 parquet_rs = { package = "parquet", version = "50" }
+
+# Crates from risingwavelabs
+arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/risingwavelabs/arrow-udf", branch = "main"}
+arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", branch = "main"}
+arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/risingwavelabs/arrow-udf", branch = "main"}
 
 # Serialization
 prost = { version = "0.12.1" }

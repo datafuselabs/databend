@@ -133,22 +133,15 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
-                if !["python", "javascript"].contains(&language.to_lowercase().as_str()) {
+                if !["python", "javascript", "wasm"].contains(&language.to_lowercase().as_str()) {
                     return Err(ErrorCode::InvalidArgument(format!(
                         "Unallowed UDF language '{language}', must be python or javascript"
                     )));
                 }
 
-                // TODO add python remove these line
-                if language.to_ascii_lowercase() == "python" {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}' is not supported now, must be javascript"
-                    )));
-                }
-
                 let mut runtime_version = runtime_version.to_string();
                 if runtime_version.is_empty() && language.to_lowercase() == "python" {
-                    runtime_version = "3.12.0".to_string();
+                    runtime_version = "3.12.2".to_string();
                 }
 
                 Ok(UserDefinedFunction {

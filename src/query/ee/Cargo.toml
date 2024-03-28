@@ -58,8 +58,14 @@ futures-util = { workspace = true }
 jwt-simple = "0.11.0"
 log = { workspace = true }
 tempfile = "3.4.0"
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+env_logger = { workspace = true }
 
 [dev-dependencies]
+databend-common-compress = { path = "../../common/compress" }
+arrow-udf-wasm = { workspace = true, features = ["build"] }
+uuid = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }

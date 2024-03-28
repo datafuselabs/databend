@@ -99,9 +99,9 @@ jsonb = { workspace = true }
 # GitHub dependencies
 
 # Crates.io dependencies
-## TODO add python support
-# arrow-udf-python = {package = "arrow-udf-python", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/risingwavelabs/arrow-udf", rev = "6c32f71" }
+arrow-udf-js = { workspace = true }
+arrow-udf-python = { workspace = true }
+arrow-udf-wasm = { workspace = true }
 
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
@@ -175,6 +175,7 @@ unicode-segmentation = "1.10.1"
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
+env_logger = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }

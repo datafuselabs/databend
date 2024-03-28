@@ -18,14 +18,31 @@ use databend_common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use log::info;
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 
 use crate::test_kits::mock_services::MockServices;
+
+static TRACING_INITIALIZED: Lazy<Mutex<()>> = Lazy::new(|| {
+    // This code block is executed only once, regardless of how many times it's called
+    env_logger::init();
+    Mutex::new(())
+});
+
+fn ensure_tracing_initialized() {
+    // The lock is acquired here to ensure thread-safe access, but since we're only
+    // interested in initializing the tracing subscriber, which itself is thread-safe
+    // and meant to be called once, the lock is not used further.
+    let _guard = TRACING_INITIALIZED.lock();
+    // At this point, tracing_subscriber::fmt::init() has already been called once.
+}
 
 pub struct TestFixture;
 
 impl TestFixture {
     pub async fn setup(config: &InnerConfig, public_key: String) -> Result<()> {
         set_panic_hook();
+        ensure_tracing_initialized();
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
