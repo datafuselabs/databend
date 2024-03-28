@@ -106,11 +106,14 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
+        let in_cluster = !self.ctx.get_cluster().is_empty();
+
         let params = Self::build_aggregator_params(
             aggregate.input.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size as usize,
             None,
         )?;
@@ -217,12 +220,13 @@ impl PipelineBuilder {
         let enable_experimental_aggregate_hashtable = self
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
-
+        let in_cluster = !self.ctx.get_cluster().is_empty();
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size as usize,
             aggregate.limit,
         )?;
@@ -288,6 +292,7 @@ impl PipelineBuilder {
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
         enable_experimental_aggregate_hashtable: bool,
+        in_cluster: bool,
         max_block_size: usize,
         limit: Option<usize>,
     ) -> Result<Arc<AggregatorParams>> {
@@ -329,6 +334,7 @@ impl PipelineBuilder {
             &aggs,
             &agg_args,
             enable_experimental_aggregate_hashtable,
+            in_cluster,
             max_block_size,
             limit,
         )?;

@@ -64,6 +64,10 @@ struct AggregateExchangeSorting<Method: HashMethodBounds, V: Send + Sync + 'stat
     _phantom: PhantomData<(Method, V)>,
 }
 
+pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
+    Ok(max_partition_count as isize * 1000 + bucket)
+}
+
 impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
     for AggregateExchangeSorting<Method, V>
 {
@@ -78,14 +82,17 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> ExchangeSorting
                     ))),
                     Some(meta_info) => match meta_info {
                         AggregateMeta::Partitioned { .. } => unreachable!(),
-                        AggregateMeta::Serialized(v) => Ok(v.bucket),
+                        AggregateMeta::Serialized(v) => {
+                            compute_block_number(v.bucket, v.max_partition_count)
+                        }
                         AggregateMeta::HashTable(v) => Ok(v.bucket),
-                        AggregateMeta::AggregateHashTable(_) => unreachable!(),
-                        AggregateMeta::AggregatePayload(v) => Ok(v.bucket),
+                        AggregateMeta::AggregatePayload(v) => {
+                            compute_block_number(v.bucket, v.max_partition_count)
+                        }
                         AggregateMeta::AggregateSpilling(_)
                         | AggregateMeta::Spilled(_)
-                        | AggregateMeta::Spilling(_)
-                        | AggregateMeta::BucketSpilled(_) => Ok(-1),
+                        | AggregateMeta::BucketSpilled(_)
+                        | AggregateMeta::Spilling(_) => Ok(-1),
                     },
                 }
             }
@@ -271,7 +278,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
                             });
                         }
                     }
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         for payload in scatter_payload(p.payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(

@@ -262,16 +262,6 @@ impl PartitionedPayload {
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
     }
-
-    pub fn include_arena(&self, other: &Arc<Bump>) -> bool {
-        for arena in self.arenas.iter() {
-            if Arc::ptr_eq(arena, other) {
-                return true;
-            }
-        }
-
-        false
-    }
 }
 
 #[inline]

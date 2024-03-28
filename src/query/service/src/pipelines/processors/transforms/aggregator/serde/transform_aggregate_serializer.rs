@@ -137,7 +137,6 @@ impl<Method: HashMethodBounds> TransformAggregateSerializer<Method> {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::HashTable(payload) => {
                         self.input_data = Some(SerializeAggregateStream::create(

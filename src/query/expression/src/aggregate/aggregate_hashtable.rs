@@ -97,11 +97,17 @@ impl AggregateHashTable {
         config: HashTableConfig,
         capacity: usize,
         arena: Arc<Bump>,
+        need_init_entry: bool,
     ) -> Self {
+        let entries = if need_init_entry {
+            vec![0u64; capacity]
+        } else {
+            vec![]
+        };
         Self {
-            entries: vec![],
+            entries,
             count: 0,
-            direct_append: true,
+            direct_append: !need_init_entry,
             current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new(
                 group_types,

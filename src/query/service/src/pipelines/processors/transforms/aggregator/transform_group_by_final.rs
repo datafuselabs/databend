@@ -67,13 +67,37 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         if let AggregateMeta::Partitioned { bucket, data } = meta {
             for bucket_data in data {
                 match bucket_data {
-                    AggregateMeta::AggregateHashTable(payload) => match agg_hashtable.as_mut() {
+                    AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
+                            debug_assert!(bucket == payload.bucket);
+                            let payload = payload.convert_to_partitioned_payload(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                0,
+                                Arc::new(Bump::new()),
+                            )?;
                             ht.combine_payloads(&payload, &mut self.flush_state)?;
                         }
                         None => {
+                            debug_assert!(bucket == payload.bucket);
+                            agg_hashtable = Some(payload.convert_to_aggregate_table(
+                                self.params.group_data_types.clone(),
+                                self.params.aggregate_functions.clone(),
+                                0,
+                                Arc::new(Bump::new()),
+                                true,
+                            )?);
+                        }
+                    },
+                    AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
+                        Some(ht) => {
+                            debug_assert!(bucket == payload.bucket);
+                            ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+                        }
+                        None => {
+                            debug_assert!(bucket == payload.bucket);
                             let capacity =
-                                AggregateHashTable::get_capacity_for_count(payload.len());
+                                AggregateHashTable::get_capacity_for_count(payload.payload.len());
                             let mut hashtable = AggregateHashTable::new_with_capacity(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
@@ -81,31 +105,8 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
-                            hashtable.combine_payloads(&payload, &mut self.flush_state)?;
+                            hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
                             agg_hashtable = Some(hashtable);
-                        }
-                    },
-                    AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
-                        Some(ht) => {
-                            debug_assert!(bucket == payload.bucket);
-                            let arena = Arc::new(Bump::new());
-                            let payload = payload.convert_to_partitioned_payload(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                0,
-                                arena,
-                            )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
-                        }
-                        None => {
-                            debug_assert!(bucket == payload.bucket);
-                            let arena = Arc::new(Bump::new());
-                            agg_hashtable = Some(payload.convert_to_aggregate_table(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                0,
-                                arena,
-                            )?);
                         }
                     },
                     _ => unreachable!(),
@@ -203,7 +204,6 @@ where Method: HashMethodBounds
                             }
                         }
                     },
-                    AggregateMeta::AggregateHashTable(_) => unreachable!(),
                     AggregateMeta::AggregatePayload(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 }
