@@ -163,6 +163,12 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(_, limit)| SetOperationElement::Limit { limit },
     );
+    let top = map(
+        rule! {
+            TOP ~ #expr
+        },
+        |(_, top)| SetOperationElement::Limit { limit: vec![top] },
+    );
     let offset = map(
         rule! {
             OFFSET ~ ^#expr

@@ -979,6 +979,8 @@ pub enum TokenKind {
     STAGE,
     #[token("SYNTAX", ignore(ascii_case))]
     SYNTAX,
+    #[token("TOP", ignore(ascii_case))]
+    TOP,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
     #[token("UPDATE", ignore(ascii_case))]
@@ -1461,6 +1463,7 @@ impl TokenKind {
             // | TokenKind::PRECISION
             // | TokenKind::RETURNING
             | TokenKind::TO
+            | TokenKind::TOP
             | TokenKind::UNION
             | TokenKind::WHERE
             // | TokenKind::WINDOW
