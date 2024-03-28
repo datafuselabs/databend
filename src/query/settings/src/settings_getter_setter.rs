@@ -447,6 +447,13 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_copy_into")? != 0)
     }
 
+    pub fn get_merge_into_resize_parallel_threads(&self) -> Result<u64> {
+        match self.try_get_u64("merge_into_resize_parallel_threads")? {
+            0 => Ok(self.get_max_threads()?),
+            value => Ok(std::cmp::min(self.get_max_threads()?, value)),
+        }
+    }
+
     pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
     }

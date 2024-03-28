@@ -504,6 +504,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("merge_into_resize_parallel_threads", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "tune the source parallel when too many small blocks",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
