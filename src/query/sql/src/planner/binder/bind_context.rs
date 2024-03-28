@@ -15,7 +15,6 @@
 use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::hash::Hash;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
@@ -42,7 +41,6 @@ use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -157,8 +155,6 @@ pub struct CteInfo {
     pub cte_idx: IndexType,
     // Record how many times this cte is used
     pub used_count: usize,
-    // If cte is materialized, it has stat_info
-    pub stat_info: Option<Arc<StatInfo>>,
     // If cte is materialized, save it's columns
     pub columns: Vec<ColumnBinding>,
 }

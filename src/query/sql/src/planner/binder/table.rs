@@ -55,7 +55,6 @@ use databend_common_exception::Span;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::ColumnId;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionKind;
@@ -95,8 +94,8 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
@@ -1207,7 +1206,7 @@ impl Binder {
                 fields,
                 // It is safe to unwrap here because we have checked that the cte is materialized.
                 offsets,
-                stat: cte_info.stat_info.clone().unwrap(),
+                stat: Arc::new(StatInfo::default()),
             }
             .into(),
         ));
@@ -1292,11 +1291,9 @@ impl Binder {
             let (cte_s_expr, cte_bind_ctx) = self
                 .bind_cte(*span, bind_context, table_name, alias, cte_info)
                 .await?;
-            let stat_info = RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
             self.ctes_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
-                    cte_info.stat_info = Some(stat_info);
                     cte_info.columns = cte_bind_ctx.columns.clone();
                 });
             self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
@@ -1342,10 +1339,6 @@ impl Binder {
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
-        let table = table.table();
-        let statistics_provider = table.column_statistics_provider(self.ctx.clone()).await?;
-
-        let mut col_stats = HashMap::new();
         let columns = self.metadata.read().columns_by_table_index(table_index);
         for column in columns.iter() {
             match column {
@@ -1354,7 +1347,6 @@ impl Binder {
                     column_index,
                     path_indices,
                     data_type,
-                    leaf_index,
                     table_index,
                     column_position,
                     virtual_computed_expr,
@@ -1376,15 +1368,7 @@ impl Binder {
                     .column_position(*column_position)
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
-
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() && virtual_computed_expr.is_none() {
-                        if let Some(col_id) = *leaf_index {
-                            let col_stat =
-                                statistics_provider.column_statistics(col_id as ColumnId);
-                            col_stats.insert(*column_index, col_stat.cloned());
-                        }
-                    }
                 }
                 other => {
                     return Err(ErrorCode::Internal(format!(
@@ -1396,19 +1380,12 @@ impl Binder {
             }
         }
 
-        let stat = table
-            .table_statistics(self.ctx.clone(), change_type.clone())
-            .await?;
-
         Ok((
             SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: columns.into_iter().map(|col| col.index()).collect(),
-                    statistics: Statistics {
-                        statistics: stat,
-                        col_stats,
-                    },
+                    statistics: Arc::new(Statistics::default()),
                     change_type,
                     ..Default::default()
                 }

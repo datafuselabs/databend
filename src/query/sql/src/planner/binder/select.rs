@@ -383,7 +383,6 @@ impl Binder {
                     materialized: cte.materialized,
                     cte_idx: idx,
                     used_count: 0,
-                    stat_info: None,
                     columns: vec![],
                 };
                 self.ctes_map.insert(table_name.clone(), cte_info.clone());

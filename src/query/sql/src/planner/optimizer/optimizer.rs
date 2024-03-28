@@ -38,6 +38,7 @@ use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
@@ -237,6 +238,10 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             s_expr.clone(),
         )?;
     }
+
+    // Collect statistics for each leaf node in SExpr.
+    s_expr = CollectStatisticsOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
+        .run(&s_expr)?;
 
     // Normalize aggregate, it should be executed before RuleSplitAggregate.
     s_expr = RuleNormalizeAggregateOptimizer::new().run(&s_expr)?;

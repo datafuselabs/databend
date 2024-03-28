@@ -268,9 +268,7 @@ impl Operator for Aggregate {
             f64::min(res, cardinality)
         };
 
-        let precise_cardinality = if self.group_items.is_empty()
-            && matches!(self.mode, AggregateMode::Final | AggregateMode::Initial)
-        {
+        let precise_cardinality = if self.group_items.is_empty() {
             Some(1)
         } else {
             None
