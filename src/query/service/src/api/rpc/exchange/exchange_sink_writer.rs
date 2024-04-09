@@ -59,6 +59,12 @@ impl ExchangeWriterSink {
     }
 }
 
+impl Drop for ExchangeWriterSink {
+    fn drop(&mut self) {
+        self.flight_sender.close();
+    }
+}
+
 #[async_trait::async_trait]
 impl AsyncSink for ExchangeWriterSink {
     const NAME: &'static str = "ExchangeWriterSink";
@@ -85,9 +91,11 @@ impl AsyncSink for ExchangeWriterSink {
         for packet in serialize_meta.packet {
             bytes += packet.bytes_size();
             if let Err(error) = self.flight_sender.send(packet).await {
-                if error.code() == ErrorCode::ABORTED_QUERY {
-                    return Ok(true);
-                }
+                self.flight_sender.close();
+
+                // if error.code() == ErrorCode::ABORTED_QUERY {
+                //     return Ok(true);
+                // }
 
                 return Err(error);
             }

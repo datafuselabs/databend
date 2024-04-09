@@ -61,6 +61,12 @@ impl ExchangeSourceReader {
     }
 }
 
+impl Drop for ExchangeSourceReader {
+    fn drop(&mut self) {
+        self.flight_receiver.close();
+    }
+}
+
 #[async_trait::async_trait]
 impl Processor for ExchangeSourceReader {
     fn name(&self) -> String {

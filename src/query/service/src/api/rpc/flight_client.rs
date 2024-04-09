@@ -226,10 +226,6 @@ impl FlightSender {
         FlightSender { tx }
     }
 
-    pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
-    }
-
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
         if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
