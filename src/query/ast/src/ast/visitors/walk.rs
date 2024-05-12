@@ -533,20 +533,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DescribeStage { stage_name } => visitor.visit_describe_stage(stage_name),
         Statement::Call(stmt) => visitor.visit_call(stmt),
         Statement::Presign(stmt) => visitor.visit_presign(stmt),
-        Statement::CreateShareEndpoint(stmt) => visitor.visit_create_share_endpoint(stmt),
-        Statement::ShowShareEndpoint(stmt) => visitor.visit_show_share_endpoint(stmt),
-        Statement::DropShareEndpoint(stmt) => visitor.visit_drop_share_endpoint(stmt),
-        Statement::CreateShare(stmt) => visitor.visit_create_share(stmt),
-        Statement::DropShare(stmt) => visitor.visit_drop_share(stmt),
-        Statement::GrantShareObject(stmt) => visitor.visit_grant_share_object(stmt),
-        Statement::RevokeShareObject(stmt) => visitor.visit_revoke_share_object(stmt),
-        Statement::AlterShareTenants(stmt) => visitor.visit_alter_share_tenants(stmt),
-        Statement::DescShare(stmt) => visitor.visit_desc_share(stmt),
-        Statement::ShowShares(stmt) => visitor.visit_show_shares(stmt),
-        Statement::ShowObjectGrantPrivileges(stmt) => {
-            visitor.visit_show_object_grant_privileges(stmt)
-        }
-        Statement::ShowGrantsOfShare(stmt) => visitor.visit_show_grants_of_share(stmt),
         Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),

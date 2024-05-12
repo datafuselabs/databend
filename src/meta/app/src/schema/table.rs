@@ -35,8 +35,6 @@ use maplit::hashmap;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
-use crate::share::ShareSpec;
-use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -536,7 +534,6 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
 }
 
 /// Drop table by id.
@@ -574,9 +571,7 @@ impl Display for DropTableByIdReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableReply {
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
-}
+pub struct DropTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableReq {
@@ -737,19 +732,13 @@ pub struct SetTableColumnMaskPolicyReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetTableColumnMaskPolicyReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableOptionReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct UpsertTableOptionReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UpdateTableMetaReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
-}
+pub struct UpdateTableMetaReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexReq {

@@ -262,10 +262,7 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply {
-            db_id: res.db_id,
-            spec_vec: None,
-        })
+        Ok(CreateDatabaseReply { db_id: res.db_id })
     }
 
     #[async_backtrace::framed]

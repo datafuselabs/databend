@@ -67,7 +67,6 @@ members = [
     "src/query/storages/memory",
     "src/query/storages/null",
     "src/query/storages/random",
-    "src/query/storages/share",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",

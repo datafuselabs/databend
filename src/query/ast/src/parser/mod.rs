@@ -20,7 +20,6 @@ pub mod query;
 pub mod quote;
 pub mod script;
 mod sequence;
-mod share;
 mod stage;
 pub mod statement;
 pub mod stream;

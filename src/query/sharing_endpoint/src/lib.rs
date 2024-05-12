@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-pub mod accessor;
 pub mod configs;
 pub mod handlers;
 pub mod middlewares;

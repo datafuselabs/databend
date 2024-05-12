@@ -163,19 +163,7 @@ impl Plan {
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
             Plan::Kill(_) => Ok("Kill".to_string()),
 
-            Plan::CreateShareEndpoint(_) => Ok("CreateShareEndpoint".to_string()),
-            Plan::ShowShareEndpoint(_) => Ok("ShowShareEndpoint".to_string()),
-            Plan::DropShareEndpoint(_) => Ok("DropShareEndpoint".to_string()),
-            Plan::CreateShare(_) => Ok("CreateShare".to_string()),
-            Plan::DropShare(_) => Ok("DropShare".to_string()),
-            Plan::GrantShareObject(_) => Ok("GrantShareObject".to_string()),
-            Plan::RevokeShareObject(_) => Ok("RevokeShareObject".to_string()),
-            Plan::AlterShareTenants(_) => Ok("AlterShareTenants".to_string()),
-            Plan::DescShare(_) => Ok("DescShare".to_string()),
-            Plan::ShowShares(_) => Ok("ShowShares".to_string()),
             Plan::ShowRoles(_) => Ok("ShowRoles".to_string()),
-            Plan::ShowObjectGrantPrivileges(_) => Ok("ShowObjectGrantPrivileges".to_string()),
-            Plan::ShowGrantTenantsOfShare(_) => Ok("ShowGrantTenantsOfShare".to_string()),
             Plan::RevertTable(_) => Ok("RevertTable".to_string()),
 
             // data mask

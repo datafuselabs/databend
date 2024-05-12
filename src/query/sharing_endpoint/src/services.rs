@@ -16,7 +16,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 
-use crate::accessor::SharingAccessor;
 use crate::configs::Config;
 
 // hold singleton services.
@@ -29,6 +28,7 @@ impl SharingServices {
         GlobalInstance::init_production();
 
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
-        SharingAccessor::init(&config).await
+
+        Ok(())
     }
 }

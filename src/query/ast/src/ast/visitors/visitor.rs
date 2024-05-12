@@ -646,30 +646,6 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_presign(&mut self, _presign: &'ast PresignStmt) {}
 
-    fn visit_create_share_endpoint(&mut self, _stmt: &'ast CreateShareEndpointStmt) {}
-
-    fn visit_show_share_endpoint(&mut self, _stmt: &'ast ShowShareEndpointStmt) {}
-
-    fn visit_drop_share_endpoint(&mut self, _stmt: &'ast DropShareEndpointStmt) {}
-
-    fn visit_create_share(&mut self, _stmt: &'ast CreateShareStmt) {}
-
-    fn visit_drop_share(&mut self, _stmt: &'ast DropShareStmt) {}
-
-    fn visit_grant_share_object(&mut self, _stmt: &'ast GrantShareObjectStmt) {}
-
-    fn visit_revoke_share_object(&mut self, _stmt: &'ast RevokeShareObjectStmt) {}
-
-    fn visit_alter_share_tenants(&mut self, _stmt: &'ast AlterShareTenantsStmt) {}
-
-    fn visit_desc_share(&mut self, _stmt: &'ast DescShareStmt) {}
-
-    fn visit_show_shares(&mut self, _stmt: &'ast ShowSharesStmt) {}
-
-    fn visit_show_object_grant_privileges(&mut self, _stmt: &'ast ShowObjectGrantPrivilegesStmt) {}
-
-    fn visit_show_grants_of_share(&mut self, _stmt: &'ast ShowGrantsOfShareStmt) {}
-
     fn visit_create_data_mask_policy(&mut self, _stmt: &'ast CreateDatamaskPolicyStmt) {}
 
     fn visit_drop_data_mask_policy(&mut self, _stmt: &'ast DropDatamaskPolicyStmt) {}

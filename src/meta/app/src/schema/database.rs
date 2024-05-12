@@ -25,7 +25,6 @@ use chrono::Utc;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
-use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
@@ -212,7 +211,6 @@ impl Display for CreateDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -256,9 +254,7 @@ impl Display for DropDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropDatabaseReply {
-    pub spec_vec: Option<Vec<ShareSpec>>,
-}
+pub struct DropDatabaseReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {

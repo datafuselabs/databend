@@ -43,7 +43,6 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::save_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -124,16 +123,8 @@ impl ModifyTableColumnInterpreter {
             action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
         };
 
-        let res = catalog.set_table_column_mask_policy(req).await?;
+        let _res = catalog.set_table_column_mask_policy(req).await?;
 
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
-        }
         Ok(PipelineBuildResult::create())
     }
 
@@ -332,18 +323,9 @@ impl ModifyTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let res = catalog
+            let _res = catalog
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
-
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -456,16 +438,7 @@ impl ModifyTableColumnInterpreter {
                 action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
             };
 
-            let res = catalog.set_table_column_mask_policy(req).await?;
-
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
+            let _res = catalog.set_table_column_mask_policy(req).await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -522,16 +495,7 @@ impl ModifyTableColumnInterpreter {
             update_stream_meta: vec![],
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
-
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
-        }
+        let _res = catalog.update_table_meta(table_info, req).await?;
 
         Ok(PipelineBuildResult::create())
     }

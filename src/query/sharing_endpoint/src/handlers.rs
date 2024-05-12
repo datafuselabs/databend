@@ -15,12 +15,10 @@
 use databend_common_meta_app::share::TableInfoMap;
 use models::Credentials;
 use models::RequestFile;
-use poem::error::BadRequest;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
 
-use crate::accessor::SharingAccessor;
 use crate::models;
 use crate::models::PresignFileResponse;
 use crate::models::ShareSpec;
@@ -28,55 +26,29 @@ use crate::models::ShareSpec;
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn share_table_presign_files(
-    credentials: &Credentials,
-    Path((_tenant_id, share_name, table_name)): Path<(String, String, String)>,
-    Json(request_files): Json<Vec<RequestFile>>,
+    _credentials: &Credentials,
+    Path((_tenant_id, _share_name, _table_name)): Path<(String, String, String)>,
+    Json(_request_files): Json<Vec<RequestFile>>,
 ) -> PoemResult<Json<Vec<PresignFileResponse>>> {
-    let requester = credentials.token.clone();
-    let input = models::LambdaInput::new(
-        credentials.token.clone(),
-        share_name,
-        requester,
-        table_name,
-        request_files,
-        None,
-    );
-    match SharingAccessor::get_share_table_spec_presigned_files(&input).await {
-        Ok(output) => Ok(Json(output)),
-        Err(e) => Err(BadRequest(e)),
-    }
+    unimplemented!()
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn share_table_meta(
-    credentials: &Credentials,
-    Path((_tenant_id, share_name)): Path<(String, String)>,
-    Json(request_tables): Json<Vec<String>>,
+    _credentials: &Credentials,
+    Path((_tenant_id, _share_name)): Path<(String, String)>,
+    Json(_request_tables): Json<Vec<String>>,
 ) -> PoemResult<Json<TableInfoMap>> {
-    let requester = credentials.token.clone();
-    let input = models::TableMetaLambdaInput::new(
-        credentials.token.clone(),
-        share_name,
-        requester,
-        request_tables,
-        None,
-    );
-    match SharingAccessor::get_share_table_meta(&input).await {
-        Ok(output) => Ok(Json(output)),
-        Err(e) => Err(BadRequest(e)),
-    }
+    unimplemented!()
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn share_spec(
     _credentials: &Credentials,
-    Path(tenant_id): Path<String>,
+    Path(_tenant_id): Path<String>,
     Json(_request_tables): Json<Vec<String>>,
 ) -> PoemResult<Json<Vec<ShareSpec>>> {
-    match SharingAccessor::get_share_spec(&tenant_id).await {
-        Ok(output) => Ok(Json(output)),
-        Err(e) => Err(BadRequest(e)),
-    }
+    unimplemented!()
 }

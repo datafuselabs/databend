@@ -191,6 +191,7 @@ pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
 }
 
 // parse: (k = v ...)* into a map
+#[allow(dead_code)]
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {

@@ -3955,13 +3955,9 @@ dependencies = [
  "async-backtrace",
  "bytes",
  "databend-common-auth",
- "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
- "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-storage",
- "databend-common-users",
  "http 1.1.0",
  "log",
  "moka",
@@ -4383,23 +4379,6 @@ dependencies = [
  "sha2",
  "tokio",
  "uuid",
-]
-
-[[package]]
-name = "databend-common-storages-share"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "chrono",
- "databend-common-exception",
- "databend-common-meta-app",
- "databend-storages-common-table-meta",
- "enumflags2",
- "goldenfile",
- "opendal",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -4886,7 +4865,6 @@ dependencies = [
  "databend-common-pipeline-transforms",
  "databend-common-script",
  "databend-common-settings",
- "databend-common-sharing",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-delta",
@@ -4898,7 +4876,6 @@ dependencies = [
  "databend-common-storages-null",
  "databend-common-storages-parquet",
  "databend-common-storages-result-cache",
- "databend-common-storages-share",
  "databend-common-storages-stage",
  "databend-common-storages-stream",
  "databend-common-storages-system",
@@ -4994,8 +4971,7 @@ name = "databend-sharing-endpoint"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "base64 0.22.0",
- "bytes",
+ "base64 0.21.7",
  "chrono",
  "clap 4.5.1",
  "databend-common-base",
@@ -5003,15 +4979,12 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-storage",
- "databend-common-storages-share",
  "enumflags2",
  "http 1.1.0",
  "opendal",
  "poem",
  "serde",
- "serde_json",
  "serfig",
- "time",
  "uuid",
 ]
 

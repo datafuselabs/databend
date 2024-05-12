@@ -13,5 +13,4 @@
 // limitations under the License.
 #![feature(thread_local)]
 
-mod accessor;
 mod models;

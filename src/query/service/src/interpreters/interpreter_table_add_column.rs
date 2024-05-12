@@ -28,7 +28,6 @@ use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::save_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -131,16 +130,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let res = catalog.update_table_meta(table_info, req).await?;
-
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
+            let _res = catalog.update_table_meta(table_info, req).await?;
         };
 
         Ok(PipelineBuildResult::create())

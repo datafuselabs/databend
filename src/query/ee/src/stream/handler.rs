@@ -175,7 +175,7 @@ impl StreamHandler for RealStreamHandler {
                 })
                 .await
         } else if plan.if_exists {
-            Ok(DropTableReply { spec_vec: None })
+            Ok(DropTableReply {})
         } else {
             Err(ErrorCode::UnknownStream(format!(
                 "unknown stream `{}`.`{}` in catalog '{}'",

@@ -13,13 +13,9 @@ doctest = false
 anyhow = { workspace = true }
 bytes = { workspace = true }
 databend-common-auth = { path = "../../common/auth" }
-databend-common-base = { path = "../../common/base" }
 databend-common-config = { path = "../config" }
 databend-common-exception = { path = "../../common/exception" }
-databend-common-meta-api = { path = "../../meta/api" }
 databend-common-meta-app = { path = "../../meta/app" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
 http = { workspace = true }

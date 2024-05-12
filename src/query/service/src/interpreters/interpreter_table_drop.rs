@@ -23,7 +23,6 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::RoleCacheManager;
@@ -102,7 +101,7 @@ impl Interpreter for DropTableInterpreter {
         let tenant = self.ctx.get_tenant();
         let db = catalog.get_database(&tenant, &self.plan.database).await?;
         // actually drop table
-        let resp = catalog
+        let _resp = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: self.plan.if_exists,
                 tenant: tenant.clone(),
@@ -147,17 +146,6 @@ impl Interpreter for DropTableInterpreter {
                     .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
                     .await?
             }
-        }
-
-        // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = resp.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
-            )
-            .await?;
         }
 
         Ok(build_res)

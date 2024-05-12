@@ -65,7 +65,6 @@ databend-common-pipeline-sinks = { path = "../pipeline/sinks" }
 databend-common-pipeline-sources = { path = "../pipeline/sources" }
 databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
 databend-common-settings = { path = "../settings" }
-databend-common-sharing = { path = "../sharing" }
 databend-common-sql = { path = "../sql" }
 databend-common-storage = { path = "../../common/storage" }
 databend-common-storages-delta = { path = "../storages/delta" }
@@ -77,7 +76,6 @@ databend-common-storages-information-schema = { path = "../storages/information_
 databend-common-storages-null = { path = "../storages/null" }
 databend-common-storages-parquet = { path = "../storages/parquet" }
 databend-common-storages-result-cache = { path = "../storages/result_cache" }
-databend-common-storages-share = { path = "../storages/share" }
 databend-common-storages-stage = { path = "../storages/stage" }
 databend-common-storages-stream = { path = "../storages/stream" }
 databend-common-storages-system = { path = "../storages/system" }

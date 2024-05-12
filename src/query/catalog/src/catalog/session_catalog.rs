@@ -355,9 +355,7 @@ impl Catalog for SessionCatalog {
             TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
             TxnState::Active => {
                 self.txn_mgr.lock().update_table_meta(req, table_info);
-                Ok(UpdateTableMetaReply {
-                    share_table_info: None,
-                })
+                Ok(UpdateTableMetaReply {})
             }
             TxnState::Fail => unreachable!(),
         }

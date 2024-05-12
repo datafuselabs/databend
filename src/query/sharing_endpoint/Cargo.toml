@@ -17,18 +17,13 @@ databend-common-config = { path = "../../query/config" }
 databend-common-exception = { path = "../../common/exception" }
 databend-common-meta-app = { path = "../../meta/app" }
 databend-common-storage = { path = "../../common/storage" }
-databend-common-storages-share = { path = "../storages/share" }
 uuid = { workspace = true }
 
-time = { version = "0.3", features = ["serde"] }
-
-base64 = { workspace = true }
-bytes = { workspace = true }
+base64 = "0.21.0"
 clap = { workspace = true }
 enumflags2 = { workspace = true }
 http = { workspace = true }
 opendal = { workspace = true }
 poem = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 serfig = { workspace = true }

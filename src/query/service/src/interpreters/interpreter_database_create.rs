@@ -19,14 +19,8 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sharing::ShareEndpointManager;
 use databend_common_sql::plans::CreateDatabasePlan;
-use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -45,55 +39,6 @@ pub struct CreateDatabaseInterpreter {
 impl CreateDatabaseInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDatabasePlan) -> Result<Self> {
         Ok(CreateDatabaseInterpreter { ctx, plan })
-    }
-
-    async fn check_create_database_from_share(
-        &self,
-        tenant: &Tenant,
-        share_name: &ShareNameIdent,
-    ) -> Result<()> {
-        let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(tenant, Some(share_name.tenant()), Some(share_name.clone()))
-            .await?;
-        match share_specs.first() {
-            Some((_, share_spec)) => {
-                if !share_spec
-                    .tenants
-                    .contains(&tenant.tenant_name().to_string())
-                {
-                    return Err(ErrorCode::UnknownShareAccounts(format!(
-                        "share {} has not granted privilege to {}",
-                        share_name.display(),
-                        tenant.tenant_name()
-                    )));
-                }
-                match share_spec.db_privileges {
-                    Some(db_privileges) => {
-                        if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                            return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                                "share {} has not granted privilege to {}",
-                                share_name.display(),
-                                tenant.tenant_name()
-                            )));
-                        }
-                    }
-                    None => {
-                        return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                            "share {} has not granted privilege to {}",
-                            share_name.display(),
-                            tenant.tenant_name()
-                        )));
-                    }
-                }
-            }
-            None => {
-                return Err(ErrorCode::UnknownShare(format!(
-                    "UnknownShare {:?}",
-                    share_name
-                )));
-            }
-        }
-        Ok(())
     }
 }
 
@@ -124,12 +69,6 @@ impl Interpreter for CreateDatabaseInterpreter {
                 quota.max_databases
             )));
         };
-        // if create from other tenant, check from share endpoint
-        if let Some(ref share_name) = self.plan.meta.from_share {
-            let share_name_ident = share_name.clone().to_tident(());
-            self.check_create_database_from_share(&tenant, &share_name_ident)
-                .await?;
-        }
 
         let create_db_req: CreateDatabaseReq = self.plan.clone().into();
         let reply = catalog.create_database(create_db_req).await?;
@@ -148,22 +87,6 @@ impl Interpreter for CreateDatabaseInterpreter {
                 )
                 .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
-        // handle share cleanups with the DropDatabaseReply
-        if let Some(spec_vec) = reply.spec_vec {
-            let mut share_table_into = Vec::with_capacity(spec_vec.len());
-            for share_spec in &spec_vec {
-                share_table_into.push((share_spec.name.clone(), None));
-            }
-
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_into),
-            )
-            .await?;
         }
 
         Ok(PipelineBuildResult::create())

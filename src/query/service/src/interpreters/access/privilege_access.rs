@@ -978,10 +978,6 @@ impl AccessChecker for PrivilegeAccess {
                 )
                     .await?;
             }
-            Plan::GrantShareObject(_)
-            | Plan::RevokeShareObject(_)
-            | Plan::ShowObjectGrantPrivileges(_)
-            | Plan::ShowGrantTenantsOfShare(_)
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
@@ -1023,7 +1019,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
-            | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
             | Plan::RefreshTableIndex(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter)
@@ -1044,13 +1039,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
-            Plan::CreateShareEndpoint(_)
-            | Plan::ShowShareEndpoint(_)
-            | Plan::DropShareEndpoint(_)
-            | Plan::CreateShare(_)
-            | Plan::DropShare(_)
-            | Plan::DescShare(_)
-            | Plan::ShowShares(_)
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
