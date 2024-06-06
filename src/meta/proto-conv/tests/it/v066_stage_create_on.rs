@@ -72,10 +72,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
         },
         comment: "ccc".to_string(),
         number_of_files: 100,
-        creator: Some(UserIdentity {
-            username: "databend".to_string(),
-            hostname: "%".to_string(),
-        }),
+        creator: Some(UserIdentity::new("databend")),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
     common::test_pb_from_to(func_name!(), want())?;

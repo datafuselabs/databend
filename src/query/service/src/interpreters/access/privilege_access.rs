@@ -198,7 +198,7 @@ impl PrivilegeAccess {
                                 privileges,
                                 catalog_name,
                                 db_name,
-                                &current_user.identity().display(),
+                                &current_user.identity().identity(),
                                 roles_name,
                             )));
                         }
@@ -296,7 +296,7 @@ impl PrivilegeAccess {
                                         catalog_name,
                                         db_name,
                                         table_name,
-                                        &current_user.identity().display(),
+                                        &current_user.identity().identity(),
                                         roles_name,
                                     )));
                                 }
@@ -414,7 +414,7 @@ impl PrivilegeAccess {
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]",
                         privilege,
                         grant_object,
-                        &current_user.identity().display(),
+                        &current_user.identity().identity(),
                         roles_name,
                     ))),
                 }
@@ -492,7 +492,7 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
-        let (identity, grant_set) = (user.identity().display().to_string(), user.grants);
+        let (identity, grant_set) = (user.identity().identity().to_string(), user.grants);
 
         let enable_experimental_rbac_check = self
             .ctx

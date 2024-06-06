@@ -58,7 +58,7 @@ async fn get_status(ep: &Route) -> InstanceStatus {
 async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>> {
     let sql = "select sleep(3) from numbers(1)";
     let user = UserApiProvider::instance()
-        .get_user(&Tenant::new_literal("test"), UserIdentity::new("root", "%"))
+        .get_user(&Tenant::new_literal("test"), UserIdentity::new("root"))
         .await?;
     query_ctx
         .get_current_session()

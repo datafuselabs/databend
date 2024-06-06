@@ -68,7 +68,7 @@ async fn test_network_policy() -> Result<()> {
         .add_user(&tenant, user_info, &CreateOption::Create)
         .await?;
 
-    let user = UserIdentity::new(username, hostname);
+    let user = UserIdentity::new(username);
 
     // check get user with client ip
     let res = user_mgr

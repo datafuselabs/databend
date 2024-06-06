@@ -30,10 +30,10 @@ pub struct UserIdentity {
 impl UserIdentity {
     const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
 
-    pub fn new(name: impl ToString, host: impl ToString) -> Self {
+    pub fn new(name: impl ToString) -> Self {
         Self {
             username: name.to_string(),
-            hostname: host.to_string(),
+            hostname: "%".to_string(),
         }
     }
 
@@ -72,6 +72,11 @@ impl UserIdentity {
             kvapi::KeyBuilder::escape_specified(&self.hostname, &Self::ESCAPE_CHARS),
         )
     }
+
+    /// Identity is human readable, used to record log or err message.
+    pub fn identity(&self) -> impl fmt::Display {
+        format!("'{}'@'{}'", &self.username, &self.hostname)
+    }
 }
 
 impl KeyCodec for UserIdentity {
@@ -88,6 +93,6 @@ impl KeyCodec for UserIdentity {
 
 impl From<databend_common_ast::ast::UserIdentity> for UserIdentity {
     fn from(user: databend_common_ast::ast::UserIdentity) -> Self {
-        UserIdentity::new(user.username, user.hostname)
+        UserIdentity::new(user.username)
     }
 }

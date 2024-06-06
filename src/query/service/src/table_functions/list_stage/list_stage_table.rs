@@ -193,7 +193,7 @@ impl ListStagesSource {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &self.ctx.get_current_user()?.identity().display(),
+                    &self.ctx.get_current_user()?.identity().identity(),
                 )));
             }
         }
@@ -226,10 +226,7 @@ fn make_block(files: &[StageFileInfo]) -> DataBlock {
                 .to_string()
         })
         .collect();
-    let creators: Vec<Option<String>> = files
-        .iter()
-        .map(|file| file.creator.as_ref().map(|c| c.display().to_string()))
-        .collect();
+    let creators: Vec<Option<String>> = vec![None; files.len()];
 
     DataBlock::new_from_columns(vec![
         StringType::from_data(names),

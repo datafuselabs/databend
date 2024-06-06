@@ -99,7 +99,7 @@ impl FlightSqlServiceImpl {
 
         let tenant = session.get_current_tenant();
 
-        let identity = UserIdentity::new(&user, "%");
+        let identity = UserIdentity::new(&user);
         let user = UserApiProvider::instance()
             .get_user_with_client_ip(&tenant, identity.clone(), client_ip)
             .await

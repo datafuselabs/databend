@@ -80,5 +80,5 @@ UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_sch
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
-Error: APIError: ResponseError with 2201: User 'role3%40test'@'%' does not exist.
+Error: APIError: ResponseError with 2201: User 'role3@test'@'%' does not exist.
 === clean up ===

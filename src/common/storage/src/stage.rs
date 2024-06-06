@@ -23,7 +23,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::principal::UserIdentity;
 use futures::stream;
 use futures::Stream;
 use futures::StreamExt;
@@ -51,7 +50,6 @@ pub struct StageFileInfo {
     pub last_modified: DateTime<Utc>,
     pub etag: Option<String>,
     pub status: StageFileStatus,
-    pub creator: Option<UserIdentity>,
 }
 
 impl StageFileInfo {
@@ -63,7 +61,6 @@ impl StageFileInfo {
             last_modified: meta.last_modified().unwrap_or_default(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
-            creator: None,
         }
     }
 
@@ -420,6 +417,5 @@ fn stdin_stage_info() -> StageFileInfo {
         last_modified: Utc::now(),
         etag: None,
         status: StageFileStatus::NeedCopy,
-        creator: None,
     }
 }

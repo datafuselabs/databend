@@ -21,8 +21,8 @@ pub enum PrincipalIdentity {
 }
 
 impl PrincipalIdentity {
-    pub fn user(name: String, host: String) -> Self {
-        PrincipalIdentity::User(UserIdentity::new(name, host))
+    pub fn user(name: String) -> Self {
+        PrincipalIdentity::User(UserIdentity::new(name))
     }
 
     pub fn role(name: String) -> Self {

@@ -90,7 +90,7 @@ mod add {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_add_user() -> databend_common_exception::Result<()> {
         let test_user_name = "test_user";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let v = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
@@ -167,7 +167,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_seq_match() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -193,7 +193,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_do_not_care_seq() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -218,7 +218,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -233,10 +233,7 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
         let res = user_mgr
-            .get_user(
-                UserIdentity::new(test_user_name, test_hostname),
-                MatchSeq::GE(0),
-            )
+            .get_user(UserIdentity::new(test_user_name), MatchSeq::GE(0))
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
@@ -246,7 +243,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist_seq_mismatch() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -261,10 +258,7 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
         let res = user_mgr
-            .get_user(
-                UserIdentity::new(test_user_name, test_hostname),
-                MatchSeq::Exact(2),
-            )
+            .get_user(UserIdentity::new(test_user_name), MatchSeq::Exact(2))
             .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
@@ -274,7 +268,7 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_invalid_user_info_encoding() -> databend_common_exception::Result<()> {
         let test_user_name = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -288,10 +282,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_user(
-            UserIdentity::new(test_user_name, test_hostname),
-            MatchSeq::GE(0),
-        );
+        let res = user_mgr.get_user(UserIdentity::new(test_user_name), MatchSeq::GE(0));
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::ILLEGAL_USER_INFO_FORMAT
@@ -401,7 +392,7 @@ mod drop {
     async fn test_drop_user_normal_case() -> databend_common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_user = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user, test_hostname))?
@@ -417,7 +408,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
+        let res = user_mgr.drop_user(UserIdentity::new(test_user), MatchSeq::GE(1));
         assert!(res.await.is_ok());
 
         Ok(())
@@ -427,7 +418,7 @@ mod drop {
     async fn test_drop_user_unknown() -> databend_common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_user = "test";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user, test_hostname))?
@@ -443,7 +434,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
+        let res = user_mgr.drop_user(UserIdentity::new(test_user), MatchSeq::GE(1));
         assert_eq!(res.await.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
         Ok(())
     }
@@ -479,7 +470,7 @@ mod update {
 
     async fn test_update_user_normal(full: bool) -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
@@ -531,7 +522,7 @@ mod update {
     async fn test_update_user_with_conflict_when_writing_back()
     -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -549,7 +540,7 @@ mod update {
         let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
 
         let res = user_mgr.update_user_with(
-            UserIdentity::new(test_user_name, test_hostname),
+            UserIdentity::new(test_user_name),
             MatchSeq::GE(0),
             |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info(false)), None),
         );
@@ -560,7 +551,7 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_with_complete() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?
@@ -609,7 +600,7 @@ mod set_user_privileges {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_grant_user_privileges() -> databend_common_exception::Result<()> {
         let test_user_name = "name";
-        let test_hostname = "localhost";
+        let test_hostname = "%";
         let test_key = format!(
             "__fd_users/tenant1/{}",
             escape_for_key(&format_user_key(test_user_name, test_hostname))?

@@ -422,7 +422,10 @@ pub(crate) fn test_stage_file() -> mt::principal::StageFile {
         NaiveDate::from_ymd_opt(2022, 9, 16).unwrap(),
         NaiveTime::from_hms_opt(0, 1, 2).unwrap(),
     );
-    let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+    let user_id = mt::principal::UserIdentity {
+        username: "datafuselabs".to_string(),
+        hostname: "datafuselabs.rs".to_string(),
+    };
     mt::principal::StageFile {
         path: "/path/to/stage".to_string(),
         size: 233,
@@ -809,7 +812,10 @@ fn test_old_stage_file() -> anyhow::Result<()> {
             NaiveDate::from_ymd_opt(2022, 9, 16).unwrap(),
             NaiveTime::from_hms_opt(0, 1, 2).unwrap(),
         );
-        let user_id = mt::principal::UserIdentity::new("datafuselabs", "datafuselabs.rs");
+        let user_id = mt::principal::UserIdentity {
+            username: "datafuselabs".to_string(),
+            hostname: "datafuselabs.rs".to_string(),
+        };
         let want = mt::principal::StageFile {
             path: "/path/to/stage".to_string(),
             size: 233,

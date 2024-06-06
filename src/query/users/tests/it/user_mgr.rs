@@ -81,7 +81,7 @@ async fn test_user_manager() -> Result<()> {
     // get user hostname.
     {
         let user_info = user_mgr
-            .get_user(&tenant, UserIdentity::new(username, hostname))
+            .get_user(&tenant, UserIdentity::new(username))
             .await?;
         assert_eq!(hostname, user_info.hostname);
         assert_eq!(pwd.as_bytes(), user_info.auth_info.get_password().unwrap());
@@ -90,7 +90,7 @@ async fn test_user_manager() -> Result<()> {
     // drop.
     {
         user_mgr
-            .drop_user(&tenant, UserIdentity::new(username, hostname), false)
+            .drop_user(&tenant, UserIdentity::new(username), false)
             .await?;
         let users = user_mgr.get_users(&tenant).await?;
         assert_eq!(0, users.len());
@@ -99,7 +99,7 @@ async fn test_user_manager() -> Result<()> {
     // repeat drop same user not with if exist.
     {
         let res = user_mgr
-            .drop_user(&tenant, UserIdentity::new(username, hostname), false)
+            .drop_user(&tenant, UserIdentity::new(username), false)
             .await;
         assert!(res.is_err());
     }
@@ -107,7 +107,7 @@ async fn test_user_manager() -> Result<()> {
     // repeat drop same user with if exist.
     {
         let res = user_mgr
-            .drop_user(&tenant, UserIdentity::new(username, hostname), true)
+            .drop_user(&tenant, UserIdentity::new(username), true)
             .await;
         assert!(res.is_ok());
     }
@@ -228,7 +228,7 @@ async fn test_user_manager() -> Result<()> {
         let not_exist = user_mgr
             .update_user(
                 &tenant,
-                UserIdentity::new("user", hostname),
+                UserIdentity::new("user"),
                 Some(auth_info.clone()),
                 None,
             )

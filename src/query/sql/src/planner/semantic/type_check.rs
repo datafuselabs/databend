@@ -2900,7 +2900,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(user) => Some(
                     self.resolve(&Expr::Literal {
                         span,
-                        value: Literal::String(user.identity().display().to_string()),
+                        value: Literal::String(user.identity().identity().to_string()),
                     })
                     .await,
                 ),

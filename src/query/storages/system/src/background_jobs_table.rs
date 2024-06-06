@@ -131,7 +131,7 @@ impl AsyncSystemTable for BackgroundJobTable {
             );
             message.push(job.message);
             last_updated.push(job.last_updated.map(|t| t.timestamp_micros()));
-            creator.push(job.creator.map(|x| x.display().to_string()));
+            creator.push(job.creator.map(|x| x.identity().to_string()));
             create_time.push(job.created_at.timestamp_micros());
         }
 

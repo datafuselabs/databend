@@ -220,7 +220,7 @@ impl AsyncSource for InspectParquetSource {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
                     stage_info.stage_name.clone(),
-                    &self.ctx.get_current_user()?.identity().display(),
+                    &self.ctx.get_current_user()?.identity().identity(),
                 )));
             }
         }

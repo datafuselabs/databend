@@ -108,7 +108,7 @@ impl AsyncSystemTable for StagesTable {
                     number_of_files.push(None);
                 }
             };
-            creator.push(stage.creator.map(|c| c.display().to_string()));
+            creator.push(stage.creator.map(|c| c.identity().to_string()));
             created_on.push(stage.created_on.timestamp_micros());
             comment.push(stage.comment.clone());
         }

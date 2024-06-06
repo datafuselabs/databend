@@ -299,7 +299,7 @@ async fn test_password_policy() -> Result<()> {
     assert!(res.is_ok());
 
     // check login password success
-    let identity = UserIdentity::new(username, hostname);
+    let identity = UserIdentity::new(username);
     let res = user_mgr
         .check_login_password(&tenant, identity.clone(), &user_info)
         .await;

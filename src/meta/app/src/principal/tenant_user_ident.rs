@@ -29,8 +29,8 @@ impl TenantUserIdent {
         Self::new_generic(tenant, user)
     }
 
-    pub fn new_user_host(tenant: impl ToTenant, user: impl ToString, host: impl ToString) -> Self {
-        Self::new(tenant, UserIdentity::new(user, host))
+    pub fn new_user_host(tenant: impl ToTenant, user: impl ToString) -> Self {
+        Self::new(tenant, UserIdentity::new(user))
     }
 }
 
@@ -70,7 +70,11 @@ mod tests {
 
     fn test_format_parse(user: &str, host: &str, expect: &str) {
         let tenant = Tenant::new_literal("test_tenant");
-        let user_ident = UserIdentity::new(user, host);
+        let user_ident = UserIdentity {
+            username: user.to_string(),
+            hostname: host.to_string(),
+        };
+
         let tenant_user_ident = TenantUserIdent::new(tenant, user_ident);
 
         let key = tenant_user_ident.to_string_key();

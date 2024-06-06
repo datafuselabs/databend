@@ -274,7 +274,7 @@ async fn show_account_grants(
     let (grant_to, name, identity, grant_set) = match grant_type {
         "user" => {
             let user = UserApiProvider::instance()
-                .get_user(&tenant, UserIdentity::new(name, "%"))
+                .get_user(&tenant, UserIdentity::new(name))
                 .await?;
             if current_user.identity().username != name && !has_grant_priv {
                 let mut roles = current_user.grants.roles();
@@ -282,14 +282,14 @@ async fn show_account_grants(
 
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    &current_user.identity().identity(),
                     roles.join(",")
                 )));
             }
             (
                 "USER".to_string(),
                 user.name.to_string(),
-                user.identity().display().to_string(),
+                user.identity().identity().to_string(),
                 user.grants,
             )
         }
@@ -299,7 +299,7 @@ async fn show_account_grants(
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    &current_user.identity().identity(),
                     roles.join(",")
                 )));
             }

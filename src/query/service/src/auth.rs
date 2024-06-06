@@ -90,7 +90,7 @@ impl AuthMgr {
                 };
 
                 let tenant = session.get_current_tenant();
-                let identity = UserIdentity::new(&user_name, "%");
+                let identity = UserIdentity::new(&user_name);
 
                 // create a new user for this identity if not exists
                 let user = match user_api
@@ -135,7 +135,7 @@ impl AuthMgr {
                 client_ip,
             } => {
                 let tenant = session.get_current_tenant();
-                let identity = UserIdentity::new(n, "%");
+                let identity = UserIdentity::new(n);
                 let user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
