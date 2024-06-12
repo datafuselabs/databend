@@ -167,5 +167,52 @@ SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
 ----
 1
 
+query
+SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k3', NULL)
+----
+{'k1':'v1','k2':'v2','k3':NULL}
+
+query
+SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'new_v1')
+----
+{'k1':'new_v1','k2':'v2'}
+
+query
+SELECT map_insert({}, 'k1', 'v1')
+----
+{'k1':'v1'}
+
+query
+SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k2', 'v3', true)
+----
+{'k1':'v1','k2':'v3'}
+
+query
+SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k2', 'v3', false)
+----
+{'k1':'v1','k2':'v2'}
+
+statement ok
+CREATE TABLE map_insert_test(col_str Map(String, String Null) Not Null, col_int Map(String, Int Null) Null);
+
+statement ok
+INSERT INTO map_insert_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, NULL);
+
+query
+SELECT map_insert(col_str, 'k1', 'k100', true) as update_str, map_insert(col_str, 'k1', 'k100', false) as origin_str
+FROM map_insert_test;
+----
+{'k1':'k100','k2':'v2','k3':NULL} {'k1':'v1','k2':'v2','k3':NULL}
+{'k5':'v5','k6':'v6','k1':'k100'} {'k5':'v5','k6':'v6','k1':'k100'}
+{'k1':'k100'} {'k1':'k100'}
+
+query
+SELECT map_insert(col_int, 'k1', 100)
+FROM map_insert_test;
+----
+{'a':10,'b':20,'k1':100}
+{'d':40,'e':NULL,'f':50,'k1':100}
+{'k1':100}
+
 statement ok
 DROP DATABASE map_func_test

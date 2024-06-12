@@ -617,3 +617,123 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------+
 
 
+ast            : map_insert({}, 'k1', 'v1')
+raw expr       : map_insert(map(array(), array()), 'k1', 'v1')
+checked expr   : map_insert<T0=String, T1=String><Map(Nothing), T0, T1>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), "k1", "v1")
+optimized expr : {"k1":"v1"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k1"}], [{"v1"..="v1"}]}
+output         : {'k1':'v1'}
+
+
+ast            : map_insert({'k1': 'v1'}, 'k2', 'v2')
+raw expr       : map_insert(map(array('k1'), array('v1')), 'k2', 'v2')
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k1"), array<T0=String><T0>("v1")) AS Map(String, String) NULL), "k2", "v2")
+optimized expr : {"k1":"v1", "k2":"v2"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
+output         : {'k1':'v1', 'k2':'v2'}
+
+
+ast            : map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', false)
+raw expr       : map_insert(map(array('k1', 'k2'), array('v1', 'v2')), 'k1', 'v10', false)
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k1", "v10", false)
+optimized expr : {"k1":"v1", "k2":"v2"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k2"}], [{"v1"..="v2"}]}
+output         : {'k1':'v1', 'k2':'v2'}
+
+
+ast            : map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'v10', true)
+raw expr       : map_insert(map(array('k1', 'k2'), array('v1', 'v2')), 'k1', 'v10', true)
+checked expr   : map_insert<T0=String, T1=String><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k1", "v10", true)
+optimized expr : {"k1":"v10", "k2":"v2"}
+output type    : Map(String, String)
+output domain  : {[{"k1"..="k2"}], [{"v10"..="v2"}]}
+output         : {'k1':'v10', 'k2':'v2'}
+
+
+ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'k1', 'v10')
+raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'k1', 'v10')
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", CAST("v10" AS String NULL))
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1) NULL, T0, T1>(CAST(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)) AS Map(String, String NULL) NULL), "k1", "v10")
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------------------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output                                     |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------------------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Map(String, String NULL)                   |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown                                    |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | {'a':'v1', 'd':'v4', 'x':'v6', 'k1':'v10'} |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | {'b':'v2', 'e':'v5', 'y':NULL, 'k1':'v10'} |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | {'c':'v3', 'f':NULL, 'z':'v7', 'k1':'v10'} |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                      |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                                                    |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                                                    |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                                                    |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                                                                                                                                                                                           |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                                                                                                                                                                               |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                                                                                                                                                                               |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x6164786b316265796b3163667a6b31, offsets: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15] }, NullableColumn { column: StringColumn { data: 0x7631763476367631307632763576313076337637763130, offsets: [0, 2, 4, 6, 9, 11, 13, 13, 16, 18, 18, 20, 23] }, validity: [0b10111111, 0b____1101] }]), offsets: [0, 4, 8, 12] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', true)
+raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a', 'v10', true)
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", CAST("v10" AS String NULL), true)
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", "v10", true)
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output                                    |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Map(String, String NULL)                  |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown                                   |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | {'a':'v10', 'd':'v4', 'x':'v6'}           |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | {'b':'v2', 'e':'v5', 'y':NULL, 'a':'v10'} |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | {'c':'v3', 'f':NULL, 'z':'v7', 'a':'v10'} |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                              |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                              |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                              |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                                                                                                                                                                     |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                                                                                                                                                         |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                                                                                                                                                         |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x6164786265796163667a61, offsets: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, NullableColumn { column: StringColumn { data: 0x763130763476367632763576313076337637763130, offsets: [0, 3, 5, 7, 9, 11, 11, 14, 16, 16, 18, 21] }, validity: [0b11011111, 0b_____110] }]), offsets: [0, 3, 7, 11] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : map_insert(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'v10', false)
+raw expr       : map_insert(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a', 'v10', false)
+checked expr   : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", CAST("v10" AS String NULL), false)
+optimized expr : map_insert<T0=String, T1=String NULL><Map(T0, T1), T0, T1, Boolean>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", "v10", false)
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output                                    |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Map(String, String NULL)                  |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown                                   |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | {'a':'v1', 'd':'v4', 'x':'v6'}            |
+| Row 1  | 'b'         | 'e'         | 'y'         | 'v2'          | 'v5'                 | NULL                 | {'b':'v2', 'e':'v5', 'y':NULL, 'a':'v10'} |
+| Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                 | 'v7'                 | {'c':'v3', 'f':NULL, 'z':'v7', 'a':'v10'} |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+-------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                              |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                            |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                            |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                                                                                                                                                            |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                                                                                                                                                                   |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                                                                                                                                                       |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                                                                                                                                                       |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x6164786265796163667a61, offsets: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, NullableColumn { column: StringColumn { data: 0x7631763476367632763576313076337637763130, offsets: [0, 2, 4, 6, 8, 10, 10, 13, 15, 15, 17, 20] }, validity: [0b11011111, 0b_____110] }]), offsets: [0, 3, 7, 11] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
