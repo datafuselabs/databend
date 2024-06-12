@@ -617,3 +617,46 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------+
 
 
+ast            : map_pick({'a':1,'b':2,'c':3}, 'a', 'b')
+raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), 'a', 'b')
+checked expr   : map_pick<Map(String, UInt8), String, String>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), "a", "b")
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
+ast            : map_pick({'a':1,'b':2,'c':3}, ['a', 'b'])
+raw expr       : map_pick(map(array('a', 'b', 'c'), array(1, 2, 3)), array('a', 'b'))
+checked expr   : map_pick<Map(String, UInt8), Array(String)>(map<T0=String, T1=UInt8><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>("a", "b", "c"), array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8)), array<T0=String><T0, T0>("a", "b"))
+optimized expr : {"a":1_u8, "b":2_u8}
+output type    : Map(String, UInt8)
+output domain  : {[{"a"..="b"}], [{1..=2}]}
+output         : {'a':1, 'b':2}
+
+
+ast            : map_pick(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'a', 'b')
+raw expr       : map_pick(map(array(a_col::String, b_col::String, c_col::String), array(d_col::String NULL, e_col::String NULL, f_col::String NULL)), 'a', 'b')
+checked expr   : map_pick<Map(String, String NULL), String, String>(map<T0=String, T1=String NULL><Array(T0), Array(T1)>(array<T0=String><T0, T0, T0>(a_col, b_col, c_col), array<T0=String NULL><T0, T0, T0>(d_col, e_col, f_col)), "a", "b")
+evaluation:
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------+
+|        | a_col       | b_col       | c_col       | d_col         | e_col                | f_col                | Output                   |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------+
+| Type   | String      | String      | String      | String NULL   | String NULL          | String NULL          | Map(String, String NULL) |
+| Domain | {"a"..="c"} | {"d"..="f"} | {"x"..="z"} | {"v1"..="v3"} | {""..="v5"} ∪ {NULL} | {""..="v7"} ∪ {NULL} | Unknown                  |
+| Row 0  | 'a'         | 'd'         | 'x'         | 'v1'          | 'v4'                 | 'v6'                 | {'a':'v1', 'b':'v2'}     |
++--------+-------------+-------------+-------------+---------------+----------------------+----------------------+--------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a_col  | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                                                                                                                                        |
+| b_col  | StringColumn { data: 0x646566, offsets: [0, 1, 2, 3] }                                                                                                                                                        |
+| c_col  | StringColumn { data: 0x78797a, offsets: [0, 1, 2, 3] }                                                                                                                                                        |
+| d_col  | NullableColumn { column: StringColumn { data: 0x763176327633, offsets: [0, 2, 4, 6] }, validity: [0b_____111] }                                                                                               |
+| e_col  | NullableColumn { column: StringColumn { data: 0x76347635, offsets: [0, 2, 4, 4] }, validity: [0b_____011] }                                                                                                   |
+| f_col  | NullableColumn { column: StringColumn { data: 0x76367637, offsets: [0, 2, 2, 4] }, validity: [0b_____101] }                                                                                                   |
+| Output | ArrayColumn { values: Tuple([StringColumn { data: 0x6162, offsets: [0, 1, 2] }, NullableColumn { column: StringColumn { data: 0x76317632, offsets: [0, 2, 4] }, validity: [0b______11] }]), offsets: [0, 2] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

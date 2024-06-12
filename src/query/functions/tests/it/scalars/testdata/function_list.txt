@@ -2463,6 +2463,9 @@ Functions overloads:
 0 map_contains_key(Map(Nothing), T0) :: Boolean
 1 map_contains_key(Map(T0, T1), T0) :: Boolean
 2 map_contains_key(Map(T0, T1) NULL, T0 NULL) :: Boolean NULL
+0 map_pick(Map(Nothing), Array(Nothing)) :: Map(Nothing)
+1 map_pick(Map(T0, T1), Array(T0)) :: Map(T0, T1)
+2 map_pick(Map(T0, T1) NULL, Array(T0) NULL) :: Map(T0, T1) NULL
 0 map_keys(Map(Nothing)) :: Array(Nothing)
 1 map_keys(Map(T0, T1)) :: Array(T0)
 2 map_keys(Map(T0, T1) NULL) :: Array(T0) NULL

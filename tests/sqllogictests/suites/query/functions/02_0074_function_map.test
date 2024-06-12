@@ -167,5 +167,30 @@ SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
 ----
 1
 
+# Test map_pick function
+query
+SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, 'k1', 'k3')
+----
+{'k1':'v1','k3':NULL}
+
+query
+SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, '')
+----
+{}
+
+statement ok
+CREATE TABLE map_pick_test(col_str Map(String, String Null) Not Null, col_int Map(String, Int Null) Null)
+
+statement ok
+INSERT INTO map_pick_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50})
+
+query
+SELECT map_pick(col_str, 'k1', 'k3')
+FROM map_pick_test
+----
+{'k1':'v1','k3':NULL} {} {'a':10,'b':20}
+{} {} {}
+{} {} NULL
+
 statement ok
 DROP DATABASE map_func_test
