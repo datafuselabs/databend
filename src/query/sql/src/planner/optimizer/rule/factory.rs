@@ -17,6 +17,8 @@ use databend_common_exception::Result;
 use super::rewrite::RuleCommuteJoin;
 use super::rewrite::RuleEliminateEvalScalar;
 use super::rewrite::RuleFoldCountAggregate;
+use super::rewrite::RuleMergeWindow;
+use super::rewrite::RuleMergeWindowEvalScalar;
 use super::rewrite::RuleNormalizeScalarFilter;
 use super::rewrite::RulePushDownFilterAggregate;
 use super::rewrite::RulePushDownFilterEvalScalar;
@@ -91,6 +93,8 @@ impl RuleFactory {
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
+            RuleID::MergeWindow => Ok(Box::new(RuleMergeWindow::new())),
+            RuleID::MergeWindowEvalScalar => Ok(Box::new(RuleMergeWindowEvalScalar::new())),
         }
     }
 }

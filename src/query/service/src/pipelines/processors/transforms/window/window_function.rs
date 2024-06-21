@@ -96,7 +96,7 @@ impl Drop for WindowFuncAggImpl {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WindowFuncLagLeadImpl {
     pub arg: usize,
     pub default: LagLeadDefault,
@@ -237,32 +237,36 @@ impl WindowFunctionInfo {
 }
 
 impl WindowFunctionImpl {
-    pub(crate) fn try_create(window: WindowFunctionInfo) -> Result<Self> {
-        Ok(match window {
-            WindowFunctionInfo::Aggregate(agg, args) => {
-                let mut arena = Area::create();
-                let mut state_offset = Vec::with_capacity(1);
-                let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
-                let place: StateAddr = arena.alloc_layout(layout).into();
-                let place = place.next(state_offset[0]);
-                let agg = WindowFuncAggImpl {
-                    _arena: arena,
-                    agg,
-                    place,
-                    args,
-                };
-                agg.reset();
-                Self::Aggregate(agg)
-            }
-            WindowFunctionInfo::RowNumber => Self::RowNumber,
-            WindowFunctionInfo::Rank => Self::Rank,
-            WindowFunctionInfo::DenseRank => Self::DenseRank,
-            WindowFunctionInfo::PercentRank => Self::PercentRank,
-            WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
-            WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
-            WindowFunctionInfo::Ntile(func) => Self::Ntile(func),
-            WindowFunctionInfo::CumeDist => Self::CumeDist,
-        })
+    pub(crate) fn try_create(window: Vec<WindowFunctionInfo>) -> Result<Vec<Self>> {
+        let mut window_func_impl = vec![];
+        for window in window {
+            window_func_impl.push(match window {
+                WindowFunctionInfo::Aggregate(agg, args) => {
+                    let mut arena = Area::create();
+                    let mut state_offset = Vec::with_capacity(1);
+                    let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
+                    let place: StateAddr = arena.alloc_layout(layout).into();
+                    let place = place.next(state_offset[0]);
+                    let agg = WindowFuncAggImpl {
+                        _arena: arena,
+                        agg,
+                        place,
+                        args,
+                    };
+                    agg.reset();
+                    Self::Aggregate(agg)
+                }
+                WindowFunctionInfo::RowNumber => Self::RowNumber,
+                WindowFunctionInfo::Rank => Self::Rank,
+                WindowFunctionInfo::DenseRank => Self::DenseRank,
+                WindowFunctionInfo::PercentRank => Self::PercentRank,
+                WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
+                WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
+                WindowFunctionInfo::Ntile(func) => Self::Ntile(func),
+                WindowFunctionInfo::CumeDist => Self::CumeDist,
+            })
+        }
+        Ok(window_func_impl)
     }
 
     pub fn return_type(&self) -> Result<DataType> {

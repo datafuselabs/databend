@@ -48,9 +48,9 @@ use crate::TypeCheck;
 pub struct Window {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub index: IndexType,
+    pub index: Vec<IndexType>,
     pub input: Box<PhysicalPlan>,
-    pub func: WindowFunction,
+    pub func: Vec<WindowFunction>,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
@@ -62,10 +62,9 @@ impl Window {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
         fields.extend_from_slice(input_schema.fields());
-        fields.push(DataField::new(
-            &self.index.to_string(),
-            self.func.data_type()?,
-        ));
+        for (index, func) in self.index.iter().zip(self.func.iter()) {
+            fields.push(DataField::new(&index.to_string(), func.data_type()?));
+        }
         Ok(DataSchemaRefExt::create(fields))
     }
 }
@@ -161,9 +160,11 @@ impl PhysicalPlanBuilder {
 
         // The scalar items in window function is not replaced yet.
         // The will be replaced in physical plan builder.
-        window.arguments.iter().for_each(|item| {
-            required.extend(item.scalar.used_columns());
-            required.insert(item.index);
+        window.arguments.iter().for_each(|items| {
+            for item in items {
+                required.extend(item.scalar.used_columns());
+                required.insert(item.index);
+            }
         });
         window.partition_by.iter().for_each(|item| {
             required.extend(item.scalar.used_columns());
@@ -252,85 +253,94 @@ impl PhysicalPlanBuilder {
             .collect::<Vec<_>>();
         let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
 
-        let func = match &w.function {
-            WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
-                sig: AggregateFunctionSignature {
-                    name: agg.func_name.clone(),
-                    args: agg
-                        .args
-                        .iter()
-                        .map(|s| s.data_type())
-                        .collect::<Result<_>>()?,
-                    params: agg.params.clone(),
-                },
-                output_column: w.index,
-                arg_indices: agg
-                    .args
-                    .iter()
-                    .map(|arg| {
-                        if let ScalarExpr::BoundColumnRef(col) = arg {
+        let mut func = vec![];
+        for (i, f) in w.function.iter().enumerate() {
+            let function = match &f {
+                WindowFuncType::Aggregate(agg) => {
+                    WindowFunction::Aggregate(AggregateFunctionDesc {
+                        sig: AggregateFunctionSignature {
+                            name: agg.func_name.clone(),
+                            args: agg
+                                .args
+                                .iter()
+                                .map(|s| s.data_type())
+                                .collect::<Result<_>>()?,
+                            params: agg.params.clone(),
+                        },
+                        output_column: w.index[i],
+                        arg_indices: agg
+                            .args
+                            .iter()
+                            .map(|arg| {
+                                if let ScalarExpr::BoundColumnRef(col) = arg {
+                                    Ok(col.column.index)
+                                } else {
+                                    Err(ErrorCode::Internal(
+                                        "Aggregate function argument must be a BoundColumnRef"
+                                            .to_string(),
+                                    ))
+                                }
+                            })
+                            .collect::<Result<_>>()?,
+                        display: ScalarExpr::AggregateFunction(agg.clone())
+                            .as_expr()?
+                            .sql_display(),
+                    })
+                }
+                WindowFuncType::LagLead(lag_lead) => {
+                    let new_default = match &lag_lead.default {
+                        None => LagLeadDefault::Null,
+                        Some(d) => match d {
+                            box ScalarExpr::BoundColumnRef(col) => {
+                                LagLeadDefault::Index(col.column.index)
+                            }
+                            _ => unreachable!(),
+                        },
+                    };
+                    WindowFunction::LagLead(LagLeadFunctionDesc {
+                        is_lag: lag_lead.is_lag,
+                        offset: lag_lead.offset,
+                        return_type: *lag_lead.return_type.clone(),
+                        arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
                             Ok(col.column.index)
                         } else {
                             Err(ErrorCode::Internal(
-                                "Aggregate function argument must be a BoundColumnRef".to_string(),
+                                "Window's lag function argument must be a BoundColumnRef"
+                                    .to_string(),
                             ))
-                        }
+                        }?,
+                        default: new_default,
                     })
-                    .collect::<Result<_>>()?,
-                display: ScalarExpr::AggregateFunction(agg.clone())
-                    .as_expr()?
-                    .sql_display(),
-            }),
-            WindowFuncType::LagLead(lag_lead) => {
-                let new_default = match &lag_lead.default {
-                    None => LagLeadDefault::Null,
-                    Some(d) => match d {
-                        box ScalarExpr::BoundColumnRef(col) => {
-                            LagLeadDefault::Index(col.column.index)
-                        }
-                        _ => unreachable!(),
-                    },
-                };
-                WindowFunction::LagLead(LagLeadFunctionDesc {
-                    is_lag: lag_lead.is_lag,
-                    offset: lag_lead.offset,
-                    return_type: *lag_lead.return_type.clone(),
-                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
+                }
+
+                WindowFuncType::NthValue(func) => WindowFunction::NthValue(NthValueFunctionDesc {
+                    n: func.n,
+                    return_type: *func.return_type.clone(),
+                    arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
                         Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
-                            "Window's lag function argument must be a BoundColumnRef".to_string(),
+                            "Window's nth_value function argument must be a BoundColumnRef"
+                                .to_string(),
                         ))
                     }?,
-                    default: new_default,
-                })
-            }
-
-            WindowFuncType::NthValue(func) => WindowFunction::NthValue(NthValueFunctionDesc {
-                n: func.n,
-                return_type: *func.return_type.clone(),
-                arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
-                    Ok(col.column.index)
-                } else {
-                    Err(ErrorCode::Internal(
-                        "Window's nth_value function argument must be a BoundColumnRef".to_string(),
-                    ))
-                }?,
-            }),
-            WindowFuncType::Ntile(func) => WindowFunction::Ntile(NtileFunctionDesc {
-                n: func.n,
-                return_type: *func.return_type.clone(),
-            }),
-            WindowFuncType::RowNumber => WindowFunction::RowNumber,
-            WindowFuncType::Rank => WindowFunction::Rank,
-            WindowFuncType::DenseRank => WindowFunction::DenseRank,
-            WindowFuncType::PercentRank => WindowFunction::PercentRank,
-            WindowFuncType::CumeDist => WindowFunction::CumeDist,
-        };
+                }),
+                WindowFuncType::Ntile(func) => WindowFunction::Ntile(NtileFunctionDesc {
+                    n: func.n,
+                    return_type: *func.return_type.clone(),
+                }),
+                WindowFuncType::RowNumber => WindowFunction::RowNumber,
+                WindowFuncType::Rank => WindowFunction::Rank,
+                WindowFuncType::DenseRank => WindowFunction::DenseRank,
+                WindowFuncType::PercentRank => WindowFunction::PercentRank,
+                WindowFuncType::CumeDist => WindowFunction::CumeDist,
+            };
+            func.push(function);
+        }
 
         Ok(PhysicalPlan::Window(Window {
             plan_id: 0,
-            index: w.index,
+            index: w.index.clone(),
             input: Box::new(input),
             func,
             partition_by: partition_items,

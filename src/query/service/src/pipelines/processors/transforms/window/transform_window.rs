@@ -73,7 +73,7 @@ pub struct TransformWindow<T: Number> {
     state: ProcessorState,
     input_is_finished: bool,
 
-    func: WindowFunctionImpl,
+    funcs: Vec<WindowFunctionImpl>,
 
     partition_indices: Vec<usize>,
     // The second field indicate if the order by column is nullable.
@@ -505,128 +505,141 @@ impl<T: Number> TransformWindow<T> {
 
     #[inline]
     fn merge_result_of_current_row(&mut self) -> Result<()> {
-        match &self.func {
-            WindowFunctionImpl::Aggregate(agg) => {
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                agg.merge_result(builder)?;
-            }
-            WindowFunctionImpl::RowNumber => {
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_row_in_partition as u64,
-                )));
-            }
-            WindowFunctionImpl::Rank => {
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_rank as u64,
-                )));
-            }
-            WindowFunctionImpl::DenseRank => {
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(ScalarRef::Number(NumberScalar::UInt64(
-                    self.current_dense_rank as u64,
-                )));
-            }
-            WindowFunctionImpl::PercentRank => {
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                let percent = if self.partition_size <= 1 {
-                    0_f64
-                } else {
-                    ((self.current_rank - 1) as f64) / ((self.partition_size - 1) as f64)
-                };
-                builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
-            }
-            WindowFunctionImpl::LagLead(ll) => {
-                let value = if self.frame_start == self.frame_end {
-                    let default_value = match ll.default.clone() {
-                        LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => {
-                            let block =
-                                &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(col).value;
-                            value.index(self.current_row.row).unwrap().to_owned()
-                        }
+        for func in &self.funcs {
+            match &func {
+                WindowFunctionImpl::Aggregate(agg) => {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    agg.merge_result(builder)?;
+                }
+                WindowFunctionImpl::RowNumber => {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    builder.push(ScalarRef::Number(NumberScalar::UInt64(
+                        self.current_row_in_partition as u64,
+                    )));
+                }
+                WindowFunctionImpl::Rank => {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    builder.push(ScalarRef::Number(NumberScalar::UInt64(
+                        self.current_rank as u64,
+                    )));
+                }
+                WindowFunctionImpl::DenseRank => {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    builder.push(ScalarRef::Number(NumberScalar::UInt64(
+                        self.current_dense_rank as u64,
+                    )));
+                }
+                WindowFunctionImpl::PercentRank => {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    let percent = if self.partition_size <= 1 {
+                        0_f64
+                    } else {
+                        ((self.current_rank - 1) as f64) / ((self.partition_size - 1) as f64)
                     };
-                    default_value
-                } else {
-                    let block = &self
-                        .blocks
-                        .get(self.frame_start.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    let value = &block.get_by_offset(ll.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
-                };
+                    builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
+                }
+                WindowFunctionImpl::LagLead(ll) => {
+                    let value = if self.frame_start == self.frame_end {
+                        let default_value = match ll.default.clone() {
+                            LagLeadDefault::Null => Scalar::Null,
+                            LagLeadDefault::Index(col) => {
+                                let block =
+                                    &self.blocks[self.current_row.block - self.first_block].block;
+                                let value = &block.get_by_offset(col).value;
+                                value.index(self.current_row.row).unwrap().to_owned()
+                            }
+                        };
+                        default_value
+                    } else {
+                        let block = &self
+                            .blocks
+                            .get(self.frame_start.block - self.first_block)
+                            .unwrap()
+                            .block;
+                        let value = &block.get_by_offset(ll.arg).value;
+                        value.index(self.frame_start.row).unwrap().to_owned()
+                    };
 
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(value.as_ref());
-            }
-            WindowFunctionImpl::NthValue(func) => {
-                let value = if self.frame_start == self.frame_end {
-                    Scalar::Null
-                } else if let Some(mut n) = func.n {
-                    let mut cur = self.frame_start;
-                    // n is counting from 1
-                    while n > 1 && cur < self.frame_end {
-                        cur = self.advance_row(cur);
-                        n -= 1;
-                    }
-                    if cur != self.frame_end {
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    builder.push(value.as_ref());
+                }
+                WindowFunctionImpl::NthValue(func) => {
+                    let value = if self.frame_start == self.frame_end {
+                        Scalar::Null
+                    } else if let Some(mut n) = func.n {
+                        let mut cur = self.frame_start;
+                        // n is counting from 1
+                        while n > 1 && cur < self.frame_end {
+                            cur = self.advance_row(cur);
+                            n -= 1;
+                        }
+                        if cur != self.frame_end {
+                            let block =
+                                &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                            let col = block.get_by_offset(func.arg).to_column(block.num_rows());
+                            col.index(cur.row).unwrap().to_owned()
+                        } else {
+                            // No such row
+                            Scalar::Null
+                        }
+                    } else {
+                        // last_value
+                        let cur = self.goback_row(self.frame_end);
+                        debug_assert!(self.frame_start <= cur);
                         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
                         let col = block.get_by_offset(func.arg).to_column(block.num_rows());
                         col.index(cur.row).unwrap().to_owned()
+                    };
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    builder.push(value.as_ref());
+                }
+                WindowFunctionImpl::Ntile(ntile) => {
+                    let num_partition_rows = if self.partition_indices.is_empty() {
+                        let mut rows = 0;
+                        for i in self.frame_start.block..self.frame_end.block {
+                            let row_ptr = RowPtr { block: i, row: 0 };
+                            rows += self.block_rows(&row_ptr);
+                        }
+                        rows
                     } else {
-                        // No such row
-                        Scalar::Null
-                    }
-                } else {
-                    // last_value
-                    let cur = self.goback_row(self.frame_end);
-                    debug_assert!(self.frame_start <= cur);
-                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                    col.index(cur.row).unwrap().to_owned()
-                };
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(value.as_ref());
-            }
-            WindowFunctionImpl::Ntile(ntile) => {
-                let num_partition_rows = if self.partition_indices.is_empty() {
-                    let mut rows = 0;
-                    for i in self.frame_start.block..self.frame_end.block {
-                        let row_ptr = RowPtr { block: i, row: 0 };
-                        rows += self.block_rows(&row_ptr);
-                    }
-                    rows
-                } else {
-                    self.partition_size
-                };
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                let bucket = ntile.compute_nitle(self.current_row_in_partition, num_partition_rows);
-                builder.push(ScalarRef::Number(NumberScalar::UInt64(bucket as u64)));
-            }
-            WindowFunctionImpl::CumeDist => {
-                let cume_rows = {
-                    let mut rows = 0;
-                    let mut row = self.partition_start;
-                    while row < self.peer_group_end {
-                        row = self.advance_row(row);
-                        rows += 1;
-                    }
-                    rows
-                };
+                        self.partition_size
+                    };
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    let bucket =
+                        ntile.compute_nitle(self.current_row_in_partition, num_partition_rows);
+                    builder.push(ScalarRef::Number(NumberScalar::UInt64(bucket as u64)));
+                }
+                WindowFunctionImpl::CumeDist => {
+                    let cume_rows = {
+                        let mut rows = 0;
+                        let mut row = self.partition_start;
+                        while row < self.peer_group_end {
+                            row = self.advance_row(row);
+                            rows += 1;
+                        }
+                        rows
+                    };
 
-                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+                    let builder =
+                        &mut self.blocks[self.current_row.block - self.first_block].builder;
 
-                let cume_dist = if self.partition_size > 0 {
-                    cume_rows as f64 / self.partition_size as f64
-                } else {
-                    0_f64
-                };
-                builder.push(ScalarRef::Number(NumberScalar::Float64(cume_dist.into())));
-            }
-        };
+                    let cume_dist = if self.partition_size > 0 {
+                        cume_rows as f64 / self.partition_size as f64
+                    } else {
+                        0_f64
+                    };
+                    builder.push(ScalarRef::Number(NumberScalar::Float64(cume_dist.into())));
+                }
+            };
+        }
 
         Ok(())
     }
@@ -656,21 +669,23 @@ impl TransformWindow<u64> {
     pub fn try_create_rows(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
+        func: Vec<WindowFunctionInfo>,
         partition_indices: Vec<usize>,
         order_by: Vec<SortColumnDescription>,
         bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<Self> {
-        let func = WindowFunctionImpl::try_create(func)?;
+        let funcs = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
-        let is_ranking = matches!(
-            func,
-            WindowFunctionImpl::RowNumber
-                | WindowFunctionImpl::Rank
-                | WindowFunctionImpl::DenseRank
-        );
+        let is_ranking = funcs.iter().any(|f| {
+            matches!(
+                f,
+                WindowFunctionImpl::RowNumber
+                    | WindowFunctionImpl::Rank
+                    | WindowFunctionImpl::DenseRank
+            )
+        });
 
         let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
         let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
@@ -679,7 +694,7 @@ impl TransformWindow<u64> {
             input,
             output,
             state: ProcessorState::Consume,
-            func,
+            funcs,
             partition_indices,
             order_by,
             blocks: VecDeque::new(),
@@ -727,7 +742,7 @@ where T: Number + ResultTypeOfUnary
     pub fn try_create_range(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        func: WindowFunctionInfo,
+        func: Vec<WindowFunctionInfo>,
         partition_indices: Vec<usize>,
         order_by: Vec<SortColumnDescription>,
         bounds: (FrameBound<T>, FrameBound<T>),
@@ -736,12 +751,15 @@ where T: Number + ResultTypeOfUnary
         let (start_bound, end_bound) = bounds;
 
         let is_empty_frame = start_bound > end_bound;
-        let is_ranking = matches!(
-            func,
-            WindowFunctionImpl::RowNumber
-                | WindowFunctionImpl::Rank
-                | WindowFunctionImpl::DenseRank
-        );
+        // TODO : consider if window functions contains a rank func
+        let is_ranking = func.iter().any(|f| {
+            matches!(
+                f,
+                WindowFunctionImpl::RowNumber
+                    | WindowFunctionImpl::Rank
+                    | WindowFunctionImpl::DenseRank
+            )
+        });
 
         // If the window clause is a specific RANGE window, we should deal with the frame with all NULL values.
         let need_check_null_frame = if order_by.len() == 1 {
@@ -749,14 +767,16 @@ where T: Number + ResultTypeOfUnary
         } else {
             false
         };
-
-        let need_peer = matches!(func, WindowFunctionImpl::CumeDist);
+        // TODO : consider if window functions contains a cume_dist func
+        let need_peer = func
+            .iter()
+            .any(|f| matches!(f, WindowFunctionImpl::CumeDist));
 
         Ok(Self {
             input,
             output,
             state: ProcessorState::Consume,
-            func,
+            funcs: func,
             partition_indices,
             order_by,
             blocks: VecDeque::new(),
@@ -914,10 +934,12 @@ where T: Number + ResultTypeOfUnary
     }
 
     fn compute_on_frame(&mut self) -> Result<()> {
-        match &self.func {
-            WindowFunctionImpl::Aggregate(agg) => self.apply_aggregate(agg),
-            _ => Ok(()),
+        for func in &self.funcs {
+            if let WindowFunctionImpl::Aggregate(agg) = func {
+                self.apply_aggregate(agg)?
+            }
         }
+        Ok(())
     }
 
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
@@ -931,10 +953,12 @@ where T: Number + ResultTypeOfUnary
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         if let Some(data) = data {
             let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
+            for func in &self.funcs {
+                self.blocks.push_back(WindowBlock {
+                    block: data.convert_to_full(),
+                    builder: ColumnBuilder::with_capacity(&func.return_type()?, num_rows),
+                });
+            }
         }
 
         // Each loop will do:
@@ -1000,7 +1024,9 @@ where T: Number + ResultTypeOfUnary
 
                 if self.is_empty_frame && !self.is_null_frame {
                     // Non-NULL empty frame, no need to advance bounds.
-                    self.func.reset();
+                    for func in &self.funcs {
+                        func.reset();
+                    }
                 } else if !self.is_ranking {
                     self.advance_frame_start();
                     if !self.frame_started {
@@ -1024,8 +1050,8 @@ where T: Number + ResultTypeOfUnary
                     self.compute_on_frame()?;
                 }
 
+                // TODO calc other function
                 self.merge_result_of_current_row()?;
-
                 // 3.2
                 self.current_row = self.advance_row(self.current_row);
                 self.current_row_in_partition += 1;
@@ -1048,7 +1074,9 @@ where T: Number + ResultTypeOfUnary
             // start to new partition
             {
                 // reset function
-                self.func.reset();
+                for func in &self.funcs {
+                    func.reset();
+                }
 
                 // reset partition
                 self.partition_start = self.partition_end;
@@ -1298,7 +1326,7 @@ mod tests {
         TransformWindow::try_create_range(
             InputPort::create(),
             OutputPort::create(),
-            func,
+            vec![func],
             vec![],
             vec![SortColumnDescription {
                 offset: 0,
@@ -1320,7 +1348,7 @@ mod tests {
         TransformWindow::try_create_rows(
             InputPort::create(),
             OutputPort::create(),
-            func,
+            vec![func],
             vec![],
             vec![SortColumnDescription {
                 offset: 0,
@@ -1342,7 +1370,7 @@ mod tests {
         TransformWindow::try_create_rows(
             InputPort::create(),
             OutputPort::create(),
-            func,
+            vec![func],
             vec![0],
             vec![],
             bounds,
@@ -2190,7 +2218,7 @@ mod tests {
         let transform = TransformWindow::try_create_rows(
             input.clone(),
             output.clone(),
-            func,
+            vec![func],
             vec![0],
             vec![],
             bounds,

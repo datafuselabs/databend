@@ -228,7 +228,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::Window(Window {
             plan_id: plan.plan_id,
-            index: plan.index,
+            index: plan.index.clone(),
             input: Box::new(input),
             func: plan.func.clone(),
             partition_by: plan.partition_by.clone(),

@@ -848,8 +848,10 @@ impl<'a> Binder {
             }
             RelOperator::Window(window) => {
                 f.reset_finder();
-                for scalar_item in &window.arguments {
-                    f.visit(&scalar_item.scalar)?;
+                for scalar_items in &window.arguments {
+                    for scalar_item in scalar_items {
+                        f.visit(&scalar_item.scalar)?;
+                    }
                 }
                 for scalar_item in &window.partition_by {
                     f.visit(&scalar_item.scalar)?;

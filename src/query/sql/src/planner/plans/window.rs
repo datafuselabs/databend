@@ -54,9 +54,9 @@ pub struct Window {
 
     // aggregate scalar expressions, such as: sum(col1), count(*);
     // or general window functions, such as: row_number(), rank();
-    pub index: IndexType,
-    pub function: WindowFuncType,
-    pub arguments: Vec<ScalarItem>,
+    pub index: Vec<IndexType>,
+    pub function: Vec<WindowFuncType>,
+    pub arguments: Vec<Vec<ScalarItem>>,
 
     // partition by scalar expressions
     pub partition_by: Vec<ScalarItem>,
@@ -72,12 +72,18 @@ impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
 
-        used_columns.insert(self.index);
-        used_columns.extend(self.function.used_columns());
+        for index in &self.index {
+            used_columns.insert(*index);
+        }
+        for func in &self.function {
+            used_columns.extend(func.used_columns());
+        }
 
-        for arg in self.arguments.iter() {
-            used_columns.insert(arg.index);
-            used_columns.extend(arg.scalar.used_columns())
+        for args in self.arguments.iter() {
+            for arg in args {
+                used_columns.insert(arg.index);
+                used_columns.extend(arg.scalar.used_columns())
+            }
         }
 
         for part in self.partition_by.iter() {
@@ -150,7 +156,9 @@ impl Operator for Window {
 
         // Derive output columns
         let mut output_columns = input_prop.output_columns.clone();
-        output_columns.insert(self.index);
+        for index in &self.index {
+            output_columns.insert(*index);
+        }
 
         // Derive outer columns
         let outer_columns = input_prop

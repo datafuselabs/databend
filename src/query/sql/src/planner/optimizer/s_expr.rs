@@ -254,36 +254,41 @@ impl SExpr {
                 }
             }
             RelOperator::Window(op) => {
-                match &op.function {
-                    WindowFuncType::Aggregate(agg) => {
-                        for arg in &agg.args {
-                            get_udf_names(arg)?.iter().for_each(|udf| {
+                for func in &op.function {
+                    match func {
+                        WindowFuncType::Aggregate(agg) => {
+                            for arg in &agg.args {
+                                get_udf_names(arg)?.iter().for_each(|udf| {
+                                    udfs.insert(*udf);
+                                });
+                            }
+                        }
+                        WindowFuncType::LagLead(lag_lead) => {
+                            // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
+                            get_udf_names(&lag_lead.arg)?.iter().for_each(|udf| {
+                                udfs.insert(*udf);
+                            });
+                            if let Some(default) = &lag_lead.default {
+                                get_udf_names(default)?.iter().for_each(|udf| {
+                                    udfs.insert(*udf);
+                                });
+                            }
+                        }
+                        WindowFuncType::NthValue(nth) => {
+                            get_udf_names(&nth.arg)?.iter().for_each(|udf| {
                                 udfs.insert(*udf);
                             });
                         }
+                        _ => {}
                     }
-                    WindowFuncType::LagLead(lag_lead) => {
-                        // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
-                        get_udf_names(&lag_lead.arg)?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                        if let Some(default) = &lag_lead.default {
-                            get_udf_names(default)?.iter().for_each(|udf| {
-                                udfs.insert(*udf);
-                            });
-                        }
-                    }
-                    WindowFuncType::NthValue(nth) => {
-                        get_udf_names(&nth.arg)?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                    _ => {}
                 }
-                for arg in &op.arguments {
-                    get_udf_names(&arg.scalar)?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
+
+                for args in &op.arguments {
+                    for arg in args {
+                        get_udf_names(&arg.scalar)?.iter().for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
+                    }
                 }
                 for order_by in &op.order_by {
                     get_udf_names(&order_by.order_by_item.scalar)?
@@ -447,10 +452,10 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .partition_by
                     .iter()
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
-                || match &op.function {
+                || op.function.iter().any(|f| match f {
                     WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
                     _ => false,
-                }
+                })
         }
         RelOperator::ProjectSet(op) => op
             .srfs

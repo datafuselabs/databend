@@ -373,7 +373,6 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 
     s_expr =
         RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), &opt_ctx).run(&s_expr)?;
-
     Ok(s_expr)
 }
 

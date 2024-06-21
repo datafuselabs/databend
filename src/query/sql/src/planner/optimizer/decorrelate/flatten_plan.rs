@@ -726,7 +726,7 @@ impl SubqueryRewriter {
             Arc::new(
                 Window {
                     span: op.span,
-                    index: op.index,
+                    index: op.index.clone(),
                     function: op.function.clone(),
                     arguments: op.arguments.clone(),
                     partition_by,

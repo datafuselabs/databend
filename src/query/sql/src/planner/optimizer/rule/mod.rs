@@ -32,3 +32,4 @@ pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
 pub use transform_result::TransformResult;
 pub use utils::constant;
+pub use utils::window;

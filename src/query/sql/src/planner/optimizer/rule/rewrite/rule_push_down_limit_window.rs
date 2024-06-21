@@ -102,7 +102,8 @@ impl Rule for RulePushDownLimitWindow {
 fn should_apply(child: &SExpr, window: &LogicalWindow) -> Result<bool> {
     let child_window_exists = child_has_window(child)?;
     // ranking functions are frame insensitive
-    if is_ranking_function(&window.function) {
+    // TODO : consider if window functions contains a rank func
+    if window.function.iter().all(is_ranking_function) {
         Ok(!child_window_exists)
     } else {
         Ok(is_valid_frame(&window.frame) && !child_window_exists)
