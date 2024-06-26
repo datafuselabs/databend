@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -42,7 +41,6 @@ use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
 use databend_common_sql::ColumnSet;
 use itertools::Itertools;
-use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -70,14 +68,13 @@ pub struct HashJoinProbeState {
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
     pub(crate) processor_count: usize,
-    /// It will be increased by 1 when a new hash join probe processor is created.
-    /// After the processor finish probe hash table, it will be decreased by 1.
-    /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
-    /// When the counter is 0, processors will go to next phase's work
-    pub(crate) probe_workers: AtomicUsize,
-    /// Wait all `probe_workers` finish
+    /// The counters will be increased by 1 when a new hash join build processor is created.
+    /// After the processor finished WaitProbe/NextRound step, it will be decreased by 1.
+    /// When the counter is 0, it means all processors have finished their work.
+    pub(crate) wait_probe_counter: AtomicUsize,
+    pub(crate) next_round_counter: AtomicUsize,
+    /// The barrier is used to synchronize probe side processors.
     pub(crate) barrier: Barrier,
-    pub(crate) barrier_count: AtomicUsize,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -92,16 +89,6 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
-
-    /// Spill related states
-    /// Record spill workers
-    pub(crate) spill_workers: AtomicUsize,
-    /// Record final probe workers
-    pub(crate) final_probe_workers: AtomicUsize,
-    /// Probe spilled partitions set
-    pub(crate) spill_partitions: RwLock<HashSet<u8>>,
-    /// Wait all processors to restore spilled data, then go to new probe
-    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinProbeState {
@@ -116,7 +103,6 @@ impl HashJoinProbeState {
         join_type: &JoinType,
         processor_count: usize,
         barrier: Barrier,
-        restore_barrier: Barrier,
     ) -> Result<Self> {
         if matches!(
             join_type,
@@ -139,19 +125,15 @@ impl HashJoinProbeState {
             func_ctx,
             hash_join_state,
             processor_count,
-            probe_workers: AtomicUsize::new(0),
-            spill_workers: AtomicUsize::new(0),
-            final_probe_workers: Default::default(),
+            wait_probe_counter: AtomicUsize::new(0),
+            next_round_counter: AtomicUsize::new(0),
             barrier,
-            restore_barrier,
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
             merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
-            spill_partitions: Default::default(),
-            barrier_count: AtomicUsize::new(0),
         })
     }
 
@@ -389,89 +371,16 @@ impl HashJoinProbeState {
         ) && !with_conjunction
     }
 
-    pub fn probe_attach(&self) -> Result<usize> {
-        let mut worker_id = 0;
-        if self.hash_join_state.need_outer_scan()
-            || self.hash_join_state.need_mark_scan()
-            || self
-                .hash_join_state
-                .merge_into_need_target_partial_modified_scan()
-        {
-            worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
-        }
-        if self.hash_join_state.enable_spill {
-            worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
-            self.spill_workers.fetch_add(1, Ordering::Relaxed);
-        }
-
-        Ok(worker_id)
-    }
-
-    pub fn finish_final_probe(&self) -> Result<()> {
-        let old_count = self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            if self.join_type() != JoinType::Cross {
-                // If build side has spilled data, we need to wait build side to next round.
-                // Set partition id to `HashJoinState`
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    self.hash_join_state
-                        .partition_id
-                        .store(id as i8, Ordering::Relaxed);
-                } else {
-                    self.hash_join_state
-                        .partition_id
-                        .store(-1, Ordering::Relaxed);
-                }
-                info!(
-                    "next partition to read: {:?}, final probe done",
-                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
-                );
-            }
-            self.hash_join_state
-                .continue_build_watcher
-                .send(true)
-                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
-        }
-        Ok(())
+    pub fn probe_attach(&self) {
+        self.wait_probe_counter.fetch_add(1, Ordering::Relaxed);
+        self.next_round_counter.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn probe_done(&self) -> Result<()> {
-        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
-        }
-        Ok(())
-    }
-
-    pub fn finish_spill(&self) -> Result<()> {
-        self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
-        let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
-        if old_count == 1 {
-            if self.join_type() != JoinType::Cross {
-                // Set partition id to `HashJoinState`
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    self.hash_join_state
-                        .partition_id
-                        .store(id as i8, Ordering::Relaxed);
-                } else {
-                    self.hash_join_state
-                        .partition_id
-                        .store(-1, Ordering::Relaxed);
-                };
-                info!(
-                    "next partition to read: {:?}, probe spill done",
-                    self.hash_join_state.partition_id.load(Ordering::Relaxed)
-                );
-            }
-            self.hash_join_state
-                .continue_build_watcher
-                .send(true)
-                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
         Ok(())
     }

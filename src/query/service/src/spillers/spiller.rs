@@ -19,8 +19,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
-use byte_unit::Byte;
-use byte_unit::ByteUnit;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -33,7 +31,6 @@ use databend_common_expression::DataBlock;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
-use crate::spillers::spiller_buffer::SpillerBuffer;
 
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -79,7 +76,6 @@ pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
     _spiller_type: SpillerType,
-    spiller_buffer: SpillerBuffer,
     pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
@@ -103,7 +99,6 @@ impl Spiller {
             operator,
             config,
             _spiller_type: spiller_type,
-            spiller_buffer: SpillerBuffer::create(),
             join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -215,126 +210,22 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
-        debug_assert!(self.partition_location.contains_key(p_id));
-
-        let files = self.partition_location.get(p_id).unwrap().to_vec();
-        let mut spilled_data = Vec::with_capacity(files.len());
-        for file in files.iter() {
-            let block = self.read_spilled_file(file).await?;
-            if block.num_rows() != 0 {
-                spilled_data.push(block);
-            }
-        }
-
-        Ok(spilled_data)
-    }
-
-    #[async_backtrace::framed]
-    // Need to compute hashes for data block advanced.
-    // For probe, only need to spill rows in build spilled partitions.
-    // For left-related join, need to record rows not in build spilled partitions.
-    pub(crate) async fn spill_input(
-        &mut self,
-        data_block: DataBlock,
-        hashes: &[u64],
-        left_related_join: bool,
-        spilled_partitions: Option<&HashSet<u8>>,
-    ) -> Result<Option<DataBlock>> {
-        // Save the row index which is not spilled.
-        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
-        // Key is partition, value is row indexes
-        let mut partition_rows = HashMap::new();
-        // Classify rows to spill or not spill.
-        for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id =
-                get_partition_id(*hash as usize, self.join_spilling_partition_bits) as u8;
-            if let Some(spilled_partitions) = spilled_partitions {
-                if !spilled_partitions.contains(&partition_id) {
-                    if left_related_join {
-                        unspilled_row_index.push(row_idx);
-                    }
-                    continue;
+    pub async fn read_spilled_partition(&mut self, p_id: &u8) -> Result<Vec<DataBlock>> {
+        if let Some(files) = self.partition_location.get(p_id) {
+            let mut spilled_data = Vec::with_capacity(files.len());
+            for file in files.iter() {
+                let block = self.read_spilled_file(file).await?;
+                if block.num_rows() != 0 {
+                    spilled_data.push(block);
                 }
             }
-            // the row can be directly spilled to corresponding partition
-            partition_rows
-                .entry(partition_id)
-                .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                .or_insert(vec![row_idx]);
+            Ok(spilled_data)
+        } else {
+            Ok(vec![])
         }
-        for (p_id, row_indexes) in partition_rows.iter() {
-            let block_row_indexes = row_indexes
-                .iter()
-                .map(|idx| (0_u32, *idx as u32, 1_usize))
-                .collect::<Vec<_>>();
-            let block = DataBlock::take_blocks(
-                &[data_block.clone()],
-                &block_row_indexes,
-                row_indexes.len(),
-            );
-            if let Some((p_id, block)) = self
-                .spiller_buffer
-                .add_partition_unspilled_data(*p_id, block)?
-            {
-                self.spill_with_partition(p_id, block).await?;
-            }
-        }
-        if !left_related_join {
-            return Ok(None);
-        }
-        let unspilled_block_row_indexes = unspilled_row_index
-            .iter()
-            .map(|idx| (0_u32, *idx as u32, 1_usize))
-            .collect::<Vec<_>>();
-        Ok(Some(DataBlock::take_blocks(
-            &[data_block.clone()],
-            &unspilled_block_row_indexes,
-            unspilled_row_index.len(),
-        )))
-    }
-
-    // Spill the data in the buffer at the end of spilling
-    pub(crate) async fn spill_buffer(&mut self) -> Result<()> {
-        let partition_unspilled_data = self.spiller_buffer.partition_unspilled_data();
-        for (partition_id, blocks) in partition_unspilled_data.iter() {
-            if !blocks.is_empty() {
-                let merged_block = DataBlock::concat(blocks)?;
-                self.spill_with_partition(*partition_id, merged_block)
-                    .await?;
-            }
-        }
-        self.spiller_buffer.reset();
-        Ok(())
-    }
-
-    pub(crate) fn empty_buffer(&self) -> bool {
-        self.spiller_buffer.empty()
     }
 
     pub(crate) fn spilled_files(&self) -> Vec<String> {
         self.columns_layout.keys().cloned().collect()
     }
-
-    pub(crate) fn format_spill_info(&self) -> String {
-        // Using a single line to print how many bytes have been spilled and how many files have been spiled for each partition.
-        let mut info = String::new();
-        for (p_id, bytes) in self.partition_spilled_bytes.iter() {
-            // Covert bytes to GB
-            let spill_gb = Byte::from_unit(*bytes as f64, ByteUnit::B)
-                .unwrap()
-                .get_appropriate_unit(false)
-                .format(2);
-            let files = self.partition_location.get(p_id).unwrap().len();
-            info.push_str(&format!(
-                " [Partition {}: spilled {}, {} files] ",
-                p_id, spill_gb, files
-            ));
-        }
-        info
-    }
-}
-
-fn get_partition_id(hash: usize, bits: usize) -> usize {
-    (hash >> (32 - bits)) & ((1 << bits) - 1)
 }

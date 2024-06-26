@@ -16,7 +16,7 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicI8;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -43,6 +43,7 @@ use parking_lot::RwLock;
 use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
+use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
@@ -81,19 +82,14 @@ pub enum HashJoinHashTable {
 pub struct HashJoinState {
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
-    /// It will be increased by 1 when a new hash join build processor is created.
-    /// After the processor added its chunks to `HashTable`, it will be decreased by 1.
-    /// When the counter is 0, it means all hash join build processors have added their chunks to `HashTable`.
-    /// And the build phase is finished. Probe phase will start.
-    pub(crate) hash_table_builders: AtomicUsize,
-    /// After `hash_table_builders` is 0, send message to notify all probe processors.
-    /// There are three types' messages:
-    /// 1. **0**: it's the initial message used by creating the watch channel
-    /// 2. **1**: when build side finish (the first round), the last build processor will send 1 to channel, and wake up all probe processors.
-    /// 3. **2**: if spill is enabled, after the first round, probe needs to wait build again, the last build processor will send 2 to channel.
-    pub(crate) build_done_watcher: Sender<u8>,
+    /// After HashTable is built, send message to notify all probe processors.
+    /// There are three types of messages:
+    /// 1. FirstRound: it is the first time the hash table is constructed.
+    /// 2. Restored: the hash table is restored from the spilled data.
+    /// 3. Empty: the hash table is empty.
+    pub(crate) build_watcher: Sender<HashTableType>,
     /// A dummy receiver to make build done watcher channel open
-    pub(crate) _build_done_dummy_receiver: Receiver<u8>,
+    pub(crate) _build_done_dummy_receiver: Receiver<HashTableType>,
     /// Some description of hash join. Such as join type, join keys, etc.
     pub(crate) hash_join_desc: HashJoinDesc,
     /// Interrupt the build phase or probe phase.
@@ -108,19 +104,23 @@ pub struct HashJoinState {
     /// `BuildState` contains all data used in probe phase.
     pub(crate) build_state: SyncUnsafeCell<BuildState>,
 
-    /// Spill related states
-    /// Spill partition set
-    pub(crate) build_spilled_partitions: RwLock<HashSet<u8>>,
+    /// Spill related states.
+    /// It record whether spill has happened.
+    pub(crate) is_spill_happened: AtomicBool,
+    /// Spilled partition set, it contains all spilled partition sets from all build processors.
+    pub(crate) spilled_partitions: RwLock<HashSet<u8>>,
+    /// Spill partition bits, it is used to calculate the number of partitions.
+    pub(crate) spill_partition_bits: usize,
+    /// The next partition id to be restored.
+    pub(crate) partition_id: AtomicU8,
+    /// Whether need next round, if it is true, restore data from spilled data and start next round.
+    pub(crate) need_next_round: AtomicBool,
     /// Send message to notify all build processors to next round.
     /// Initial message is false, send true to wake up all build processors.
     pub(crate) continue_build_watcher: Sender<bool>,
     /// A dummy receiver to make continue build watcher channel open
     pub(crate) _continue_build_dummy_receiver: Receiver<bool>,
-    /// After all build processors finish spill, will pick a partition
-    /// tell build processors to restore data in the partition
-    /// If partition_id is -1, it means all partitions are spilled.
-    pub(crate) partition_id: AtomicI8,
-    pub(crate) enable_spill: bool,
+    pub(crate) _enable_spill: bool,
 
     pub(crate) merge_into_state: Option<SyncUnsafeCell<MergeIntoState>>,
 
@@ -148,12 +148,15 @@ impl HashJoinState {
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
-        let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
+        let (build_watcher, _build_done_dummy_receiver) = watch::channel(HashTableType::UnFinished);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
-        let mut enable_spill = false;
-        if ctx.get_settings().get_join_spilling_memory_ratio()? != 0 {
-            enable_spill = true;
+        let settings = ctx.get_settings();
+        let mut _enable_spill = false;
+        if settings.get_join_spilling_memory_ratio()? != 0 {
+            _enable_spill = true;
         }
+        let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
+
         let column_map = if let Some((_, column_map)) = build_side_cache_info {
             column_map
         } else {
@@ -161,8 +164,7 @@ impl HashJoinState {
         };
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
-            hash_table_builders: AtomicUsize::new(0),
-            build_done_watcher,
+            build_watcher,
             _build_done_dummy_receiver,
             hash_join_desc,
             interrupt: AtomicBool::new(false),
@@ -170,11 +172,14 @@ impl HashJoinState {
             probe_to_build: probe_to_build.to_vec(),
             row_space: RowSpace::new(ctx, build_schema, build_projections)?,
             build_state: SyncUnsafeCell::new(BuildState::new()),
-            build_spilled_partitions: Default::default(),
+            spilled_partitions: Default::default(),
             continue_build_watcher,
             _continue_build_dummy_receiver,
-            partition_id: AtomicI8::new(-2),
-            enable_spill,
+            partition_id: AtomicU8::new(0),
+            need_next_round: AtomicBool::new(false),
+            is_spill_happened: AtomicBool::new(false),
+            _enable_spill,
+            spill_partition_bits,
             merge_into_state: match enable_merge_into_optimization {
                 false => None,
                 true => Some(MergeIntoState::create_merge_into_state(
@@ -190,33 +195,22 @@ impl HashJoinState {
         self.interrupt.store(true, Ordering::Release);
     }
 
-    /// Used by hash join probe processors, wait for the first round build phase finished.
+    /// Used by hash join probe processors, wait for build phase finished.
     #[async_backtrace::framed]
-    pub async fn wait_first_round_build_done(&self) -> Result<()> {
-        let mut rx = self.build_done_watcher.subscribe();
-        if *rx.borrow() == 1_u8 {
-            return Ok(());
+    pub async fn wait_build_notify(&self) -> Result<HashTableType> {
+        let mut rx = self.build_watcher.subscribe();
+        if *rx.borrow() != HashTableType::UnFinished {
+            return Ok(*rx.borrow());
         }
         rx.changed()
             .await
-            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
-        debug_assert!(*rx.borrow() == 1_u8);
-        Ok(())
+            .map_err(|_| ErrorCode::TokioError("build_watcher's sender is dropped"))?;
+        let hash_table_type = *rx.borrow();
+        Ok(hash_table_type)
     }
 
-    /// Used by hash join probe processors, wait for build phase finished with spilled data
-    /// It's only be used when spilling is enabled.
-    #[async_backtrace::framed]
-    pub async fn wait_build_finish(&self) -> Result<()> {
-        let mut rx = self.build_done_watcher.subscribe();
-        if *rx.borrow() == 2_u8 {
-            return Ok(());
-        }
-        rx.changed()
-            .await
-            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
-        debug_assert!(*rx.borrow() == 2_u8);
-        Ok(())
+    pub fn join_type(&self) -> JoinType {
+        self.hash_join_desc.join_type.clone()
     }
 
     pub fn need_outer_scan(&self) -> bool {
@@ -238,9 +232,16 @@ impl HashJoinState {
         self.need_outer_scan() || self.need_mark_scan()
     }
 
-    pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
-        let mut spill_partition = self.build_spilled_partitions.write();
-        spill_partition.extend(partitions);
+    pub fn can_probe_first_round(&self) -> bool {
+        !matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAnti | JoinType::Full
+        )
+    }
+
+    pub fn add_spilled_partitions(&self, partitions: &HashSet<u8>) {
+        let mut spilled_partitions = self.spilled_partitions.write();
+        spilled_partitions.extend(partitions);
     }
 
     #[async_backtrace::framed]

@@ -28,12 +28,10 @@ use databend_common_sql::IndexType;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
-use crate::pipelines::processors::transforms::BuildSpillState;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
 use crate::pipelines::processors::transforms::MaterializedCteSink;
 use crate::pipelines::processors::transforms::MaterializedCteState;
-use crate::pipelines::processors::transforms::ProbeSpillState;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinDesc;
@@ -161,19 +159,9 @@ impl PipelineBuilder {
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if join_state.enable_spill {
-                Some(Box::new(BuildSpillState::create(
-                    self.ctx.clone(),
-                    build_state.clone(),
-                )?))
-            } else {
-                None
-            };
-
             Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(
                 input,
                 build_state.clone(),
-                spill_state,
             )?))
         };
         // for distributed merge into when source as build side.
@@ -192,7 +180,6 @@ impl PipelineBuilder {
 
         let max_block_size = self.settings.get_max_block_size()? as usize;
         let barrier = Barrier::new(self.main_pipeline.output_len());
-        let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             self.func_ctx.clone(),
@@ -203,7 +190,6 @@ impl PipelineBuilder {
             &join.join_type,
             self.main_pipeline.output_len(),
             barrier,
-            restore_barrier,
         )?);
         let mut has_string_column = false;
         for filed in join.output_schema()?.fields() {
@@ -211,21 +197,11 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if state.enable_spill {
-                Some(Box::new(ProbeSpillState::create(
-                    self.ctx.clone(),
-                    probe_state.clone(),
-                )?))
-            } else {
-                None
-            };
-
             Ok(ProcessorPtr::create(TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
                 probe_state.clone(),
-                probe_spill_state,
                 max_block_size,
                 self.func_ctx.clone(),
                 &join.join_type,
