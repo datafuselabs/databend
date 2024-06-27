@@ -20,6 +20,7 @@ mod write_settings;
 
 pub(crate) use block_writer::create_inverted_index_builders;
 pub use block_writer::serialize_block;
+pub use block_writer::serialize_blocks;
 pub use block_writer::write_data;
 pub use block_writer::BlockBuilder;
 pub use block_writer::BlockSerialization;

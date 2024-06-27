@@ -156,6 +156,42 @@ pub fn eval_aggr(
     Ok((builder.build(), data_type))
 }
 
+/// Evaluates a unary aggregation function for multiple discrete chunks.
+/// This function treats the input columns as multiple inputs to a unary function.
+pub fn eval_unary_aggr_for_discrete_chunks(
+    name: &str,
+    params: Vec<Scalar>,
+    columns: &[Column],
+    rows: usize,
+) -> Result<(Column, DataType)> {
+    if columns.is_empty() {
+        return Err(ErrorCode::BadArguments(format!(
+            "No input columns provided for aggregation function '{}'",
+            name
+        )));
+    }
+    if !columns
+        .iter()
+        .all(|x| x.data_type() == columns[0].data_type())
+    {
+        return Err(ErrorCode::BadArguments(
+            "All input columns must have the same data type".to_string(),
+        ));
+    }
+    let factory = AggregateFunctionFactory::instance();
+
+    let func = factory.get(name, params, vec![columns[0].data_type()])?;
+    let data_type = func.return_type()?;
+
+    let eval = EvalAggr::new(func.clone());
+    for col in columns.chunks(1) {
+        func.accumulate(eval.addr, col, None, rows)?;
+    }
+    let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
+    func.merge_result(eval.addr, &mut builder)?;
+    Ok((builder.build(), data_type))
+}
+
 #[inline]
 pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
     writer: &mut W,

@@ -68,7 +68,7 @@ fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
         StringType::from_data(vec!["aa", "aa", "bb"]),
     ]);
 
-    let r = gen_columns_statistics(&block, None, &schema)?;
+    let r = gen_columns_statistics(&[block.clone()], None, &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
@@ -95,7 +95,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exc
     let mut column_distinct_count = HashMap::new();
     column_distinct_count.insert(0, 3);
     column_distinct_count.insert(1, 2);
-    let r = gen_columns_statistics(&block, Some(column_distinct_count), &schema)?;
+    let r = gen_columns_statistics(&[block.clone()], Some(column_distinct_count), &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
@@ -129,7 +129,7 @@ fn test_ft_tuple_stats_block_stats() -> databend_common_exception::Result<()> {
 
     let block = DataBlock::new_from_columns(vec![column]);
 
-    let r = gen_columns_statistics(&block, None, &schema)?;
+    let r = gen_columns_statistics(&[block.clone()], None, &schema)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
@@ -151,7 +151,7 @@ fn test_ft_stats_col_stats_reduce() -> databend_common_exception::Result<()> {
         TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
-        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None, &schema))
+        .map(|b| gen_columns_statistics(&[b.clone().unwrap()], None, &schema))
         .collect::<databend_common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats);
     assert_eq!(3, r.len());
@@ -320,7 +320,7 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     for item in blocks {
         let block = item?;
-        let col_stats = gen_columns_statistics(&block, None, &schema)?;
+        let col_stats = gen_columns_statistics(&[block.clone()], None, &schema)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
@@ -528,7 +528,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
         let max_expr = max_col.0.index(0).unwrap();
 
         // generate the statistics of column
-        let stats_of_columns = gen_columns_statistics(&block, None, &schema).unwrap();
+        let stats_of_columns = gen_columns_statistics(&[block], None, &schema).unwrap();
 
         // check if the max value (untrimmed) is in degenerated condition:
         // - the length of string value is larger or equal than STRING_PREFIX_LEN

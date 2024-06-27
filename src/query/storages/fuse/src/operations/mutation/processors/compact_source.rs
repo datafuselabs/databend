@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -40,7 +41,6 @@ use crate::operations::mutation::SerializeDataMeta;
 use crate::operations::BlockMetaIndex;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
-
 enum State {
     ReadData(Option<PartInfoPtr>),
     Concat {
@@ -52,7 +52,30 @@ enum State {
     Finish,
 }
 
-pub struct CompactSource {
+#[derive(Clone)]
+pub struct LazyCompactedBlock(pub Vec<DataBlock>);
+
+impl Debug for LazyCompactedBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "lazy compacted {} blocks", self.0.len())
+    }
+}
+
+impl serde::Serialize for LazyCompactedBlock {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        unimplemented!("Unimplemented serialize LazyCompactedBlock")
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for LazyCompactedBlock {
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        unimplemented!("Unimplemented deserialize LazyCompactedBlock")
+    }
+}
+
+pub struct CompactSource<const IS_LAZY: bool> {
     state: State,
     ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
@@ -61,7 +84,7 @@ pub struct CompactSource {
     stream_ctx: Option<StreamContext>,
 }
 
-impl CompactSource {
+impl<const IS_LAZY: bool> CompactSource<IS_LAZY> {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         storage_format: FuseStorageFormat,
@@ -69,7 +92,7 @@ impl CompactSource {
         stream_ctx: Option<StreamContext>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(CompactSource {
+        Ok(ProcessorPtr::create(Box::new(Self {
             state: State::ReadData(None),
             ctx,
             block_reader,
@@ -81,7 +104,7 @@ impl CompactSource {
 }
 
 #[async_trait::async_trait]
-impl Processor for CompactSource {
+impl<const IS_LAZY: bool> Processor for CompactSource<IS_LAZY> {
     fn name(&self) -> String {
         "CompactSource".to_string()
     }
@@ -153,18 +176,32 @@ impl Processor for CompactSource {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                // concat blocks.
-                let block = if blocks.len() == 1 {
-                    blocks[0].convert_to_full()
-                } else {
-                    DataBlock::concat(&blocks)?
+                let new_block = match IS_LAZY {
+                    true => {
+                        let lazy_block = LazyCompactedBlock(
+                            blocks.into_iter().map(|x| x.convert_to_full()).collect(),
+                        );
+                        let meta =
+                            Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
+                                index,
+                                ClusterStatsGenType::Generally,
+                                Some(lazy_block),
+                            )));
+                        DataBlock::empty_with_meta(meta)
+                    }
+                    false => {
+                        // concat blocks.
+                        let block = if blocks.len() == 1 {
+                            blocks[0].convert_to_full()
+                        } else {
+                            DataBlock::concat(&blocks)?
+                        };
+                        let meta = Box::new(SerializeDataMeta::SerializeBlock(
+                            SerializeBlock::create(index, ClusterStatsGenType::Generally, None),
+                        ));
+                        block.add_meta(Some(meta))?
+                    }
                 };
-
-                let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
-                    index,
-                    ClusterStatsGenType::Generally,
-                )));
-                let new_block = block.add_meta(Some(meta))?;
 
                 let progress_values = ProgressValues {
                     rows: new_block.num_rows(),

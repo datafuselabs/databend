@@ -25,7 +25,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
-use databend_common_functions::aggregates::eval_aggr;
+use databend_common_functions::aggregates::eval_unary_aggr_for_discrete_chunks;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -35,13 +35,13 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 // 0.04f--> 10 buckets
 const DISTINCT_ERROR_RATE: f64 = 0.04;
 
-pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u64> {
-    let distinct_values = eval_aggr(
+pub fn calc_column_distinct_of_values(columns: &[Column], rows: usize) -> Result<u64> {
+    let distinct_values = eval_unary_aggr_for_discrete_chunks(
         "approx_count_distinct",
         vec![Scalar::Number(NumberScalar::Float64(
             DISTINCT_ERROR_RATE.into(),
         ))],
-        &[column.clone()],
+        columns,
         rows,
     )?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
@@ -53,17 +53,32 @@ pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseRes
 }
 
 pub fn gen_columns_statistics(
-    data_block: &DataBlock,
+    data_blocks: &[DataBlock],
     column_distinct_count: Option<HashMap<FieldIndex, usize>>,
     schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
-    let data_block = data_block.convert_to_full();
-    let rows = data_block.num_rows();
-
-    let leaves = get_traverse_columns_dfs(&data_block)?;
+    if data_blocks.is_empty() {
+        return Ok(statistics);
+    }
+    let rows = data_blocks[0].num_rows();
+    let first_block = data_blocks[0].convert_to_full();
+    let leaves_of_first_block: Vec<(Option<usize>, Column, DataType)> =
+        get_traverse_columns_dfs(&first_block)?;
+    let mut leaves: Vec<(Option<usize>, Vec<Column>, DataType)> = leaves_of_first_block
+        .into_iter()
+        .map(|(idx, col, data_type)| (idx, vec![col], data_type))
+        .collect();
+    for block in data_blocks.iter().skip(1) {
+        let block = block.convert_to_full();
+        let leaves_of_block: Vec<(Option<usize>, Column, DataType)> =
+            get_traverse_columns_dfs(&block)?;
+        for (leave, this_leave) in leaves.iter_mut().zip(leaves_of_block.into_iter()) {
+            leave.1.push(this_leave.1);
+        }
+    }
     let leaf_column_ids = schema.to_leaf_column_ids();
-    for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
+    for ((col_idx, cols, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         // Ignore the range index does not supported type.
         if !RangeIndex::supported_type(data_type) {
             continue;
@@ -78,8 +93,8 @@ pub fn gen_columns_statistics(
         let mut min = Scalar::Null;
         let mut max = Scalar::Null;
 
-        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
-        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
+        let (mins, _) = eval_unary_aggr_for_discrete_chunks("min", vec![], cols, rows)?;
+        let (maxs, _) = eval_unary_aggr_for_discrete_chunks("max", vec![], cols, rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.index(0) {
@@ -105,12 +120,15 @@ pub fn gen_columns_statistics(
             }
         }
 
-        let (is_all_null, bitmap) = col.validity();
-        let unset_bits = match (is_all_null, bitmap) {
-            (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.unset_bits(),
-            (false, None) => 0,
-        };
+        let mut unset_bits = 0;
+        for col in cols {
+            let (is_all_null, bitmap) = col.validity();
+            unset_bits += match (is_all_null, bitmap) {
+                (true, _) => rows,
+                (false, Some(bitmap)) => bitmap.unset_bits(),
+                (false, None) => 0,
+            };
+        }
 
         // use distinct count calculated by the xor hash function to avoid repetitive operation.
         let distinct_of_values = match (col_idx, &column_distinct_count) {
@@ -123,13 +141,13 @@ pub fn gen_columns_statistics(
                         *value as u64
                     }
                 } else {
-                    calc_column_distinct_of_values(col, rows)?
+                    calc_column_distinct_of_values(cols, rows)?
                 }
             }
-            (_, _) => calc_column_distinct_of_values(col, rows)?,
+            (_, _) => calc_column_distinct_of_values(cols, rows)?,
         };
 
-        let in_memory_size = col.memory_size() as u64;
+        let in_memory_size = cols.iter().map(|c| c.memory_size()).sum::<usize>() as u64;
         let col_stats = ColumnStatistics::new(
             min,
             max,

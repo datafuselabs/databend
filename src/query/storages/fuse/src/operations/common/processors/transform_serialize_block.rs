@@ -50,7 +50,7 @@ use crate::FuseTable;
 enum State {
     Consume,
     NeedSerialize {
-        block: DataBlock,
+        blocks: Vec<DataBlock>,
         stats_type: ClusterStatsGenType,
         index: Option<BlockMetaIndex>,
     },
@@ -227,7 +227,7 @@ impl Processor for TransformSerializeBlock {
                     Ok(Event::NeedConsume)
                 }
                 SerializeDataMeta::SerializeBlock(serialize_block) => {
-                    if input_data.is_empty() {
+                    if input_data.is_empty() && serialize_block.lazy_compacted_block.is_none() {
                         // delete a whole block, block level
                         let data_block = Self::mutation_logs(MutationLogEntry::DeletedBlock {
                             index: serialize_block.index,
@@ -236,8 +236,12 @@ impl Processor for TransformSerializeBlock {
                         Ok(Event::NeedConsume)
                     } else {
                         // replace the old block
+                        let blocks = serialize_block.lazy_compacted_block.map_or_else(
+                            || vec![input_data],
+                            |lazy_compacted_block| lazy_compacted_block.0,
+                        );
                         self.state = State::NeedSerialize {
-                            block: input_data,
+                            blocks,
                             stats_type: serialize_block.stats_type,
                             index: Some(serialize_block.index),
                         };
@@ -261,7 +265,7 @@ impl Processor for TransformSerializeBlock {
         } else {
             // append block
             self.state = State::NeedSerialize {
-                block: input_data,
+                blocks: vec![input_data],
                 stats_type: ClusterStatsGenType::Generally,
                 index: None,
             };
@@ -272,16 +276,18 @@ impl Processor for TransformSerializeBlock {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::NeedSerialize {
-                block,
+                blocks,
                 stats_type,
                 index,
             } => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
-                block.check_valid()?;
+                for block in blocks.iter() {
+                    block.check_valid()?;
+                }
 
                 let serialized =
                     self.block_builder
-                        .build(block, |block, generator| match &stats_type {
+                        .build(blocks, |block, generator| match &stats_type {
                             ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
                             ClusterStatsGenType::WithOrigin(origin_stats) => {
                                 let cluster_stats = generator

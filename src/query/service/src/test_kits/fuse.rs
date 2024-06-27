@@ -155,7 +155,7 @@ async fn generate_blocks(fuse_table: &FuseTable, num_blocks: usize) -> Result<Ve
 
     let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
     for block in blocks {
-        let stats = gen_columns_statistics(&block, None, &schema)?;
+        let stats = gen_columns_statistics(&[block.clone()], None, &schema)?;
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
             .await?;

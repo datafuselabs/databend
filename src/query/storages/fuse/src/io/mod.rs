@@ -41,6 +41,7 @@ pub(crate) use write::create_index_schema;
 pub(crate) use write::create_inverted_index_builders;
 pub(crate) use write::create_tokenizer_manager;
 pub use write::serialize_block;
+pub use write::serialize_blocks;
 pub use write::write_data;
 pub use write::BlockBuilder;
 pub use write::BlockSerialization;

@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
+use crate::operations::LazyCompactedBlock;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum SerializeDataMeta {
     SerializeBlock(SerializeBlock),
     DeletedSegment(DeletedSegmentInfo),
@@ -29,8 +29,8 @@ pub enum SerializeDataMeta {
 
 #[typetag::serde(name = "serialize_data_meta")]
 impl BlockMetaInfo for SerializeDataMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        SerializeDataMeta::downcast_ref_from(info).is_some_and(|other| self == other)
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        unreachable!("SerializeDataMeta should not be compared")
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -44,14 +44,23 @@ pub enum ClusterStatsGenType {
     WithOrigin(Option<ClusterStatistics>),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct SerializeBlock {
     pub index: BlockMetaIndex,
     pub stats_type: ClusterStatsGenType,
+    pub lazy_compacted_block: Option<LazyCompactedBlock>,
 }
 
 impl SerializeBlock {
-    pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> Self {
-        SerializeBlock { index, stats_type }
+    pub fn create(
+        index: BlockMetaIndex,
+        stats_type: ClusterStatsGenType,
+        lazy_compacted_block: Option<LazyCompactedBlock>,
+    ) -> SerializeBlock {
+        SerializeBlock {
+            index,
+            stats_type,
+            lazy_compacted_block,
+        }
     }
 }

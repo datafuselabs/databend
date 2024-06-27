@@ -84,7 +84,7 @@ async fn test_compact() -> Result<()> {
         .get_table(&ctx.get_tenant(), &db_name, &tbl_name)
         .await?;
     let res = do_compact(ctx.clone(), table.clone()).await;
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "{:?}", res);
     assert!(res.unwrap());
 
     // check count

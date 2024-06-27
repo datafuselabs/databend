@@ -22,6 +22,7 @@ use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use databend_common_arrow::native::write::NativeWriter;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -61,18 +62,25 @@ use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
 
-// TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    serialize_blocks(write_settings, schema, vec![block], buf)
+}
+
+pub fn serialize_blocks(
+    write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
+    blocks: Vec<DataBlock>,
+    buf: &mut Vec<u8>,
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+            let result = blocks_to_parquet(&schema, blocks, buf, write_settings.table_compression)?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }
@@ -96,10 +104,16 @@ pub fn serialize_block(
                 },
             );
 
-            let batch = ArrowChunk::try_from(block)?;
-
             writer.start()?;
-            writer.write(&batch)?;
+            assert_eq!(
+                blocks.len(),
+                1,
+                "Native format does not support write multiple chunk for now"
+            );
+            for block in blocks {
+                let batch = ArrowChunk::try_from(block)?;
+                writer.write(&batch)?;
+            }
             writer.finish()?;
 
             let mut metas = HashMap::with_capacity(writer.metas.len());
@@ -217,7 +231,7 @@ impl BloomIndexState {
     }
     pub fn from_data_block(
         ctx: Arc<dyn TableContext>,
-        block: &DataBlock,
+        blocks: &[DataBlock],
         location: Location,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
@@ -225,7 +239,7 @@ impl BloomIndexState {
         let maybe_bloom_index = BloomIndex::try_create(
             ctx.get_function_context()?,
             location.1,
-            &[block],
+            blocks,
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {
@@ -285,7 +299,7 @@ pub struct InvertedIndexState {
 impl InvertedIndexState {
     pub fn try_create(
         source_schema: &TableSchemaRef,
-        block: &DataBlock,
+        blocks: &[DataBlock],
         block_location: &Location,
         inverted_index_builder: &InvertedIndexBuilder,
     ) -> Result<Self> {
@@ -294,7 +308,9 @@ impl InvertedIndexState {
             Arc::new(inverted_index_builder.schema.clone()),
             &inverted_index_builder.options,
         )?;
-        writer.add_block(source_schema, block)?;
+        for block in blocks {
+            writer.add_block(source_schema, block)?;
+        }
         let data = writer.finalize()?;
         let size = data.len() as u64;
 
@@ -340,16 +356,29 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
-    pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
+    pub fn build<F>(&self, mut data_blocks: Vec<DataBlock>, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
-        let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
+        let cluster_stats = if !self.cluster_stats_gen.cluster_key_index.is_empty() {
+            if data_blocks.len() != 1 {
+                return Err(ErrorCode::Internal(format!(
+                    "Invalid data blocks count: {}",
+                    data_blocks.len(),
+                )));
+            }
+            let (cluster_stats, data_block) =
+                f(data_blocks.pop().unwrap(), &self.cluster_stats_gen)?;
+            data_blocks.push(data_block);
+            cluster_stats
+        } else {
+            None
+        };
         let (block_location, block_id) = self.meta_locations.gen_block_location();
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state = BloomIndexState::from_data_block(
             self.ctx.clone(),
-            &data_block,
+            &data_blocks,
             bloom_index_location,
             self.bloom_columns_map.clone(),
         )?;
@@ -361,23 +390,23 @@ impl BlockBuilder {
         for inverted_index_builder in &self.inverted_index_builders {
             let inverted_index_state = InvertedIndexState::try_create(
                 &self.source_schema,
-                &data_block,
+                &data_blocks,
                 &block_location,
                 inverted_index_builder,
             )?;
             inverted_index_states.push(inverted_index_state);
         }
 
-        let row_count = data_block.num_rows() as u64;
-        let block_size = data_block.memory_size() as u64;
+        let row_count = data_blocks.iter().map(|b| b.num_rows()).sum::<usize>() as u64;
+        let block_size = data_blocks.iter().map(|b| b.memory_size()).sum::<usize>() as u64;
         let col_stats =
-            gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
+            gen_columns_statistics(&data_blocks, column_distinct_count, &self.source_schema)?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let col_metas = serialize_block(
+        let col_metas = serialize_blocks(
             &self.write_settings,
             &self.source_schema,
-            data_block,
+            data_blocks,
             &mut buffer,
         )?;
         let file_size = buffer.len() as u64;

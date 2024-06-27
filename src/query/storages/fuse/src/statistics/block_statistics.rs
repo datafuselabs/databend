@@ -44,7 +44,7 @@ impl BlockStatistics {
             block_rows_size: data_block.num_rows() as u64,
             block_bytes_size: data_block.memory_size() as u64,
             block_column_statistics: column_statistic::gen_columns_statistics(
-                data_block,
+                &[data_block.clone()],
                 column_distinct_count,
                 schema,
             )?,

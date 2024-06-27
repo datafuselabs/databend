@@ -183,7 +183,7 @@ impl BloomIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
         version: u64,
-        data_blocks_tobe_indexed: &[&DataBlock],
+        data_blocks_tobe_indexed: &[DataBlock],
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
         // TODO refactor :

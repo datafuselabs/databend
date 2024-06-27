@@ -250,6 +250,7 @@ impl Processor for MutationSource {
                                         SerializeBlock::create(
                                             self.index.clone(),
                                             self.stats_type.clone(),
+                                            None,
                                         ),
                                     ));
                                     self.state = State::Output(
@@ -351,7 +352,7 @@ impl Processor for MutationSource {
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
                 let inner_meta = Box::new(SerializeDataMeta::SerializeBlock(
-                    SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
+                    SerializeBlock::create(self.index.clone(), self.stats_type.clone(), None),
                 ));
                 let meta: BlockMetaInfoPtr = if self.block_reader.update_stream_columns() {
                     Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
@@ -407,7 +408,11 @@ impl Processor for MutationSource {
                             };
                             self.ctx.get_write_progress().incr(&progress_values);
                             let meta = Box::new(SerializeDataMeta::SerializeBlock(
-                                SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
+                                SerializeBlock::create(
+                                    self.index.clone(),
+                                    self.stats_type.clone(),
+                                    None,
+                                ),
                             ));
                             self.state = State::Output(
                                 self.ctx.get_partition(),

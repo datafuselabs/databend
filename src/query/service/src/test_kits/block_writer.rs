@@ -114,7 +114,7 @@ impl<'a> BlockWriter<'a> {
         let maybe_bloom_index = BloomIndex::try_create(
             FunctionContext::default(),
             location.1,
-            &[block],
+            &[block.clone()],
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {
