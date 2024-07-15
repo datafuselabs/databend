@@ -153,11 +153,13 @@ impl SubqueryRewriter {
                     item.order_by_item.scalar = res.0;
                 }
 
-                if let WindowFuncType::Aggregate(agg) = &mut plan.function {
-                    for item in agg.args.iter_mut() {
-                        let res = self.try_rewrite_subquery(item, &input, false)?;
-                        input = res.1;
-                        *item = res.0;
+                for mut functions in &mut plan.function {
+                    if let WindowFuncType::Aggregate(agg) = &mut functions {
+                        for item in agg.args.iter_mut() {
+                            let res = self.try_rewrite_subquery(item, &input, false)?;
+                            input = res.1;
+                            *item = res.0;
+                        }
                     }
                 }
 

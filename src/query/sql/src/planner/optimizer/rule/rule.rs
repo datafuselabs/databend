@@ -31,6 +31,8 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateSort,
         RuleID::MergeFilter,
         RuleID::MergeEvalScalar,
+        RuleID::MergeWindowEvalScalar,
+        RuleID::MergeWindow,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
@@ -97,6 +99,7 @@ pub enum RuleID {
     EliminateSort,
     MergeEvalScalar,
     MergeFilter,
+    MergeWindow,
     SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
@@ -107,6 +110,7 @@ pub enum RuleID {
     CommuteJoinBaseTable,
     LeftExchangeJoin,
     EagerAggregation,
+    MergeWindowEvalScalar,
 }
 
 impl Display for RuleID {
@@ -144,6 +148,8 @@ impl Display for RuleID {
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
+            RuleID::MergeWindow => write!(f, "MergeWindow"),
+            RuleID::MergeWindowEvalScalar => write!(f, "MergeWindowEvalScalar"),
         }
     }
 }

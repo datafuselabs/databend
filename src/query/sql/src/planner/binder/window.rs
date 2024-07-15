@@ -58,9 +58,9 @@ impl Binder {
     ) -> Result<SExpr> {
         let window_plan = Window {
             span: window_info.span,
-            index: window_info.index,
-            function: window_info.func.clone(),
-            arguments: window_info.arguments.clone(),
+            index: vec![window_info.index],
+            function: vec![window_info.func.clone()],
+            arguments: vec![window_info.arguments.clone()],
             partition_by: window_info.partition_by_items.clone(),
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
@@ -70,8 +70,10 @@ impl Binder {
         // eval scalars before sort
         // Generate a `EvalScalar` as the input of `Window`.
         let mut scalar_items: Vec<ScalarItem> = Vec::new();
-        for arg in &window_plan.arguments {
-            scalar_items.push(arg.clone());
+        for args in &window_plan.arguments {
+            for arg in args {
+                scalar_items.push(arg.clone());
+            }
         }
         for part in &window_plan.partition_by {
             scalar_items.push(part.clone());

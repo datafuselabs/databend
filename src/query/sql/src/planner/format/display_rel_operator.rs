@@ -286,8 +286,13 @@ fn window_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexTyp
 
     let frame = op.frame.to_string();
 
+    let mut function_name = String::new();
+    for function in &op.function {
+        function_name += function.func_name().as_str();
+    }
+
     FormatTreeNode::with_children("Window".to_string(), vec![
-        FormatTreeNode::new(format!("aggregate function: {}", op.function.func_name())),
+        FormatTreeNode::new(format!("aggregate function: {}", function_name)),
         FormatTreeNode::new(format!("partition items: [{}]", partition_by_items)),
         FormatTreeNode::new(format!("order by items: [{}]", order_by_items)),
         FormatTreeNode::new(format!("frame: [{}]", frame)),
