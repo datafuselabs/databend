@@ -39,7 +39,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -225,12 +225,10 @@ impl AsyncSource for LicenseInfoSource {
             )?
         };
 
-        get_license_manager()
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
-        let info = get_license_manager()
-            .manager
+        let info = LicenseManagerSwitch::instance()
             .parse_license(license.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
                 format!(

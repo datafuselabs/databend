@@ -19,7 +19,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
@@ -52,9 +52,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let handler = get_vacuum_handler();

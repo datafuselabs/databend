@@ -19,7 +19,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
@@ -31,13 +31,11 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let tenant = query_ctx.get_tenant();
     let settings = query_ctx.get_settings();
     let spill_prefix = query_spill_prefix(tenant.tenant_name(), &query_ctx.get_id());
-    let license_manager = get_license_manager();
     let vacuum_limit = settings.get_max_vacuum_temp_files_after_query()?;
 
     // disable all s3 operator if vacuum limit = 0
     if vacuum_limit != 0
-        && license_manager
-            .manager
+        && LicenseManagerSwitch::instance()
             .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
             .is_ok()
     {

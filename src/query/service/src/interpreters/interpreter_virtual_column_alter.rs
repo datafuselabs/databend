@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_sql::plans::AlterVirtualColumnPlan;
@@ -52,9 +52,7 @@ impl Interpreter for AlterVirtualColumnInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
         let catalog_name = self.plan.catalog.clone();

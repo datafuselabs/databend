@@ -33,7 +33,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -253,9 +253,7 @@ impl Binder {
 
         // check inverted index license
         if !from_context.inverted_index_map.is_empty() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         // add internal column binding into expr

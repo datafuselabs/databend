@@ -27,7 +27,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -214,9 +214,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {

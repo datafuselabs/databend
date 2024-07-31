@@ -25,7 +25,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_fail_safe::get_fail_safe_handler;
 use databend_enterprise_fail_safe::FailSafeHandlerWrapper;
 
@@ -67,10 +67,9 @@ impl SimpleTableFunc for FuseAmendTable {
     }
 
     async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::AmendTable)?;
+
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(CATALOG_DEFAULT)

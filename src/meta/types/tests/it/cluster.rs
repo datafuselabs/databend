@@ -16,14 +16,13 @@ use databend_common_meta_types::NodeInfo;
 
 #[test]
 fn test_node_info_ip_port() -> anyhow::Result<()> {
-    let n = NodeInfo {
-        id: "".to_string(),
-        secret: "".to_string(),
-        cpu_nums: 1,
-        version: 1,
-        flight_address: "1.2.3.4:123".to_string(),
-        binary_version: "v0.8-binary-version".to_string(),
-    };
+    let n = NodeInfo::create(
+        "".to_string(),
+        "".to_string(),
+        1,
+        "1.2.3.4:123".to_string(),
+        "v0.8-binary-version".to_string(),
+    );
 
     let (ip, port) = n.ip_port()?;
     assert_eq!("1.2.3.4".to_string(), ip);

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_sql::plans::DropTableIndexPlan;
 use databend_common_storages_fuse::TableContext;
@@ -49,9 +49,7 @@ impl Interpreter for DropTableIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
 
         let index_name = self.plan.index_name.clone();

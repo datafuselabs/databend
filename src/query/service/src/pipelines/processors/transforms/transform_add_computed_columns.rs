@@ -24,7 +24,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -45,9 +45,7 @@ where Self: Transform
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
     ) -> Result<Self> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), ComputedColumn)?;
 
         let mut exprs = Vec::with_capacity(output_schema.fields().len());

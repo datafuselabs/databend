@@ -26,7 +26,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -76,9 +76,7 @@ impl ModifyTableColumnInterpreter {
         column: String,
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -436,9 +434,7 @@ impl ModifyTableColumnInterpreter {
         table: Arc<dyn Table>,
         column: String,
     ) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
@@ -484,9 +480,7 @@ impl ModifyTableColumnInterpreter {
         table_meta: TableMeta,
         column: String,
     ) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
         let table_info = table.get_table_info();

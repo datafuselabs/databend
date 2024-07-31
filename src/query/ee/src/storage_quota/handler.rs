@@ -18,7 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license::StorageQuota;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_storage_quota::StorageQuotaHandler;
 use databend_enterprise_storage_quota::StorageQuotaHandlerWrapper;
 use databend_query::sessions::SessionManager;
@@ -39,8 +39,7 @@ impl StorageQuotaHandler for RealStorageQuotaHandler {
 
         let settings = session.get_settings();
         // check for valid license
-        get_license_manager()
-            .manager
+        LicenseManagerSwitch::instance()
             .get_storage_quota(unsafe { settings.get_enterprise_license().unwrap_or_default() })
     }
 }

@@ -18,7 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_storage_encryption::StorageEncryptionHandler;
 use databend_enterprise_storage_encryption::StorageEncryptionHandlerWrapper;
 use databend_query::sessions::SessionManager;
@@ -40,7 +40,7 @@ impl StorageEncryptionHandler for RealStorageEncryptionHandler {
         let settings = session.get_settings();
 
         // check for valid license
-        get_license_manager().manager.check_enterprise_enabled(
+        LicenseManagerSwitch::instance().check_enterprise_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::StorageEncryption,
         )

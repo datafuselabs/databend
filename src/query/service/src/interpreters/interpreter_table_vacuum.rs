@@ -22,7 +22,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTablePlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
@@ -107,9 +107,7 @@ impl Interpreter for VacuumTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let catalog_name = self.plan.catalog.clone();

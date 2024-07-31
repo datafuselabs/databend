@@ -18,7 +18,7 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -56,9 +56,7 @@ impl Interpreter for CreateIndexInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
 
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index_name.clone();

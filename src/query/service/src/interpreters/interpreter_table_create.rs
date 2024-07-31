@@ -29,7 +29,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -118,15 +118,11 @@ impl Interpreter for CreateTableInterpreter {
             .iter()
             .any(|f| f.computed_expr().is_some());
         if has_computed_column {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
         if self.plan.inverted_indexes.is_some() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
         }
 
@@ -478,9 +474,7 @@ impl CreateTableInterpreter {
     }
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AttacheTable)?;
 
         let handler = get_attach_table_handler();

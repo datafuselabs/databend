@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::DropDatamaskPolicyPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
@@ -49,9 +49,7 @@ impl Interpreter for DropDataMaskInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();

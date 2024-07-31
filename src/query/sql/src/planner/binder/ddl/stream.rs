@@ -19,7 +19,7 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use log::debug;
 
 use crate::binder::Binder;
@@ -114,9 +114,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowStreamsStmt,
     ) -> Result<Plan> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
         let ShowStreamsStmt {
@@ -190,9 +188,7 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &DescribeStreamStmt,
     ) -> Result<Plan> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::Stream)?;
 
         let DescribeStreamStmt {

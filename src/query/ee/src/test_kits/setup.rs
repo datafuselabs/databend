@@ -39,9 +39,7 @@ impl TestFixture {
 
         // Cluster register.
         {
-            ClusterDiscovery::instance()
-                .register_to_metastore(config)
-                .await?;
+            ClusterDiscovery::instance().register_to_metastore().await?;
             info!(
                 "Databend query has been registered:{:?} to metasrv:{:?}.",
                 config.query.cluster_id, config.meta.endpoints

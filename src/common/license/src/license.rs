@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -22,6 +23,42 @@ use serde::Serialize;
 pub struct ComputeQuota {
     threads_num: Option<usize>,
     memory_usage: Option<usize>,
+}
+
+#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ClusterQuota {
+    pub(crate) max_clusters: Option<usize>,
+    pub(crate) max_nodes_per_cluster: Option<usize>,
+}
+
+impl ClusterQuota {
+    pub fn un_limit() -> ClusterQuota {
+        ClusterQuota {
+            max_clusters: None,
+            max_nodes_per_cluster: None,
+        }
+    }
+
+    pub fn limit_clusters(max_clusters: usize) -> ClusterQuota {
+        ClusterQuota {
+            max_nodes_per_cluster: None,
+            max_clusters: Some(max_clusters),
+        }
+    }
+
+    pub fn limit_nodes(nodes: usize) -> ClusterQuota {
+        ClusterQuota {
+            max_clusters: None,
+            max_nodes_per_cluster: Some(nodes),
+        }
+    }
+
+    pub fn limit_full(max_clusters: usize, nodes: usize) -> ClusterQuota {
+        ClusterQuota {
+            max_clusters: Some(max_clusters),
+            max_nodes_per_cluster: Some(nodes),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -69,6 +106,8 @@ pub enum Feature {
     ComputeQuota(ComputeQuota),
     #[serde(alias = "storage_quota", alias = "STORAGE_QUOTA")]
     StorageQuota(StorageQuota),
+    #[serde(alias = "cluster_quota", alias = "CLUSTER_QUOTA")]
+    ClusterQuota(ClusterQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
     #[serde(other)]
@@ -99,17 +138,36 @@ impl Display for Feature {
                 };
 
                 match v.memory_usage {
-                    None => write!(f, "memory_usage: unlimited,"),
-                    Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage),
-                }
+                    None => write!(f, "memory_usage: unlimited,")?,
+                    Some(memory_usage) => write!(f, "memory_usage: {}", memory_usage)?,
+                };
+
+                write!(f, ")")
             }
             Feature::StorageQuota(v) => {
                 write!(f, "storage_quota(")?;
 
                 match v.storage_usage {
-                    None => write!(f, "storage_usage: unlimited,"),
-                    Some(storage_usage) => write!(f, "storage_usage: {}", storage_usage),
-                }
+                    None => write!(f, "storage_usage: unlimited,")?,
+                    Some(storage_usage) => write!(f, "storage_usage: {}", storage_usage)?,
+                };
+
+                write!(f, ")")
+            }
+            Feature::ClusterQuota(v) => {
+                write!(f, "cluster_quota(")?;
+
+                match &v.max_clusters {
+                    None => write!(f, "max_clusters: unlimited,")?,
+                    Some(v) => write!(f, "max_clusters: {}", v)?,
+                };
+
+                match v.max_nodes_per_cluster {
+                    None => write!(f, "max_nodes_per_cluster: unlimited,")?,
+                    Some(v) => write!(f, "max_nodes_per_cluster: {}", v)?,
+                };
+
+                write!(f, ")")
             }
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::Unknown => write!(f, "unknown"),
@@ -118,31 +176,75 @@ impl Display for Feature {
 }
 
 impl Feature {
-    pub fn verify(&self, feature: &Feature) -> bool {
+    pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
+        match self {
+            Feature::ClusterQuota(cluster_quote) => {
+                if matches!(cluster_quote.max_clusters, Some(x) if x > 1) {
+                    return Err(ErrorCode::LicenseKeyInvalid(
+                        "No license found. The default configuration of Databend Community Edition only supports 1 cluster. To use more clusters, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                    ));
+                }
+
+                if matches!(cluster_quote.max_nodes_per_cluster, Some(x) if x > 1) {
+                    return Err(ErrorCode::LicenseKeyInvalid(
+                        "No license found. The default configuration of Databend Community Edition only supports up to 1 nodes per cluster. To use more nodes per cluster, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                    ));
+                }
+
+                Ok(())
+            }
+            _ => Err(ErrorCode::LicenseKeyInvalid(message.into())),
+        }
+    }
+
+    pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
         match (self, feature) {
             (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
                 if let Some(thread_num) = c.threads_num {
                     if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
                 if let Some(max_memory_usage) = c.memory_usage {
                     if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
             }
             (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
                 if let Some(max_storage_usage) = c.storage_usage {
                     if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
+            }
+            (Feature::ClusterQuota(c), Feature::ClusterQuota(v)) => {
+                if let Some(max_clusters) = c.max_clusters {
+                    if max_clusters < v.max_clusters.unwrap_or(usize::MAX) {
+                        return Err(ErrorCode::LicenseKeyInvalid(format!(
+                            "The number of clusters exceeds the quota specified in the Databend Enterprise Edition license. Maximum allowed: {}, Requested: {}. Please contact Databend to review your licensing options. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                            max_clusters,
+                            v.max_clusters.unwrap_or(usize::MAX)
+                        )));
+                    }
+                }
+
+                if let Some(max_nodes_per_cluster) = c.max_nodes_per_cluster {
+                    if max_nodes_per_cluster < v.max_nodes_per_cluster.unwrap_or(usize::MAX) {
+                        return Err(ErrorCode::LicenseKeyInvalid(format!(
+                            "The number of nodes per cluster exceeds the quota specified in the Databend Enterprise Edition license. Maximum allowed: {}, Requested: {}. Please contact Databend to review your licensing options. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                            max_nodes_per_cluster,
+                            v.max_nodes_per_cluster.unwrap_or(usize::MAX)
+                        )));
+                    }
+                }
+
+                Ok(true)
             }
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
@@ -155,8 +257,8 @@ impl Feature {
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
-            | (Feature::StorageEncryption, Feature::StorageEncryption) => true,
-            (_, _) => false,
+            | (Feature::StorageEncryption, Feature::StorageEncryption) => Ok(true),
+            (_, _) => Ok(false),
         }
     }
 }
@@ -289,6 +391,15 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::ClusterQuota(ClusterQuota {
+                max_clusters: None,
+                max_nodes_per_cluster: Some(1),
+            }),
+            serde_json::from_str::<Feature>("{\"ClusterQuota\":{\"max_nodes_per_cluster\":1}}")
+                .unwrap()
+        );
+
+        assert_eq!(
             Feature::AmendTable,
             serde_json::from_str::<Feature>("\"amend_table\"").unwrap()
         );
@@ -297,5 +408,94 @@ mod tests {
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
+    }
+
+    #[test]
+    fn test_cluster_quota_verify_default() {
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_clusters(1))
+                .verify_default("")
+                .is_ok()
+        );
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_nodes(1))
+                .verify_default("")
+                .is_ok()
+        );
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_nodes(2))
+                .verify_default("")
+                .is_err()
+        );
+
+        for nodes in 0..2 {
+            assert!(
+                Feature::ClusterQuota(ClusterQuota::limit_full(1, nodes))
+                    .verify_default("")
+                    .is_ok()
+            );
+        }
+
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_clusters(2))
+                .verify_default("")
+                .is_err()
+        );
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_nodes(4))
+                .verify_default("")
+                .is_err()
+        );
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_full(2, 1))
+                .verify_default("")
+                .is_err()
+        );
+        assert!(
+            Feature::ClusterQuota(ClusterQuota::limit_full(1, 4))
+                .verify_default("")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_cluster_quota_verify() -> Result<(), ErrorCode> {
+        let unlimit_feature = Feature::ClusterQuota(ClusterQuota::un_limit());
+
+        for cluster_num in 0..1000 {
+            for node_num in 0..1000 {
+                let feature =
+                    Feature::ClusterQuota(ClusterQuota::limit_full(cluster_num, node_num));
+                assert!(unlimit_feature.verify(&feature)?);
+            }
+        }
+
+        let unlimit_cluster_feature = Feature::ClusterQuota(ClusterQuota::limit_nodes(1));
+
+        for cluster_num in 0..1000 {
+            let feature = Feature::ClusterQuota(ClusterQuota::limit_full(cluster_num, 1));
+            assert!(unlimit_cluster_feature.verify(&feature)?);
+            let feature = Feature::ClusterQuota(ClusterQuota::limit_full(cluster_num, 2));
+            assert!(unlimit_cluster_feature.verify(&feature).is_err());
+        }
+
+        let unlimit_nodes_feature = Feature::ClusterQuota(ClusterQuota::limit_clusters(1));
+
+        for nodes_num in 0..1000 {
+            let feature = Feature::ClusterQuota(ClusterQuota::limit_full(1, nodes_num));
+            assert!(unlimit_nodes_feature.verify(&feature)?);
+            let feature = Feature::ClusterQuota(ClusterQuota::limit_full(2, nodes_num));
+            assert!(unlimit_nodes_feature.verify(&feature).is_err());
+        }
+
+        let limit_full = Feature::ClusterQuota(ClusterQuota::limit_full(1, 1));
+        let feature = Feature::ClusterQuota(ClusterQuota::limit_full(1, 1));
+        assert!(limit_full.verify(&feature)?);
+        let feature = Feature::ClusterQuota(ClusterQuota::limit_full(2, 1));
+        assert!(limit_full.verify(&feature).is_err());
+        let feature = Feature::ClusterQuota(ClusterQuota::limit_full(1, 2));
+        assert!(limit_full.verify(&feature).is_err());
+
+        Ok(())
     }
 }

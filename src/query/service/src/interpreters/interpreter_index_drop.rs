@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_sql::plans::DropIndexPlan;
@@ -52,9 +52,7 @@ impl Interpreter for DropIndexInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
 
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
 
         let index_name = self.plan.index.clone();

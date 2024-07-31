@@ -23,7 +23,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::VirtualColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
@@ -66,9 +66,7 @@ impl VirtualColumnRewriter {
     }
 
     pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let license_manager = get_license_manager();
-        if license_manager
-            .manager
+        if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
             .is_err()
         {

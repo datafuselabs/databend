@@ -24,7 +24,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -112,9 +112,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();

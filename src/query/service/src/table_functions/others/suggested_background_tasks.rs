@@ -36,7 +36,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -250,9 +250,7 @@ impl AsyncSource for SuggestedBackgroundTasksSource {
         self.done = true;
 
         let ctx = self.ctx.as_any().downcast_ref::<QueryContext>().unwrap();
-        let license_mgr = get_license_manager();
-        license_mgr
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::BackgroundService)?;
 
         let suggestions = Self::all_suggestions(Arc::new(ctx.clone())).await?;

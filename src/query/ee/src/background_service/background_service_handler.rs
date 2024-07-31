@@ -23,7 +23,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_api::BackgroundApi;
 use databend_common_meta_app::background::BackgroundJobIdent;
 use databend_common_meta_app::background::BackgroundJobInfo;
@@ -274,7 +274,7 @@ impl RealBackgroundService {
         let settings = session.get_settings();
 
         // check for valid license
-        get_license_manager().manager.check_enterprise_enabled(
+        LicenseManagerSwitch::instance().check_enterprise_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::BackgroundService,
         )

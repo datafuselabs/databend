@@ -19,7 +19,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::ComputedColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -100,9 +100,7 @@ impl Interpreter for AddTableColumnInterpreter {
             let mut new_table_meta = table.get_table_info().meta.clone();
             let field = self.plan.field.clone();
             if field.computed_expr().is_some() {
-                let license_manager = get_license_manager();
-                license_manager
-                    .manager
+                LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
 

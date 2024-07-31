@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -58,21 +59,34 @@ pub trait LicenseManager: Sync + Send {
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota>;
 }
 
-pub struct LicenseManagerWrapper {
-    pub manager: Box<dyn LicenseManager>,
+pub struct LicenseManagerSwitch {
+    manager: Box<dyn LicenseManager>,
 }
-unsafe impl Send for LicenseManagerWrapper {}
-unsafe impl Sync for LicenseManagerWrapper {}
+
+impl LicenseManagerSwitch {
+    pub fn create(manager: Box<dyn LicenseManager>) -> LicenseManagerSwitch {
+        LicenseManagerSwitch { manager }
+    }
+
+    pub fn instance() -> Arc<LicenseManagerSwitch> {
+        GlobalInstance::get()
+    }
+}
+
+impl Deref for LicenseManagerSwitch {
+    type Target = dyn LicenseManager;
+
+    fn deref(&self) -> &Self::Target {
+        self.manager.as_ref()
+    }
+}
 
 pub struct OssLicenseManager {}
 
 impl LicenseManager for OssLicenseManager {
     fn init(_tenant: String) -> Result<()> {
         let rm = OssLicenseManager {};
-        let wrapper = LicenseManagerWrapper {
-            manager: Box::new(rm),
-        };
-        GlobalInstance::set(Arc::new(wrapper));
+        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         Ok(())
     }
 
@@ -80,10 +94,9 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
-        Err(ErrorCode::LicenseKeyInvalid(
-            "Need Commercial License".to_string(),
-        ))
+    fn check_enterprise_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
+        // oss ignore license key.
+        feature.verify_default("Need Commercial License".to_string())
     }
 
     fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
@@ -96,8 +109,4 @@ impl LicenseManager for OssLicenseManager {
     fn get_storage_quota(&self, _: String) -> Result<StorageQuota> {
         Ok(StorageQuota::default())
     }
-}
-
-pub fn get_license_manager() -> Arc<LicenseManagerWrapper> {
-    GlobalInstance::get()
 }

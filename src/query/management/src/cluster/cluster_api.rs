@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::Result;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
@@ -23,6 +25,8 @@ pub trait ClusterApi: Sync + Send {
 
     // Get the tenant's cluster all nodes.
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
+
+    async fn get_tenant_nodes(&self) -> Result<HashMap<String, Vec<NodeInfo>>>;
 
     // Drop the tenant's cluster one node by node.id.
     async fn drop_node(&self, node_id: String, seq: MatchSeq) -> Result<()>;

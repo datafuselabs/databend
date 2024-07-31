@@ -30,7 +30,7 @@ use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -205,9 +205,7 @@ impl UpdateInterpreter {
             .generate_stored_computed_list(self.ctx.clone(), Arc::new(tbl.schema().into()))?;
 
         if !computed_list.is_empty() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
