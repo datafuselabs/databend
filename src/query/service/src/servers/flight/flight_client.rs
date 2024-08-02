@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -26,14 +29,12 @@ use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
-use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::full_name;
 use fastrace::future::FutureExt;
 use fastrace::Span;
+use futures::Stream;
 use futures::StreamExt;
 use futures_util::future::Either;
 use log::info;
@@ -49,6 +50,7 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::pipelines::executor::WatchNotify;
+use crate::servers::flight::flight_client::impls::FlightRxInner;
 use crate::servers::flight::request_builder::RequestBuilder;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -130,6 +132,8 @@ impl FlightClient {
         query_id: &str,
         target: &str,
         source_address: &str,
+        retry_times: usize,
+        retry_interval: usize,
     ) -> Result<FlightExchange> {
         let req = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "request_server_exchange")?
@@ -148,6 +152,8 @@ impl FlightClient {
                 target: target.to_string(),
                 fragment: None,
                 source_address: source_address.to_string(),
+                retry_times,
+                retry_interval: Duration::from_secs(retry_interval as u64),
             }),
         ))
     }
@@ -160,6 +166,8 @@ impl FlightClient {
         target: &str,
         fragment: usize,
         source_address: &str,
+        retry_times: usize,
+        retry_interval: usize,
     ) -> Result<FlightExchange> {
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
@@ -181,6 +189,8 @@ impl FlightClient {
                 target: target.to_string(),
                 fragment: Some(fragment),
                 source_address: source_address.to_string(),
+                retry_times,
+                retry_interval: Duration::from_secs(retry_interval as u64),
             }),
         ))
     }
@@ -240,260 +250,196 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    async fn reconnect(
-        &mut self,
-        info: &ConnectionInfo,
-        continue_from: usize,
-    ) -> Result<(Arc<WatchNotify>, Receiver<Result<FlightData>>)> {
+    async fn reconnect(&mut self, info: &ConnectionInfo, seq: usize) -> Result<FlightRxInner> {
         let request = match info.fragment {
             Some(fragment_id) => RequestBuilder::create(Ticket::default())
                 .with_metadata("x-type", "exchange_fragment")?
                 .with_metadata("x-target", &info.target)?
                 .with_metadata("x-query-id", &info.query_id)?
                 .with_metadata("x-fragment-id", &fragment_id.to_string())?
-                .with_metadata("x-continue-from", &continue_from.to_string())?
+                .with_metadata("x-continue-from", &seq.to_string())?
                 .build(),
             None => RequestBuilder::create(Ticket::default())
                 .with_metadata("x-type", "request_server_exchange")?
                 .with_metadata("x-target", &info.target)?
                 .with_metadata("x-query-id", &info.query_id)?
-                .with_metadata("x-continue-from", &continue_from.to_string())?
+                .with_metadata("x-continue-from", &seq.to_string())?
                 .build(),
         };
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
 
         let streaming = self.get_streaming(request).await?;
 
-        Ok(Self::streaming_receiver(streaming))
+        let (network_notify, recv) = Self::streaming_receiver(streaming);
+        Ok(FlightRxInner::create(network_notify, recv))
     }
 }
 
+#[derive(Clone)]
 pub struct ConnectionInfo {
     pub query_id: String,
     pub target: String,
     pub fragment: Option<usize>,
     pub source_address: String,
+    pub retry_times: usize,
+    pub retry_interval: Duration,
 }
 
-pub struct FlightReceiver {
-    seq_num: AtomicUsize,
-    notify: AtomicPtr<Arc<WatchNotify>>,
-    rx: AtomicPtr<Receiver<Result<FlightData>>>,
-    connection_info: Option<ConnectionInfo>,
+pub struct RetryableFlightReceiver {
+    seq: Arc<AtomicUsize>,
+    info: Option<ConnectionInfo>,
+    inner: Arc<AtomicPtr<FlightRxInner>>,
 }
 
-impl Drop for FlightReceiver {
+impl Drop for RetryableFlightReceiver {
     fn drop(&mut self) {
-        drop_guard(move || {
-            self.close();
-        })
+        self.close();
     }
 }
 
-impl FlightReceiver {
-    pub fn create(
-        rx: Receiver<Result<FlightData>>,
-        connection_info: Option<ConnectionInfo>,
-    ) -> FlightReceiver {
-        FlightReceiver {
-            seq_num: AtomicUsize::new(0),
-            rx: AtomicPtr::new(Box::into_raw(Box::new(rx))),
-            notify: AtomicPtr::new(Box::into_raw(Box::new(Arc::new(WatchNotify::new())))),
-            connection_info,
+impl RetryableFlightReceiver {
+    pub fn dummy() -> RetryableFlightReceiver {
+        // dummy
+        RetryableFlightReceiver {
+            info: None,
+            seq: Arc::new(AtomicUsize::new(0)),
+            inner: Arc::new(Default::default()),
         }
     }
 
     #[async_backtrace::framed]
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        let receiver = unsafe { &*self.rx.load(Ordering::Acquire) };
-        match receiver.recv().await {
-            Err(_) => Ok(None),
-            Ok(Err(error)) => {
-                info!("Error while receiving data from flight : {:?}", error);
-                if error.code() == ErrorCode::CANNOT_CONNECT_NODE {
-                    // only retry when error is network problem
-                    if self.retry().await.is_ok() {
-                        info!("Reconnect Successfully");
-                        return Ok(Some(DataPacket::RetryConnectSuccess));
-                    }
+        // Non thread safe, we only use atomic to implement mutable.
+        loop {
+            let inner = unsafe { &*self.inner.load(Ordering::SeqCst) };
+
+            return match inner.recv().await {
+                Ok(message) => {
+                    self.seq.fetch_add(1, Ordering::SeqCst);
+                    Ok(message)
                 }
-                Err(error)
-            }
-            Ok(Ok(message)) => {
-                self.seq_num.fetch_add(1, Ordering::Acquire);
-                Ok(Some(DataPacket::try_from(message)?))
-            }
+                Err(cause) => {
+                    info!("Error while receiving data from flight : {:?}", cause);
+                    if cause.code() == ErrorCode::CANNOT_CONNECT_NODE {
+                        // only retry when error is network problem
+                        let Err(cause) = self.retry().await else {
+                            info!("Retry flight connection successfully!");
+                            continue;
+                        };
+
+                        info!("Retry flight connection failure, cause: {:?}", cause);
+                    }
+
+                    Err(cause)
+                }
+            };
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn retry(&self) -> Result<()> {
-        if let Some(connection_info) = &self.connection_info {
+    async fn retry(&self) -> Result<()> {
+        if let Some(connection_info) = &self.info {
             let mut flight_client =
                 DataExchangeManager::create_client(&connection_info.source_address, true).await?;
-            let max_attempt = 2;
-            let mut attempts = 0;
-            let (notify, receiver) = loop {
-                if attempts >= max_attempt {
-                    break Err(ErrorCode::Timeout("Exceed max retries time"));
+
+            for attempts in 0..connection_info.retry_times {
+                let Ok(recv) = flight_client
+                    .reconnect(connection_info, self.seq.load(Ordering::Acquire))
+                    .await
+                else {
+                    info!("Reconnect attempt {} failed", attempts);
+                    sleep(connection_info.retry_interval).await;
+                    continue;
+                };
+
+                let ptr = self
+                    .inner
+                    .swap(Box::into_raw(Box::new(recv)), Ordering::SeqCst);
+
+                unsafe {
+                    // We cannot determine the number of strong ref. so close it.
+                    let broken_connection = Box::from_raw(ptr);
+                    broken_connection.close();
                 }
-                attempts += 1;
-                let reconnect_res = flight_client
-                    .reconnect(connection_info, self.seq_num.load(Ordering::Acquire))
-                    .await;
-                match reconnect_res {
-                    Ok((notify, receiver)) => break Ok((notify, receiver)),
-                    Err(_) => info!("Reconnect attempt {} failed", attempts),
-                }
-                sleep(Duration::from_secs(1)).await;
-            }?;
-            let old_notify = self
-                .notify
-                .swap(Box::into_raw(Box::new(notify)), Ordering::Acquire);
-            let old_receiver = self
-                .rx
-                .swap(Box::into_raw(Box::new(receiver)), Ordering::Acquire);
-            unsafe {
-                drop(Box::from_raw(old_notify));
-                drop(Box::from_raw(old_receiver));
+
+                return Ok(());
             }
+
+            return Err(ErrorCode::Timeout("Exceed max retries time"));
         }
+
         Ok(())
     }
 
     pub fn close(&self) {
-        let receiver = unsafe { &*self.rx.load(Ordering::Acquire) };
-        receiver.close();
+        unsafe {
+            let inner = self.inner.load(Ordering::SeqCst);
 
-        let notify = unsafe { &*self.notify.load(Ordering::Acquire) };
-        notify.notify_waiters();
+            if !inner.is_null() {
+                (*inner).close();
+            }
+        }
     }
 }
 
 pub struct FlightSender {
-    tx: AtomicPtr<Sender<Result<FlightData, Status>>>,
-    seq_num: AtomicUsize,
-    buffer: Mutex<VecDeque<FlightData>>,
+    tx: Sender<Result<FlightData, Status>>,
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
-        FlightSender {
-            tx: AtomicPtr::new(Box::into_raw(Box::new(tx))),
-            seq_num: AtomicUsize::new(0),
-            buffer: Mutex::new(VecDeque::with_capacity(3)),
-        }
+        FlightSender { tx }
     }
 
     pub fn is_closed(&self) -> bool {
-        unsafe { (*self.tx.load(Ordering::Acquire)).is_closed() }
+        self.tx.is_closed()
     }
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.seq_num.fetch_add(1, Ordering::Acquire);
-        let flight_data = FlightData::try_from(data)?;
-        self.update_buffer(flight_data.clone());
-        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
-        if let Err(_cause) = sender.send(Ok(flight_data)).await {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
         }
-        Ok(())
-    }
 
-    fn update_buffer(&self, data: FlightData) {
-        let mut buffer = self.buffer.lock();
-        if buffer.len() == buffer.capacity() {
-            buffer.pop_front();
-        }
-        buffer.push_back(data);
-    }
-
-    pub fn replace_tx(
-        &self,
-        new_tx: Sender<Result<FlightData, Status>>,
-        continue_from: usize,
-    ) -> Result<()> {
-        let old_tx = self
-            .tx
-            .swap(Box::into_raw(Box::new(new_tx.clone())), Ordering::AcqRel);
-        unsafe { drop(Box::from_raw(old_tx)) };
-        let buffer = self.buffer.lock().clone();
-        let seq_num = self.seq_num.load(Ordering::Acquire);
-        Runtime::with_worker_threads(1, Some(String::from("ReconnectSender")))?.spawn(async move {
-            if seq_num - continue_from < buffer.len() {
-                for data in buffer.iter().skip(seq_num - continue_from) {
-                    if let Err(_cause) = new_tx.send(Ok(data.clone())).await {
-                        break;
-                    }
-                }
-            } else {
-                let _res = new_tx
-                    .send(Err(ErrorCode::AbortedQuery(
-                        "Aborted query, because the remote flight channel is closed.",
-                    )
-                    .into()))
-                    .await;
-            }
-        });
         Ok(())
     }
 
     pub fn close(&self) {
-        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
-        sender.close();
+        self.tx.close();
     }
 }
 
-impl Drop for FlightSender {
-    fn drop(&mut self) {
-        let _ = unsafe { Box::from_raw(self.tx.load(Ordering::Acquire)) };
-    }
+pub struct SenderPayload {
+    pub state: Arc<Mutex<FlightDataAckState>>,
+    pub sender: Option<Sender<Result<FlightData, Status>>>,
 }
 
-pub struct FlightSenderWrapper {
-    inner: Arc<FlightSender>,
-}
-
-impl FlightSenderWrapper {
-    pub fn create(inner: Arc<FlightSender>) -> FlightSenderWrapper {
-        FlightSenderWrapper { inner }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.inner.send(data).await
-    }
-
-    pub fn close(&self) {
-        self.inner.close();
-    }
-}
-
-impl Drop for FlightSenderWrapper {
-    fn drop(&mut self) {
-        drop_guard(move || {
-            self.inner.close();
-        })
-    }
+pub struct ReceiverPayload {
+    seq: Arc<AtomicUsize>,
+    info: Option<ConnectionInfo>,
+    inner: Arc<AtomicPtr<impls::FlightRxInner>>,
 }
 
 pub enum FlightExchange {
     Dummy,
-    Receiver {
-        notify: Arc<WatchNotify>,
-        receiver: Receiver<Result<FlightData>>,
-        // connection_info used for retrying when receiver get error
-        connection_info: Option<ConnectionInfo>,
-    },
-    Sender(Sender<Result<FlightData, Status>>),
+    Sender(SenderPayload),
+    Receiver(ReceiverPayload),
+
+    MovedSender(SenderPayload),
+    MovedReceiver(ReceiverPayload),
 }
 
 impl FlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
-        FlightExchange::Sender(sender)
+    pub fn create_sender(
+        state: Arc<Mutex<FlightDataAckState>>,
+        sender: Sender<Result<FlightData, Status>>,
+    ) -> FlightExchange {
+        FlightExchange::Sender(SenderPayload {
+            state,
+            sender: Some(sender),
+        })
     }
 
     pub fn create_receiver(
@@ -501,37 +447,203 @@ impl FlightExchange {
         receiver: Receiver<Result<FlightData>>,
         connection_info: Option<ConnectionInfo>,
     ) -> FlightExchange {
-        FlightExchange::Receiver {
-            notify,
+        FlightExchange::Receiver(ReceiverPayload {
+            seq: Arc::new(AtomicUsize::new(0)),
+            info: connection_info,
+            inner: Arc::new(AtomicPtr::new(Box::into_raw(Box::new(
+                FlightRxInner::create(notify, receiver),
+            )))),
+        })
+    }
+
+    pub fn take_as_sender(&mut self) -> FlightSender {
+        let mut flight_sender = FlightExchange::Dummy;
+        std::mem::swap(self, &mut flight_sender);
+
+        if let FlightExchange::Sender(mut v) = flight_sender {
+            let flight_sender = FlightSender::create(v.sender.take().unwrap());
+            *self = FlightExchange::MovedSender(v);
+            return flight_sender;
+        }
+
+        unreachable!("take as sender miss match exchange type")
+    }
+
+    pub fn take_as_receiver(&mut self) -> RetryableFlightReceiver {
+        let mut flight_receiver = FlightExchange::Dummy;
+        std::mem::swap(self, &mut flight_receiver);
+
+        if let FlightExchange::Receiver(v) = flight_receiver {
+            let flight_receiver = RetryableFlightReceiver {
+                seq: v.seq.clone(),
+                info: v.info.clone(),
+                inner: v.inner.clone(),
+            };
+
+            *self = FlightExchange::MovedReceiver(v);
+
+            return flight_receiver;
+        }
+
+        unreachable!("take as receiver miss match exchange type")
+    }
+}
+
+mod impls {
+    use std::sync::Arc;
+
+    use async_channel::Receiver;
+    use databend_common_arrow::arrow_format::flight::data::FlightData;
+    use databend_common_base::base::WatchNotify;
+    use databend_common_exception::Result;
+
+    use crate::servers::flight::v1::packets::DataPacket;
+
+    pub struct FlightRxInner {
+        notify: Arc<WatchNotify>,
+        rx: Receiver<Result<FlightData>>,
+    }
+
+    impl FlightRxInner {
+        pub fn create(notify: Arc<WatchNotify>, rx: Receiver<Result<FlightData>>) -> FlightRxInner {
+            FlightRxInner { rx, notify }
+        }
+
+        #[async_backtrace::framed]
+        pub async fn recv(&self) -> Result<Option<DataPacket>> {
+            match self.rx.recv().await {
+                Err(_) => Ok(None),
+                Ok(Err(error)) => Err(error),
+                Ok(Ok(message)) => Ok(Some(DataPacket::try_from(message)?)),
+            }
+        }
+
+        pub fn close(&self) {
+            self.rx.close();
+            self.notify.notify_waiters();
+        }
+    }
+}
+
+pub struct FlightDataAckState {
+    seq: AtomicUsize,
+    auto_ack_window_size: usize,
+
+    may_retry: bool,
+    receiver: Receiver<Result<FlightData, Status>>,
+    confirmation_queue: VecDeque<(usize, Result<FlightData, Status>)>,
+}
+
+impl FlightDataAckState {
+    pub fn create(
+        window_size: usize,
+        receiver: Receiver<Result<FlightData, Status>>,
+    ) -> Arc<Mutex<FlightDataAckState>> {
+        Arc::new(Mutex::new(FlightDataAckState {
             receiver,
-            connection_info,
+            may_retry: true,
+            seq: AtomicUsize::new(0),
+            auto_ack_window_size: window_size,
+            confirmation_queue: VecDeque::with_capacity(window_size),
+        }))
+    }
+
+    fn ack_message(&mut self, seq: usize) {
+        while let Some((id, _)) = self.confirmation_queue.front() {
+            if *id <= seq {
+                self.confirmation_queue.pop_front();
+            }
         }
     }
 
-    pub fn convert_to_sender(self) -> FlightSender {
-        match self {
-            FlightExchange::Sender(tx) => FlightSender {
-                tx: AtomicPtr::new(Box::into_raw(Box::new(tx))),
-                seq_num: AtomicUsize::new(0),
-                buffer: Mutex::new(VecDeque::with_capacity(3)),
-            },
-            _ => unreachable!(),
-        }
+    fn end_of_stream(&mut self) -> Poll<Option<Result<FlightData, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        self.ack_message(message_seq);
+
+        self.may_retry = false;
+        Poll::Ready(None)
     }
 
-    pub fn convert_to_receiver(self) -> FlightReceiver {
-        match self {
-            FlightExchange::Receiver {
-                notify,
-                receiver,
-                connection_info,
-            } => FlightReceiver {
-                seq_num: AtomicUsize::new(0),
-                notify: AtomicPtr::new(Box::into_raw(Box::new(notify))),
-                rx: AtomicPtr::new(Box::into_raw(Box::new(receiver))),
-                connection_info,
-            },
-            _ => unreachable!(),
+    fn error_of_stream(&mut self, cause: Status) -> Poll<Option<Result<FlightData, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
+        }
+
+        self.confirmation_queue
+            .push_back((message_seq, Err(cause.clone())));
+        Poll::Ready(Some(Err(cause)))
+    }
+
+    fn message(&mut self, data: FlightData) -> Poll<Option<Result<FlightData, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+
+        let (data, duplicate) = duplicate_flight_data(data);
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
+        }
+
+        self.confirmation_queue.push_back((message_seq, Ok(data)));
+        Poll::Ready(Some(Ok(duplicate)))
+    }
+
+    pub fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<FlightData, Status>>> {
+        match Pin::new(&mut self.receiver).poll_next(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(None) => self.end_of_stream(),
+            Poll::Ready(Some(Err(status))) => self.error_of_stream(status),
+            Poll::Ready(Some(Ok(flight_data))) => self.message(flight_data),
         }
     }
+}
+
+pub struct FlightDataAckStream {
+    state: Arc<Mutex<FlightDataAckState>>,
+}
+
+impl FlightDataAckStream {
+    pub fn create(state: Arc<Mutex<FlightDataAckState>>, _i: usize) -> Result<FlightDataAckStream> {
+        // TODO: reset begin
+        Ok(FlightDataAckStream { state })
+    }
+}
+
+impl Drop for FlightDataAckStream {
+    fn drop(&mut self) {
+        let state = self.state.lock();
+
+        state.receiver.close();
+
+        // TODO:
+        // if state.may_retry {
+        //     drop(state);
+        //     let weak = Arc::downgrade(&self.state);
+        //     GlobalIORuntime::instance().spawn(async move {
+        //         // todo: wait retry connection and add timer
+        //         tokio::time::sleep(Duration::from_secs(60)).await;
+        //         if let Some(ss) = weak.upgrade() {
+        //             let ss = ss.lock();
+        //             ss.receiver.close();
+        //         }
+        //     });
+        // }
+    }
+}
+
+impl Stream for FlightDataAckStream {
+    type Item = Result<FlightData, Status>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.state.lock().poll_next(cx)
+    }
+}
+
+fn duplicate_flight_data(flight_data: FlightData) -> (FlightData, FlightData) {
+    (flight_data.clone(), flight_data)
 }

@@ -29,13 +29,13 @@ use log::info;
 
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::FlightReceiver;
+use crate::servers::flight::RetryableFlightReceiver;
 
 pub struct ExchangeSourceReader {
     finished: AtomicBool,
     output: Arc<OutputPort>,
     output_data: Vec<DataPacket>,
-    flight_receiver: FlightReceiver,
+    flight_receiver: RetryableFlightReceiver,
     source: String,
     destination: String,
     fragment: usize,
@@ -44,7 +44,7 @@ pub struct ExchangeSourceReader {
 impl ExchangeSourceReader {
     pub fn create(
         output: Arc<OutputPort>,
-        flight_receiver: FlightReceiver,
+        flight_receiver: RetryableFlightReceiver,
         source: &str,
         destination: &str,
         fragment: usize,
@@ -117,10 +117,6 @@ impl Processor for ExchangeSourceReader {
         if self.output_data.is_empty() {
             let mut dictionaries = Vec::new();
             while let Some(output_data) = self.flight_receiver.recv().await? {
-                if matches!(&output_data, DataPacket::RetryConnectSuccess) {
-                    // retry connect only re-establish connection, need to continue call recv
-                    continue;
-                }
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
                     dictionaries.push(output_data);
                     self.output_data = dictionaries;
@@ -160,7 +156,7 @@ impl Processor for ExchangeSourceReader {
 }
 
 pub fn create_reader_item(
-    flight_receiver: FlightReceiver,
+    flight_receiver: RetryableFlightReceiver,
     source: &str,
     destination: &str,
     fragment: usize,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::broadcast::channel;
@@ -27,7 +26,7 @@ use futures_util::future::select;
 use futures_util::future::Either;
 
 use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::FlightExchange;
+use crate::servers::flight::RetryableFlightReceiver;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsReceiver {
@@ -39,14 +38,13 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, FlightExchange>,
+        statistics_exchanges: Vec<RetryableFlightReceiver>,
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (_source, exchange) in statistics_exchanges.into_iter() {
-            let rx = exchange.convert_to_receiver();
+        for rx in statistics_exchanges.into_iter() {
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
@@ -118,8 +116,6 @@ impl StatisticsReceiver {
         match recv_data {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
-            // RetryConnectSuccess means we need to continue call recv
-            Ok(Some(DataPacket::RetryConnectSuccess)) => Ok(false),
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::Dictionary(_))) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),

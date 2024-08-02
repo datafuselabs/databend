@@ -447,7 +447,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
@@ -788,7 +787,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-
                 ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables auto fix missing bloom index",
@@ -818,7 +816,25 @@ impl DefaultSettings {
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                })
+                }),
+                ("distributed_connection_retry_count", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_flight_connection_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum retry count for cluster flight. Disable if 0.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=30)),
+                }),
+                ("flight_connection_retry_interval", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "The retry interval of cluster flight is in seconds.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=900)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

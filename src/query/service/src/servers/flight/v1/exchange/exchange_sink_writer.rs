@@ -29,11 +29,11 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
 
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
+use crate::servers::flight::FlightSender;
 
 pub struct ExchangeWriterSink {
-    flight_sender: FlightSenderWrapper,
+    flight_sender: FlightSender,
     source: String,
     destination: String,
     fragment: usize,
@@ -42,7 +42,7 @@ pub struct ExchangeWriterSink {
 impl ExchangeWriterSink {
     pub fn create(
         input: Arc<InputPort>,
-        flight_sender: FlightSenderWrapper,
+        flight_sender: FlightSender,
         source_id: &str,
         destination_id: &str,
         fragment_id: usize,
@@ -115,11 +115,11 @@ impl AsyncSink for ExchangeWriterSink {
 }
 
 pub struct IgnoreExchangeSink {
-    flight_sender: FlightSenderWrapper,
+    flight_sender: FlightSender,
 }
 
 impl IgnoreExchangeSink {
-    pub fn create(input: Arc<InputPort>, flight_sender: FlightSenderWrapper) -> Box<dyn Processor> {
+    pub fn create(input: Arc<InputPort>, flight_sender: FlightSender) -> Box<dyn Processor> {
         Sinker::create(input, IgnoreExchangeSink { flight_sender })
     }
 }
@@ -138,7 +138,7 @@ impl Sink for IgnoreExchangeSink {
 }
 
 pub fn create_writer_item(
-    exchange: FlightSenderWrapper,
+    exchange: FlightSender,
     ignore: bool,
     destination_id: &str,
     fragment_id: usize,

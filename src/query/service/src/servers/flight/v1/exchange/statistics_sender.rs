@@ -27,9 +27,9 @@ use futures_util::future::Either;
 use log::warn;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
+use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
@@ -42,7 +42,7 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        tx: FlightSenderWrapper,
+        tx: FlightSender,
         executor: Arc<PipelineExecutor>,
     ) -> Self {
         let spawner = ctx.clone();
@@ -143,17 +143,14 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSenderWrapper) -> Result<()> {
+    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
         let progress = Self::fetch_progress(ctx);
         let data_packet = DataPacket::SerializeProgress(progress);
         tx.send(data_packet).await
     }
 
     #[async_backtrace::framed]
-    async fn send_copy_status(
-        ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
-    ) -> Result<()> {
+    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
         let copy_status = ctx.get_copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
@@ -165,7 +162,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_merge_status(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
+        flight_sender: &FlightSender,
     ) -> Result<()> {
         let merge_status = {
             let binding = ctx.get_merge_status();
@@ -183,7 +180,7 @@ impl StatisticsSender {
 
     async fn send_profile(
         executor: &PipelineExecutor,
-        tx: &FlightSenderWrapper,
+        tx: &FlightSender,
         collect_metrics: bool,
     ) -> Result<()> {
         let plans_profile = executor.fetch_profiling(collect_metrics);
@@ -199,7 +196,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_scan_cache_metrics(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
+        flight_sender: &FlightSender,
     ) -> Result<()> {
         let data_cache_metrics = ctx.get_data_cache_metrics();
         let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
