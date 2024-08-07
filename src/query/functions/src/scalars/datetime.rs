@@ -26,6 +26,7 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use databend_common_ast::ParseError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::check_date;
@@ -70,7 +71,6 @@ use databend_common_expression::ValueRef;
 use databend_common_io::cursor_ext::unwrap_local_time;
 use dtparse::parse;
 use num_traits::AsPrimitive;
-use databend_common_ast::ParseError;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS timestamp)
