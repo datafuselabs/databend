@@ -176,7 +176,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 };
 
                 match result_timestamp {
-                    Ok(timestamp) => output.push(timestamp.with_timezone(&t_tz).to_string()),
+                    Ok(timestamp) => output.push(&timestamp.with_timezone(&t_tz).to_string()),
                     Err(e) => {
                         ctx.set_error(output.len(), format!("Unable to parse src_timestamp : {}", e));
                     }
@@ -253,7 +253,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     .checked_add_signed(sec_offset)
                     .expect("Overflow when adding offset");
                 let utc_adjusted_datetime = Utc.from_utc_datetime(&adjusted_datetime);
-                output.push(utc_adjusted_datetime.with_timezone(&t_tz).to_string())
+                output.push(&utc_adjusted_datetime.with_timezone(&t_tz).to_string())
             },
         )(target_tz, src_timestamp, ctx)
     }
