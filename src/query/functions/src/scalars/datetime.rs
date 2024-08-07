@@ -70,6 +70,7 @@ use databend_common_expression::ValueRef;
 use databend_common_io::cursor_ext::unwrap_local_time;
 use dtparse::parse;
 use num_traits::AsPrimitive;
+use databend_common_ast::ParseError;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS timestamp)
@@ -170,12 +171,12 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
                 // Parsing src_timestamp
-                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
+                let result_timestamp: Result<DateTime<Tz>, ParseError> = match src_timestamp.parse::<DateTime<Utc>>() {
                     Ok(utc_dt) => Ok(utc_dt.with_timezone(&s_tz)),
                     Err(_) => Ok(src_timestamp.parse::<NaiveDateTime>().unwrap().and_local_timezone(s_tz).unwrap()),
                 };
 
-                output.push(result_timestamp.with_timezone(&t_tz).timestamp_micros())
+                output.push(result_timestamp.unwrap().with_timezone(&t_tz).timestamp_micros())
             },
         ),
     );
