@@ -90,6 +90,12 @@ impl LockKey {
         }
     }
 
+    pub fn get_tenant(&self) -> &Tenant {
+        match self {
+            LockKey::Table { tenant, .. } => tenant,
+        }
+    }
+
     pub fn get_extra_info(&self) -> BTreeMap<String, String> {
         match self {
             LockKey::Table { .. } => BTreeMap::new(),
@@ -191,6 +197,7 @@ impl CreateLockRevReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReply {
     pub revision: u64,
+    pub elapsed_time: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

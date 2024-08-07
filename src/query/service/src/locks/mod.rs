@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod lock_ext;
 mod lock_holder;
 mod lock_manager;
 mod table_lock;
 
-pub use lock_ext::LockExt;
 pub use lock_manager::LockManager;
