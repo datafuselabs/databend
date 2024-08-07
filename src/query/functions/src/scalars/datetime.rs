@@ -204,10 +204,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 if str_datetime_part.len() != 3 {
                     return ctx.set_error(
                         output.len(),
-                        format!(
-                            "Invalid src_timestamp format : {}",
-                            src_timestamp.to_string()
-                        ),
+                        format!("Invalid src_timestamp format : {}", src_timestamp),
                     );
                 }
 
@@ -215,7 +212,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     src_timestamp.rsplit_once(' ').expect("Invalid format");
 
                 let str_naive_datetime = datetime_part;
-                let mut naive_datetime =
+                let naive_datetime =
                     match NaiveDateTime::parse_from_str(str_naive_datetime, "%Y-%m-%d %H:%M:%S") {
                         Ok(parsed) => parsed,
                         Err(e) => {
