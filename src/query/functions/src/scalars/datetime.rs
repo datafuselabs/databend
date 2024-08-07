@@ -196,26 +196,39 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
                     Err(e) => {
-                        return  ctx.set_error(output.len(),format!("cannot parse target `timezone`. {}", e))
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
                     }
                 };
 
-                /* Split the src_timestamp, isolate this timezone if given */
+                // Split the src_timestamp, isolate this timezone if given
                 let str_datetime_part: Vec<&str> = src_timestamp.split(' ').collect();
-                if str_datetime_part.len() != 3
-                {
-                    return  ctx.set_error(output.len(),format!("Invalid src_timestamp format : {}", src_timestamp.to_string()))
+                if str_datetime_part.len() != 3 {
+                    return ctx.set_error(
+                        output.len(),
+                        format!(
+                            "Invalid src_timestamp format : {}",
+                            src_timestamp.to_string()
+                        ),
+                    );
                 }
 
-                let (datetime_part, offset_part) = src_timestamp.rsplit_once(' ').expect("Invalid format");
+                let (datetime_part, offset_part) =
+                    src_timestamp.rsplit_once(' ').expect("Invalid format");
 
                 let str_naive_datetime = datetime_part;
-                let mut naive_datetime = match NaiveDateTime::parse_from_str(str_naive_datetime,"%Y-%m-%d %H:%M:%S"){
-                    Ok(parsed) => parsed,
-                    Err(e) => {
-                        return  ctx.set_error(output.len(),format!("Unable to parse src_timestamp : {}", e))
-                    }
-                };
+                let mut naive_datetime =
+                    match NaiveDateTime::parse_from_str(str_naive_datetime, "%Y-%m-%d %H:%M:%S") {
+                        Ok(parsed) => parsed,
+                        Err(e) => {
+                            return ctx.set_error(
+                                output.len(),
+                                format!("Unable to parse src_timestamp : {}", e),
+                            );
+                        }
+                    };
 
                 let str_offset = offset_part;
                 // Process the offset
@@ -231,13 +244,15 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     "+" => Duration::seconds(-total_seconds),
                     "-" => Duration::seconds(total_seconds),
                     _ => {
-                        return  ctx.set_error(output.len(),format!("Invalid offset sign"));
+                        return ctx.set_error(output.len(), format!("Invalid offset sign"));
                     }
                 };
 
                 // Add the offset to the naive datetime
-                let adjusted_datetime = naive_datetime.checked_add_signed(sec_offset).expect("Overflow when adding offset");
-                let utc_adjusted_datetime= Utc.from_utc_datetime(&adjusted_datetime);
+                let adjusted_datetime = naive_datetime
+                    .checked_add_signed(sec_offset)
+                    .expect("Overflow when adding offset");
+                let utc_adjusted_datetime = Utc.from_utc_datetime(&adjusted_datetime);
                 output.push(utc_adjusted_datetime.with_timezone(&t_tz).to_string())
             },
         )(target_tz, src_timestamp, ctx)
