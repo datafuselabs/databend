@@ -3344,8 +3344,8 @@ output type    : Timestamp
 output domain  : {1630812366000000..=1630812366000000}
 output         : '2021-09-05 03:26:06.000000'
 
-ast            : convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')
-raw expr       : convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')
+ast            : convert_timezone('2024-08-06 14:30:00 +02:00','America/New_York')
+raw expr       : convert_timezone('2024-08-06 14:30:00 +02:00','America/New_York')
 checked expr   : convert_timezone<String,String,Timestamp> ('2024-08-06T14:30:00+02:00','America/New_York')
 optimized expr : '2024-08-06T08:30:00.000000'
 output type    : Timestamp
