@@ -139,7 +139,7 @@ impl LockManager {
                 let extend_table_lock_req =
                     ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, true);
 
-                catalog.extend_lock_revision(extend_table_lock_req).await?;
+                let _ = catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
                 record_acquired_lock_nums(lock_type, table_id, 1);
                 break;

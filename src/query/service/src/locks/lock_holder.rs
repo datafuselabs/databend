@@ -57,12 +57,17 @@ impl LockHolder {
 
         // get a new table lock revision.
         let res = catalog.create_lock_revision(req).await?;
+        if res.elapsed_time >= expire_secs {
+            return Err(ErrorCode::TableLockExpired(format!(
+                "lock creation took {} secs, exceeding the set expiration time of {} secs",
+                res.elapsed_time, expire_secs
+            )));
+        }
         let revision = res.revision;
         // metrics.
         record_created_lock_nums(lock_key.lock_type().to_string(), lock_key.get_table_id(), 1);
 
-        let interval_secs = expire_secs - res.elapsed_time;
-        let sleep_range = (interval_secs * 1000 / 3)..=(interval_secs * 1000 * 2 / 3);
+        let mut interval_secs = expire_secs - res.elapsed_time;
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
         let extend_table_lock_req =
             ExtendLockRevReq::new(lock_key.clone(), revision, expire_secs, false);
@@ -72,6 +77,8 @@ impl LockHolder {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());
                 while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
                     let mills = {
+                        let sleep_range =
+                            (interval_secs * 1000 / 3)..=(interval_secs * 1000 * 2 / 3);
                         let mut rng = thread_rng();
                         rng.gen_range(sleep_range.clone())
                     };
@@ -83,7 +90,7 @@ impl LockHolder {
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
-                            if let Err(e) = self_clone
+                            match self_clone
                                 .try_extend_lock(
                                     catalog.clone(),
                                     extend_table_lock_req.clone(),
@@ -91,13 +98,16 @@ impl LockHolder {
                                 )
                                 .await
                             {
-                                // Force kill the query if extend lock failure.
-                                if let Some(session) =
-                                    SessionManager::instance().get_session_by_id(&query_id)
-                                {
-                                    session.force_kill_query(e.clone());
+                                Ok(v) => interval_secs = v,
+                                Err(e) => {
+                                    // Force kill the query if extend lock failure.
+                                    if let Some(session) =
+                                        SessionManager::instance().get_session_by_id(&query_id)
+                                    {
+                                        session.force_kill_query(e.clone());
+                                    }
+                                    return Err(e);
                                 }
-                                return Err(e);
                             }
                         }
                     }
@@ -127,12 +137,14 @@ impl LockHolder {
         catalog: Arc<dyn Catalog>,
         req: ExtendLockRevReq,
         max_retry_elapsed: Option<Duration>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
+        let mut elapsed_time = 0;
         let mut backoff = set_backoff(Some(Duration::from_millis(2)), None, max_retry_elapsed);
         let mut extend_notified = Box::pin(self.shutdown_notify.notified());
         while !self.shutdown_flag.load(Ordering::SeqCst) {
             match catalog.extend_lock_revision(req.clone()).await {
-                Ok(_) => {
+                Ok(res) => {
+                    elapsed_time = res.elapsed_time;
                     break;
                 }
                 Err(e) if e.code() == ErrorCode::TABLE_LOCK_EXPIRED => {
@@ -173,7 +185,13 @@ impl LockHolder {
             }
         }
 
-        Ok(())
+        if elapsed_time >= req.expire_secs {
+            return Err(ErrorCode::TableLockExpired(format!(
+                "lock extend took {} secs, exceeding the set expiration time of {} secs",
+                elapsed_time, req.expire_secs
+            )));
+        }
+        Ok(req.expire_secs - elapsed_time)
     }
 
     async fn try_delete_lock(

@@ -110,6 +110,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
@@ -3814,7 +3815,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
+    async fn extend_lock_revision(
+        &self,
+        req: ExtendLockRevReq,
+    ) -> Result<ExtendLockRevReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
@@ -3854,10 +3858,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&key, Eq, lock_seq),
             ];
 
+            let start = SeqV::<()>::now_ms();
             let if_then = vec![txn_op_put_with_expire(
                 &key,
                 serialize_struct(&lock_meta)?,
-                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
+                start / 1000 + req.expire_secs,
             )];
 
             let txn_req = TxnRequest {
@@ -3875,7 +3880,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(());
+                let elapsed_time = (SeqV::<()>::now_ms() - start).div_ceil(1000);
+                return Ok(ExtendLockRevReply { elapsed_time });
             }
         }
     }

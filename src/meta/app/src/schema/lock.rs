@@ -220,6 +220,11 @@ impl ExtendLockRevReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtendLockRevReply {
+    pub elapsed_time: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeleteLockRevReq {
     pub lock_key: LockKey,
     pub revision: u64,

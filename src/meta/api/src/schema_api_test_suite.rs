@@ -6659,7 +6659,7 @@ impl SchemaApiTestSuite {
                 revision: res2.revision,
                 acquire_lock: true,
             };
-            mt.extend_lock_revision(req4).await?;
+            let _ = mt.extend_lock_revision(req4).await?;
 
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
