@@ -137,18 +137,18 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 
 fn register_convert_timezone(registry: &mut FunctionRegistry) {
     // 2 arguments function [target_timezone, src_timestamp]
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, TimestampType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<StringType, TimestampType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _| FunctionDomain::MayThrow,
         eval_convert_timezone,
     );
 
     // 3 arguments function [target_timezone, src_timestamp, src_timezone]
-    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, TimestampType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, TimestampType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<StringType, StringType, StringType, TimestampType>(
-            |target_tz, src_timestamp, src_tz, output, ctx| {
+        vectorize_with_builder_3_arg::<StringType, StringType, TimestampType, TimestampType>(
+            |src_tz, target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
@@ -170,9 +170,17 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
                 // Parsing src_timestamp
-                let result_timestamp: Result<DateTime<Tz>, ParseError> = match src_timestamp.parse::<DateTime<Utc>>() {
+                let result_timestamp: Result<DateTime<Tz>, _> = match src_timestamp.parse::<DateTime<Utc>>() {
                     Ok(utc_dt) => Ok(utc_dt.with_timezone(&s_tz)),
-                    Err(_) => Ok(src_timestamp.parse::<NaiveDateTime>().unwrap().and_local_timezone(s_tz).unwrap()),
+                    Err(_) => match src_timestamp.parse::<NaiveDateTime>() {
+                        Ok(naive_dt) => naive_dt.and_local_timezone(s_tz).single(),
+                        Err(e) => {
+                            return ctx.set_error(
+                                output.len(),
+                                format!("cannot parse `src_timestamp`. {}", e),
+                            );
+                        }
+                    },
                 };
 
                 output.push(result_timestamp.unwrap().with_timezone(&t_tz).timestamp_micros())
@@ -182,10 +190,10 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
     fn eval_convert_timezone(
         target_tz: ValueRef<StringType>,
-        src_timestamp: ValueRef<StringType>,
+        src_timestamp: TimestampType,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
-        vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
+        vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
