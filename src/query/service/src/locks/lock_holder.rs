@@ -77,10 +77,8 @@ impl LockHolder {
                 let mut notified = Box::pin(self_clone.shutdown_notify.notified());
                 while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
                     let mills = {
-                        let sleep_range =
-                            (interval_secs * 1000 / 3)..=(interval_secs * 1000 * 2 / 3);
                         let mut rng = thread_rng();
-                        rng.gen_range(sleep_range.clone())
+                        rng.gen_range((interval_secs * 1000 / 3)..=(interval_secs * 1000 * 2 / 3))
                     };
                     let sleep_range = Box::pin(sleep(Duration::from_millis(mills)));
                     match select(notified, sleep_range).await {
