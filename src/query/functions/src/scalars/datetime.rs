@@ -190,26 +190,15 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
-                // Parsing parameters
-                let t_tz: Tz = match target_tz.parse() {
-                    Ok(tz) => tz,
-                    Err(e) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("cannot parse target `timezone`. {}", e),
-                        );
-                    }
-                };
-
                 // Assume the source timestamp is in UTC
-                let utc_datetime: DateTime<Utc> = Utc.timestamp(src_timestamp, 0);
+                let utc_datetime: DateTime<Utc> = Utc.timestamp_opt(src_timestamp, 0).unwrap();
 
                 // Parse the target timezone
-                let target_timezone: Tz =
+                let t_tz: Tz =
                     target_tz.parse().expect("Failed to parse target timezone");
 
                 // Convert the UTC time to the specified target timezone
-                let target_datetime: DateTime<Tz> = utc_datetime.with_timezone(&target_timezone);
+                let target_datetime: DateTime<Tz> = utc_datetime.with_timezone(&t_tz);
                 let result_timestamp = target_datetime.timestamp();
                 // Return the adjusted timestamp as a Unix timestamp in seconds
                 output.push(result_timestamp)
