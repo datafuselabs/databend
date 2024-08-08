@@ -159,7 +159,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                         );
                     }
                 };
-
                 let s_tz: Tz = match src_tz.parse() {
                     Ok(tz) => tz,
                     Err(e) => {
@@ -169,28 +168,24 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                         );
                     }
                 };
-                // Parsing src_timestamp
-                let result_timestamp: Result<DateTime<Tz>, _> = match src_timestamp.parse::<DateTime<Utc>>() {
-                    Ok(utc_dt) => Ok(utc_dt.with_timezone(&s_tz)),
-                    Err(_) => match src_timestamp.parse::<NaiveDateTime>() {
-                        Ok(naive_dt) => naive_dt.and_local_timezone(s_tz).single(),
-                        Err(e) => {
-                            return ctx.set_error(
-                                output.len(),
-                                format!("cannot parse `src_timestamp`. {}", e),
-                            );
-                        }
-                    },
-                };
+                // Create dummy timezone
+                let utc_now: DateTime<Utc> = Utc::now();
 
-                output.push(result_timestamp.unwrap().with_timezone(&t_tz).timestamp_micros())
+                let src_time = utc_now.with_timezone(&s_tz);
+                let target_time = utc_now.with_timezone(&t_tz);
+
+                // Calculate the difference in seconds
+                let delta = target_time.signed_duration_since(src_time);
+                let result_timestamp = src_timestamp + delta.num_seconds();
+
+                output.push(result_timestamp)
             },
         ),
     );
 
     fn eval_convert_timezone(
         target_tz: ValueRef<StringType>,
-        src_timestamp: TimestampType,
+        src_timestamp: ValueRef<TimestampType>,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
@@ -206,58 +201,18 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                // Split the src_timestamp, isolate this timezone if given
-                let str_datetime_part: Vec<&str> = src_timestamp.split(' ').collect();
-                if str_datetime_part.len() != 3 {
-                    return ctx.set_error(
-                        output.len(),
-                        format!("Invalid src_timestamp format : {}", src_timestamp),
-                    );
-                }
+                // Assume the source timestamp is in UTC
+                let utc_datetime: DateTime<Utc> = Utc.timestamp(src_timestamp, 0);
 
-                let (datetime_part, offset_part) =
-                    src_timestamp.rsplit_once(' ').expect("Invalid format");
+                // Parse the target timezone
+                let target_timezone: Tz =
+                    target_tz.parse().expect("Failed to parse target timezone");
 
-                let str_naive_datetime = datetime_part;
-                let naive_datetime =
-                    match NaiveDateTime::parse_from_str(str_naive_datetime, "%Y-%m-%d %H:%M:%S") {
-                        Ok(parsed) => parsed,
-                        Err(e) => {
-                            return ctx.set_error(
-                                output.len(),
-                                format!("Unable to parse src_timestamp : {}", e),
-                            );
-                        }
-                    };
-
-                let str_offset = offset_part;
-                // Process the offset
-                let offset_sign = &str_offset[0..1]; // Get the sign of the offset (+ or -)
-                let offset_time = &str_offset[1..]; // Get the time part of the offset
-                let offset_parts: Vec<&str> = offset_time.split(':').collect();
-                let hours: i64 = offset_parts[0].parse().expect("Invalid number for hours");
-                let minutes: i64 = offset_parts[1].parse().expect("Invalid number for minutes");
-
-                // Convert offset to seconds
-                let total_seconds = hours * 3600 + minutes * 60;
-                let sec_offset = match offset_sign {
-                    "+" => Duration::seconds(-total_seconds),
-                    "-" => Duration::seconds(total_seconds),
-                    _ => {
-                        return ctx.set_error(output.len(), format!("Invalid offset sign"));
-                    }
-                };
-
-                // Add the offset to the naive datetime
-                let adjusted_datetime = naive_datetime
-                    .checked_add_signed(sec_offset)
-                    .expect("Overflow when adding offset");
-                let utc_adjusted_datetime = Utc.from_utc_datetime(&adjusted_datetime);
-                output.push(
-                    utc_adjusted_datetime
-                        .with_timezone(&t_tz)
-                        .timestamp_micros(),
-                )
+                // Convert the UTC time to the specified target timezone
+                let target_datetime: DateTime<Tz> = utc_datetime.with_timezone(&target_timezone);
+                let result_timestamp = target_datetime.timestamp();
+                // Return the adjusted timestamp as a Unix timestamp in seconds
+                output.push(result_timestamp)
             },
         )(target_tz, src_timestamp, ctx)
     }
