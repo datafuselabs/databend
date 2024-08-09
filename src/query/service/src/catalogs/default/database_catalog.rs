@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
@@ -690,7 +691,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<ExtendLockRevReply> {
         self.mutable_catalog.extend_lock_revision(req).await
     }
 

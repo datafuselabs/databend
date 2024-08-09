@@ -50,6 +50,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
@@ -379,7 +380,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply>;
 
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()>;
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<ExtendLockRevReply>;
 
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()>;
 

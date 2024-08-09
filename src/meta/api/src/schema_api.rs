@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
+use databend_common_meta_app::schema::ExtendLockRevReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
@@ -283,7 +284,10 @@ pub trait SchemaApi: Send + Sync {
         req: CreateLockRevReq,
     ) -> Result<CreateLockRevReply, KVAppError>;
 
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError>;
+    async fn extend_lock_revision(
+        &self,
+        req: ExtendLockRevReq,
+    ) -> Result<ExtendLockRevReply, KVAppError>;
 
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError>;
 

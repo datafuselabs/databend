@@ -112,3 +112,8 @@ query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 24 24 [0, 18446744073709551615] DEFAULT Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64
+
+query TTTTTTT
+show settings like 'table_lock_expire_secs'
+----
+table_lock_expire_secs 300 30 [0, 18446744073709551615] GLOBAL Sets the seconds that the table lock will expire in. UInt64

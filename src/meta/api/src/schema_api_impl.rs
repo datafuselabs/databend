@@ -110,6 +110,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::ExtendLockRevReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
@@ -3781,10 +3782,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&key, Eq, 0),
             ];
 
+            let start = SeqV::<()>::now_ms();
             let if_then = vec![txn_op_put_with_expire(
                 &key,
                 serialize_struct(&lock_meta)?,
-                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
+                start / 1000 + req.expire_secs,
             )];
 
             let txn_req = TxnRequest {
@@ -3802,16 +3804,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                break;
+                let elapsed_time = (SeqV::<()>::now_ms() - start).div_ceil(1000);
+                return Ok(CreateLockRevReply {
+                    revision,
+                    elapsed_time,
+                });
             }
         }
-
-        Ok(CreateLockRevReply { revision })
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
+    async fn extend_lock_revision(
+        &self,
+        req: ExtendLockRevReq,
+    ) -> Result<ExtendLockRevReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let ctx = func_name!();
@@ -3830,7 +3837,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
             let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
-            table_lock_has_to_exist(lock_seq, table_id, ctx)?;
+            if lock_seq == 0 || lock_meta_opt.is_none() {
+                return Err(KVAppError::AppError(AppError::TableLockExpired(
+                    TableLockExpired::new(table_id, ctx),
+                )));
+            }
+
             let mut lock_meta = lock_meta_opt.unwrap();
             // Set `acquire_lock = true` to initialize `acquired_on` when the
             // first time this lock is acquired. Before the lock is
@@ -3846,10 +3858,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&key, Eq, lock_seq),
             ];
 
+            let start = SeqV::<()>::now_ms();
             let if_then = vec![txn_op_put_with_expire(
                 &key,
                 serialize_struct(&lock_meta)?,
-                SeqV::<()>::now_ms() / 1000 + req.expire_secs,
+                start / 1000 + req.expire_secs,
             )];
 
             let txn_req = TxnRequest {
@@ -3867,10 +3880,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                break;
+                let elapsed_time = (SeqV::<()>::now_ms() - start).div_ceil(1000);
+                return Ok(ExtendLockRevReply { elapsed_time });
             }
         }
-        Ok(())
     }
 
     #[logcall::logcall]
@@ -5571,21 +5584,6 @@ async fn update_mask_policy(
     }
 
     Ok(())
-}
-
-/// Return OK if a table lock exists by checking the seq.
-///
-/// Otherwise returns TableLockExpired error
-fn table_lock_has_to_exist(seq: u64, table_id: u64, msg: impl Display) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(seq = seq, table_id = table_id; "table lock does not exist");
-
-        Err(KVAppError::AppError(AppError::TableLockExpired(
-            TableLockExpired::new(table_id, format!("{}: {}", msg, table_id)),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 #[tonic::async_trait]

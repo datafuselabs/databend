@@ -17,8 +17,11 @@ use std::sync::Arc;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::anyerror::func_name;
 use databend_common_pipeline_core::LockGuard;
 
 use crate::locks::LockManager;
@@ -43,23 +46,20 @@ impl Lock for TableLock {
         LockType::TABLE
     }
 
-    fn get_catalog(&self) -> &str {
-        self.table_info.catalog()
-    }
-
-    fn get_table_id(&self) -> u64 {
-        self.table_info.ident.table_id
-    }
-
-    fn tenant_name(&self) -> &str {
-        &self.table_info.tenant
-    }
-
     async fn try_lock(
         &self,
         ctx: Arc<dyn TableContext>,
         should_retry: bool,
     ) -> Result<Option<Arc<LockGuard>>> {
-        self.lock_mgr.try_lock(ctx, self, should_retry).await
+        let tenant = Tenant::new_or_err(&self.table_info.tenant, func_name!())?;
+        let table_id = self.table_info.ident.table_id;
+        let lock_key = LockKey::Table {
+            tenant: tenant.clone(),
+            table_id,
+        };
+        let catalog = self.table_info.catalog();
+        self.lock_mgr
+            .try_lock(ctx, lock_key, catalog, should_retry)
+            .await
     }
 }

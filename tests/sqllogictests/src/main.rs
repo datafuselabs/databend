@@ -141,7 +141,7 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
         client.enable_debug();
     }
     // reset table lock expire secs.
-    let secs = 60;
+    let secs = 300;
     client.set_table_lock_expire_secs(secs).await?;
     Ok(Databend::create(client))
 }

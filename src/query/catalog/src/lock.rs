@@ -31,12 +31,6 @@ pub enum LockTableOption {
 pub trait Lock: Sync + Send {
     fn lock_type(&self) -> LockType;
 
-    fn get_catalog(&self) -> &str;
-
-    fn get_table_id(&self) -> u64;
-
-    fn tenant_name(&self) -> &str;
-
     async fn try_lock(
         &self,
         ctx: Arc<dyn TableContext>,
