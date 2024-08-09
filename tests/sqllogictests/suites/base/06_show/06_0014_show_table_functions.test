@@ -15,6 +15,7 @@ fuse_encoding
 fuse_segment
 fuse_snapshot
 fuse_statistic
+fuse_vacuum2
 
 query T
 SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1

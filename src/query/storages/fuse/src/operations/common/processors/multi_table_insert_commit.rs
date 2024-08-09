@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_txn::TxnManagerRef;
@@ -54,6 +55,7 @@ pub struct CommitMultiTableInsert {
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
     catalog: Arc<dyn Catalog>,
+    table_meta_timestampss: HashMap<u64, TableMetaTimestamps>,
 }
 
 impl CommitMultiTableInsert {
@@ -64,6 +66,7 @@ impl CommitMultiTableInsert {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
         catalog: Arc<dyn Catalog>,
+        table_meta_timestampss: HashMap<u64, TableMetaTimestamps>,
     ) -> Self {
         Self {
             commit_metas: Default::default(),
@@ -73,6 +76,7 @@ impl CommitMultiTableInsert {
             update_stream_meta,
             deduplicated_label,
             catalog,
+            table_meta_timestampss,
         }
     }
 }
@@ -95,6 +99,7 @@ impl AsyncSink for CommitMultiTableInsert {
                     table.as_ref(),
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
+                    *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
                 )
                 .await?,
                 table.get_table_info().clone(),
@@ -180,6 +185,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
+                                    *self.table_meta_timestampss.get(&tid).unwrap(),
                                 )
                                 .await?;
                                 break;
@@ -235,6 +241,7 @@ async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
@@ -245,6 +252,7 @@ async fn build_update_table_meta_req(
         Some(fuse_table.table_info.ident.seq),
         txn_mgr,
         table.get_id(),
+        table_meta_timestamps,
     )?;
 
     // write snapshot

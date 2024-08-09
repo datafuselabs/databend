@@ -22,6 +22,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
@@ -82,6 +83,7 @@ impl FuseTable {
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<PipeItem> {
         let new_schema: TableSchemaRef = self
             .schema_with_stream()
@@ -100,6 +102,7 @@ impl FuseTable {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            table_meta_timestamps,
         };
         let aggregator = MatchedAggregator::create(
             ctx,

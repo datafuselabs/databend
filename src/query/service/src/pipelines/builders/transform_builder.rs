@@ -38,7 +38,9 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
+use meta::TableMetaTimestamps;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
@@ -106,6 +108,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         cluster_stats_gen: ClusterStatsGenerator,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -117,6 +120,7 @@ impl PipelineBuilder {
                 fuse_table,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
+                table_meta_timestamps,
             )?;
             proc.into_processor()
         })
@@ -126,10 +130,17 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         block_thresholds: BlockThresholds,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeSegment::new(input, output, fuse_table, block_thresholds);
+            let proc = TransformSerializeSegment::new(
+                input,
+                output,
+                fuse_table,
+                block_thresholds,
+                table_meta_timestamps,
+            );
             proc.into_processor()
         })
     }
@@ -137,6 +148,7 @@ impl PipelineBuilder {
     pub(crate) fn mutation_aggregator_transform_builder(
         &self,
         table: Arc<dyn Table>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -149,6 +161,7 @@ impl PipelineBuilder {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
+                table_meta_timestamps,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,

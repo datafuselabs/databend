@@ -27,6 +27,7 @@ use crate::meta::Statistics;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotV2;
 use crate::meta::TableSnapshotV3;
+use crate::meta::TableSnapshotV4;
 use crate::readers::VersionedReader;
 
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
@@ -34,7 +35,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: Read + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V4(_) => TableSnapshot::from_read(reader)?,
+            SnapshotVersion::V5(_) => TableSnapshot::from_read(reader)?,
+            SnapshotVersion::V4(_) => TableSnapshotV4::from_read(reader)?.into(),
             SnapshotVersion::V3(_) => TableSnapshotV3::from_reader(reader)?.into(),
             SnapshotVersion::V2(v) => {
                 let mut ts: TableSnapshotV2 = load_json(reader, v)?;
@@ -60,6 +62,7 @@ pub trait TableSnapshotAccessor {
     fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
     fn snapshot_id(&self) -> Option<(SnapshotId, FormatVersion)>;
     fn table_statistics_location(&self) -> Option<String>;
+    fn least_visible_timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
 }
 
 impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
@@ -87,5 +90,10 @@ impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
     fn table_statistics_location(&self) -> Option<String> {
         self.as_ref()
             .and_then(|snapshot| snapshot.table_statistics_location.clone())
+    }
+
+    fn least_visible_timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.as_ref()
+            .and_then(|snapshot| snapshot.least_visible_timestamp)
     }
 }

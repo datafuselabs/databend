@@ -1,0 +1,2 @@
+>>>> create or replace table test_vacuum2(a int);
+>>>> insert into test_vacuum2 values(1);

@@ -304,36 +304,3 @@ where T: Into<v3::TableSnapshot>
         }
     }
 }
-
-// A memory light version of TableSnapshot(Without segments)
-// This *ONLY* used for some optimize operation, like PURGE/FUSE_SNAPSHOT function to avoid OOM.
-#[derive(Clone, Debug)]
-pub struct TableSnapshotLite {
-    pub format_version: FormatVersion,
-    pub snapshot_id: SnapshotId,
-    pub timestamp: Option<DateTime<Utc>>,
-    pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-    pub row_count: u64,
-    pub block_count: u64,
-    pub index_size: u64,
-    pub uncompressed_byte_size: u64,
-    pub compressed_byte_size: u64,
-    pub segment_count: u64,
-}
-
-impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
-    fn from((value, ver): (&TableSnapshot, FormatVersion)) -> Self {
-        TableSnapshotLite {
-            format_version: ver,
-            snapshot_id: value.snapshot_id,
-            timestamp: value.timestamp,
-            prev_snapshot_id: value.prev_snapshot_id,
-            row_count: value.summary.row_count,
-            block_count: value.summary.block_count,
-            index_size: value.summary.index_size,
-            uncompressed_byte_size: value.summary.uncompressed_byte_size,
-            segment_count: value.segments.len() as u64,
-            compressed_byte_size: value.summary.compressed_byte_size,
-        }
-    }
-}

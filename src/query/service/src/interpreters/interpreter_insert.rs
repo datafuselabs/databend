@@ -103,6 +103,15 @@ impl Interpreter for InsertInterpreter {
 
         // check mutability
         table.check_mutable()?;
+        let table_meta_timestamps = if table.engine() == "FUSE" {
+            let fuse_table =
+                databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
+            let snapshot = fuse_table.read_table_snapshot().await?;
+            self.ctx
+                .get_table_meta_timestamps(table.get_id(), snapshot)?
+        } else {
+            Default::default()
+        };
 
         let mut build_res = PipelineBuildResult::create();
 
@@ -182,6 +191,7 @@ impl Interpreter for InsertInterpreter {
                                 select_column_bindings,
                                 insert_schema: self.plan.dest_schema(),
                                 cast_needed: self.check_schema_cast(plan)?,
+                                table_meta_timestamps,
                             },
                         )));
                         select_plan
@@ -198,6 +208,7 @@ impl Interpreter for InsertInterpreter {
                             select_column_bindings,
                             insert_schema: self.plan.dest_schema(),
                             cast_needed: self.check_schema_cast(plan)?,
+                            table_meta_timestamps,
                         }))
                     }
                 };
@@ -214,6 +225,7 @@ impl Interpreter for InsertInterpreter {
                     self.plan.overwrite,
                     None,
                     unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                    table_meta_timestamps,
                 )?;
 
                 //  Execute the hook operator.
@@ -243,6 +255,7 @@ impl Interpreter for InsertInterpreter {
             self.plan.overwrite,
             AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            table_meta_timestamps,
         )?;
 
         //  Execute the hook operator.

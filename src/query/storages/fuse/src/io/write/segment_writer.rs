@@ -15,6 +15,7 @@
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 
@@ -26,16 +27,19 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<'a> SegmentWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
+            table_meta_timestamps,
         }
     }
 
@@ -58,7 +62,9 @@ impl<'a> SegmentWriter<'a> {
     }
 
     fn generate_location(&self) -> Location {
-        let path = self.location_generator.gen_segment_info_location();
+        let path = self
+            .location_generator
+            .gen_segment_info_location(self.table_meta_timestamps);
         (path, SegmentInfo::VERSION)
     }
 }

@@ -72,6 +72,8 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SetLVTReply;
+use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
@@ -500,5 +502,9 @@ impl Catalog for SessionCatalog {
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {
         self.inner.drop_sequence(req).await
+    }
+
+    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply> {
+        self.inner.set_table_lvt(req).await
     }
 }

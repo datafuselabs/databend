@@ -14,6 +14,7 @@
 
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::PhysicalPlan;
 use crate::ColumnBinding;
@@ -29,4 +30,5 @@ pub struct DistributedInsertSelect {
     pub select_schema: DataSchemaRef,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }

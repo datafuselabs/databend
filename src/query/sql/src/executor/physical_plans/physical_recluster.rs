@@ -20,6 +20,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::physical_commit_sink::ReclusterInfoSideCar;
 use crate::executor::physical_plans::CommitSink;
@@ -35,6 +36,7 @@ pub struct Recluster {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -86,6 +88,9 @@ impl PhysicalPlanBuilder {
                 "No need to do recluster for '{database}'.'{table}'"
             )));
         };
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
         if parts.is_empty() {
             return Err(ErrorCode::NoNeedToRecluster(format!(
                 "No need to do recluster for '{database}'.'{table}'"
@@ -105,6 +110,7 @@ impl PhysicalPlanBuilder {
                     tasks,
                     table_info: table_info.clone(),
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                 }));
 
                 if is_distributed {
@@ -126,6 +132,7 @@ impl PhysicalPlanBuilder {
                     merge_meta: false,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                     recluster_info: Some(ReclusterInfoSideCar {
                         merged_blocks: remained_blocks,
                         removed_segment_indexes,
@@ -140,6 +147,7 @@ impl PhysicalPlanBuilder {
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                 }));
 
                 if is_distributed {
@@ -162,6 +170,7 @@ impl PhysicalPlanBuilder {
                     merge_meta,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                     recluster_info: None,
                 }))
             }

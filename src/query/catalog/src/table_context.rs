@@ -59,6 +59,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
@@ -325,6 +326,11 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps>;
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);

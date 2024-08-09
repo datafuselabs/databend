@@ -39,6 +39,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 
@@ -217,6 +218,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, append_mode);
 
@@ -236,6 +238,7 @@ pub trait Table: Sync + Send {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (
             ctx,

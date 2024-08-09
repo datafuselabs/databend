@@ -304,6 +304,7 @@ impl FuseTable {
         snapshot_id: &str,
         retention_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
+        // TODO(Sky): unify location related logic into a single place
         let mut location = None;
         let prefix = format!(
             "{}/{}/",
@@ -311,10 +312,11 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         let prefix_loc = format!("{}{}", prefix, snapshot_id);
+        let prefix_loc_v5 = format!("{}g{}", prefix, snapshot_id);
 
         let files = self
             .list_files(prefix, |loc, modified| {
-                if loc.starts_with(&prefix_loc) {
+                if loc.starts_with(&prefix_loc) || loc.starts_with(&prefix_loc_v5) {
                     location = Some(loc);
                 }
                 modified <= retention_point

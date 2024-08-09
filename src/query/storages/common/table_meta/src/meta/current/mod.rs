@@ -22,10 +22,11 @@ pub use v2::Statistics;
 pub use v3::TableSnapshotStatistics;
 pub use v4::CompactSegmentInfo;
 pub use v4::SegmentInfo;
-pub use v4::TableSnapshot;
-pub use v4::TableSnapshotLite;
+pub use v5::TableSnapshot;
+pub use v5::TableSnapshotLite;
 
 use super::v0;
 use super::v2;
 use super::v3;
 use super::v4;
+use super::v5;

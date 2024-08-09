@@ -84,7 +84,11 @@ async fn test_refresh_agg_index() -> Result<()> {
 
     blocks.sort();
     indexes.sort();
-    assert_eq!(blocks, indexes);
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes);
 
     // Check aggregating index is correct.
     {
@@ -122,7 +126,11 @@ async fn test_refresh_agg_index() -> Result<()> {
 
         blocks.sort();
         indexes.sort();
-        assert_eq!(blocks, indexes);
+        let blocks_remove_prefix_g = blocks
+            .iter()
+            .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(blocks_remove_prefix_g, indexes);
 
         let new_block = {
             blocks.retain(|s| s != &pre_block);
@@ -264,7 +272,11 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // Check aggregating index_0 is correct.
     {
@@ -303,7 +315,13 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // Check aggregating index_0 is correct after update.
     {
@@ -388,7 +406,11 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     blocks.sort();
     indexes_1.sort();
-    assert_eq!(blocks, indexes_1);
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_1);
 
     // Check aggregating index_0 is correct.
     {
@@ -446,13 +468,23 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // check index1
     let mut indexes_1 = collect_file_names(&agg_index_path_1)?;
 
     indexes_1.sort();
-    assert_eq!(blocks, indexes_1);
+    let indexes_1 = collect_file_names(&agg_index_path_1)?;
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_1);
 
     Ok(())
 }
@@ -494,7 +526,11 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
 
     blocks.sort();
     indexes_0.sort();
-    assert_eq!(blocks, indexes_0);
+    let blocks_remove_prefix_g = blocks
+        .iter()
+        .map(|b| b.strip_prefix('g').unwrap_or(b).to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(blocks_remove_prefix_g, indexes_0);
 
     // Check aggregating index_0 is correct.
     {

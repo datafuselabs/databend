@@ -145,13 +145,13 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use uuid::Uuid;
 use walkdir::WalkDir;
 use xorf::BinaryFuse16;
 
@@ -274,17 +274,17 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
-            let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
+            let new_snapshot = TableSnapshot::try_new(
                 None,
-                &None,
                 None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
                 None,
                 None,
-            );
+                Default::default(),
+            )
+            .unwrap();
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,
@@ -859,6 +859,15 @@ impl TableContext for CtxDelegation {
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx
+            .get_table_meta_timestamps(table_id, previous_snapshot)
     }
 }
 

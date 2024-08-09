@@ -192,11 +192,15 @@ impl MutationInterpreter {
         let partitions = self
             .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(fuse_table.get_id(), table_snapshot.clone())?;
         Ok(MutationBuildInfo {
             table_info,
             table_snapshot,
             update_stream_meta,
             partitions,
+            table_meta_timestamps,
         })
     }
 

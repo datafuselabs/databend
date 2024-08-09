@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::binder::MutationType;
 use crate::executor::physical_plan::PhysicalPlan;
@@ -31,4 +32,5 @@ pub struct ColumnMutation {
     pub field_id_to_schema_index: HashMap<usize, usize>,
     pub input_num_columns: usize,
     pub has_filter_column: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }

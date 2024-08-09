@@ -848,4 +848,3 @@ select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t1
 
 statement ok
 DROP DATABASE db_09_0008
-

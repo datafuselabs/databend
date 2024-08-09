@@ -36,7 +36,7 @@ use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
 
-const FUSE_AEEND_ENGINE_NAME: &str = "fuse_failsafe_amend_table";
+const FUSE_AMEND_ENGINE_NAME: &str = "fuse_failsafe_amend_table";
 struct AmendTableArgs {
     arg_database_name: String,
     arg_table_name: String,
@@ -101,7 +101,7 @@ impl SimpleTableFunc for FuseAmendTable {
     where Self: Sized {
         let fail_safe_handler = get_fail_safe_handler();
         let (arg_database_name, arg_table_name) =
-            parse_db_tb_args(&table_args, FUSE_AEEND_ENGINE_NAME)?;
+            parse_db_tb_args(&table_args, FUSE_AMEND_ENGINE_NAME)?;
         Ok(Self {
             args: AmendTableArgs {
                 arg_database_name,

@@ -141,6 +141,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
@@ -448,7 +449,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn txn_mgr(&self) -> TxnManagerRef {
-        todo!()
+        self.ctx.txn_mgr()
     }
 
     fn incr_total_scan_value(&self, _value: ProgressValues) {
@@ -936,6 +937,15 @@ impl TableContext for CtxDelegation {
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx
+            .get_table_meta_timestamps(table_id, previous_snapshot)
     }
 }
 

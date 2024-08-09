@@ -39,7 +39,6 @@ use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::FuseTable;
 use crate::Table;
-
 const FUSE_FUNC_COLUMN: &str = "fuse_column";
 
 pub struct FuseColumnTable {

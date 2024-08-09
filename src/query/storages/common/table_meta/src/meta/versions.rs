@@ -22,6 +22,7 @@ use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v3;
 use crate::meta::v4;
+use crate::meta::v5;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -77,6 +78,7 @@ impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
 impl Versioned<3> for v3::TableSnapshot {}
 impl Versioned<4> for v4::TableSnapshot {}
+impl Versioned<5> for v5::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
@@ -84,6 +86,7 @@ pub enum SnapshotVersion {
     V2(PhantomData<v2::TableSnapshot>),
     V3(PhantomData<v3::TableSnapshot>),
     V4(PhantomData<v4::TableSnapshot>),
+    V5(PhantomData<v5::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -94,6 +97,7 @@ impl SnapshotVersion {
             SnapshotVersion::V2(a) => Self::ver(a),
             SnapshotVersion::V3(a) => Self::ver(a),
             SnapshotVersion::V4(a) => Self::ver(a),
+            SnapshotVersion::V5(a) => Self::ver(a),
         }
     }
 
@@ -168,8 +172,9 @@ mod converters {
                 2 => Ok(SnapshotVersion::V2(testify_version::<_, 2>(PhantomData))),
                 3 => Ok(SnapshotVersion::V3(testify_version::<_, 3>(PhantomData))),
                 4 => Ok(SnapshotVersion::V4(testify_version::<_, 4>(PhantomData))),
+                5 => Ok(SnapshotVersion::V5(testify_version::<_, 5>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2, 3, 4"
+                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2, 3, 4, 5"
                 ))),
             }
         }

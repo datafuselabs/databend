@@ -65,6 +65,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
+            insert_select.table_meta_timestamps,
         )?;
 
         Ok(())
