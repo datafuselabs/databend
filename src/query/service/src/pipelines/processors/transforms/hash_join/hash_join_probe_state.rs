@@ -160,6 +160,9 @@ impl HashJoinProbeState {
     pub fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::Inner
+            | JoinType::Asof
+            | JoinType::LeftAsof
+            | JoinType::RightAsof
             | JoinType::LeftSemi
             | JoinType::LeftAnti
             | JoinType::RightSemi

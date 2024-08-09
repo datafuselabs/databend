@@ -32,11 +32,17 @@ pub enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+    AsofJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
 }
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.equi_conditions.is_empty() {
+    if !join.equi_conditions.is_empty()
+        && !matches!(
+            join.join_type,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        )
+    {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
@@ -59,14 +65,21 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             &mut other_conditions,
         )
     }
-
     if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
             range_conditions,
             other_conditions,
         ));
     }
-
+    if matches!(
+        join.join_type,
+        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+    ) {
+        return Ok(PhysicalJoinType::AsofJoin(
+            range_conditions,
+            other_conditions,
+        ));
+    }
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
@@ -164,9 +177,20 @@ impl PhysicalPlanBuilder {
                 )
                 .await
             }
-            PhysicalJoinType::RangeJoin(range, other) => {
-                self.build_range_join(s_expr, left_required, right_required, range, other)
+            PhysicalJoinType::AsofJoin(range, other) => {
+                self.build_asof_join(join, s_expr, (left_required, right_required), range, other)
                     .await
+            }
+            PhysicalJoinType::RangeJoin(range, other) => {
+                self.build_range_join(
+                    join.join_type.clone(),
+                    s_expr,
+                    left_required,
+                    right_required,
+                    range,
+                    other,
+                )
+                .await
             }
         }
     }

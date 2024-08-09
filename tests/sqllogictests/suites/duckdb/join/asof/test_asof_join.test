@@ -1,0 +1,59 @@
+# name: test/sql/join/asof/test_asof_join.test
+# description: Test As-Of join useage
+# group: [asof]
+# Use doubles for readable infinities
+statement ok
+CREATE TABLE events0 (begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events0 VALUES
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3)
+;
+
+# Prevent optimiser from removing true inequalities
+statement ok
+create table prices(wh timestamp, symbol int, price int);
+
+statement ok
+insert into prices values ('2020-01-01 00:00:00', 1, 42);
+
+statement ok
+create table trades(wh timestamp, symbol int);
+
+statement ok
+insert into trades values ('2020-01-01 00:00:03', 1);
+
+query III
+SELECT t.*, p.price
+FROM trades t ASOF JOIN prices p 
+  ON t.symbol = p.symbol AND t.wh >= p.wh;
+----
+2020-01-01 00:00:03.000000 1 42
+
+#
+#  Errors
+#
+
+# Invalid ASOF JOIN comparison
+statement error (?s).*Missing inequality condition!
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts <> e.begin
+ORDER BY p.ts ASC
+
+# Missing ASOF JOIN inequality
+statement error (?s).*Missing inequality condition!
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts = e.begin
+ORDER BY p.ts ASC
+
+# Multiple ASOF JOIN inequalities
+statement error (?s).*Multiple inequalities condition!
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts >= e.begin AND p.ts >= e.value
+ORDER BY p.ts ASC

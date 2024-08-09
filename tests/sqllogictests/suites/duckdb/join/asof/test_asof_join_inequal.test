@@ -1,0 +1,69 @@
+# name: test/sql/join/asof/test_asof_join_inequalities.test
+# description: Test As-Of joins for greater than and less thans
+# group: [asof]
+
+# Join on a timestamp range
+
+statement ok
+CREATE TABLE events0 AS 
+	(SELECT add_hours('2023-03-21 13:00:00'::TIMESTAMP , v) AS begin, v AS value
+	FROM range(0, 4) vals(v) );
+
+statement ok
+CREATE TABLE probe0 AS 
+	( SELECT  add_hours('2023-03-21 12:00:00'::TIMESTAMP, v) AS begin
+	FROM range(0,10) vals(v));
+
+# Check results against IEJoin
+#
+# Strictly Greater Than
+#
+
+# INNER 
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin > e.begin
+ORDER BY 1,2 ASC
+----
+2023-03-21 14:00:00.000000 2023-03-21 13:00:00.000000 0
+2023-03-21 15:00:00.000000 2023-03-21 14:00:00.000000 1
+2023-03-21 16:00:00.000000 2023-03-21 15:00:00.000000 2
+2023-03-21 17:00:00.000000 2023-03-21 16:00:00.000000 3
+2023-03-21 18:00:00.000000 2023-03-21 16:00:00.000000 3
+2023-03-21 19:00:00.000000 2023-03-21 16:00:00.000000 3
+2023-03-21 20:00:00.000000 2023-03-21 16:00:00.000000 3
+2023-03-21 21:00:00.000000 2023-03-21 16:00:00.000000 3
+
+#
+# Less Than or Equal
+#
+
+# INNER
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin <= e.begin
+ORDER BY 1,2 ASC
+----
+2023-03-21 12:00:00.000000	2023-03-21 13:00:00.000000	0
+2023-03-21 13:00:00.000000	2023-03-21 13:00:00.000000	0
+2023-03-21 14:00:00.000000	2023-03-21 14:00:00.000000	1
+2023-03-21 15:00:00.000000	2023-03-21 15:00:00.000000	2
+2023-03-21 16:00:00.000000	2023-03-21 16:00:00.000000	3
+
+#
+# Strictly Less Than 
+#
+
+# INNER
+query III
+SELECT p.begin, e.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin < e.begin
+ORDER BY 1,2 ASC
+----
+2023-03-21 12:00:00.000000	2023-03-21 13:00:00.000000	0
+2023-03-21 13:00:00.000000	2023-03-21 14:00:00.000000	1
+2023-03-21 14:00:00.000000	2023-03-21 15:00:00.000000	2
+2023-03-21 15:00:00.000000	2023-03-21 16:00:00.000000	3

@@ -16,6 +16,8 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -31,11 +33,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::physical_plans::RangeJoinCondition;
 use databend_common_sql::executor::physical_plans::RangeJoinType;
+use databend_common_sql::plans::JoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
+use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {
@@ -59,8 +63,15 @@ pub struct RangeJoinState {
     // Row index offset for left/right
     pub(crate) row_offset: RwLock<Vec<(usize, usize)>>,
     pub(crate) finished_tasks: AtomicU64,
+    pub(crate) completed_pair: AtomicU64,
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
+    pub(crate) join_type: JoinType,
+    // A bool indicating for tuple in the LHS if they found a match (used in full outer join)
+    pub(crate) left_match: RwLock<MutableBitmap>,
+    // A bool indicating for tuple in the RHS if they found a match (used in full outer join)
+    pub(crate) right_match: RwLock<MutableBitmap>,
+    pub(crate) partition_count: AtomicU64,
 }
 
 impl RangeJoinState {
@@ -70,7 +81,6 @@ impl RangeJoinState {
         } else {
             None
         };
-
         Self {
             ctx,
             left_table: RwLock::new(vec![]),
@@ -87,21 +97,46 @@ impl RangeJoinState {
             tasks: RwLock::new(vec![]),
             row_offset: RwLock::new(vec![]),
             finished_tasks: AtomicU64::new(0),
+            completed_pair: AtomicU64::new(0),
             ie_join_state,
+            join_type: range_join.join_type.clone(),
+            left_match: RwLock::new(MutableBitmap::new()),
+            right_match: RwLock::new(MutableBitmap::new()),
+            partition_count: AtomicU64::new(0),
         }
     }
 
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        right_table.push(block);
+        let mut right_block = block;
+        if matches!(self.join_type, JoinType::Left) {
+            let validity = Bitmap::new_constant(true, right_block.num_rows());
+            let nullable_right_columns = right_block
+                .columns()
+                .iter()
+                .map(|c| wrap_true_validity(c, right_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            right_block = DataBlock::new(nullable_right_columns, right_block.num_rows());
+        }
+        right_table.push(right_block);
         Ok(())
     }
 
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        left_table.push(block);
+        let mut left_block = block;
+        if matches!(self.join_type, JoinType::Right) {
+            let validity = Bitmap::new_constant(true, left_block.num_rows());
+            let nullable_left_columns = left_block
+                .columns()
+                .iter()
+                .map(|c| wrap_true_validity(c, left_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            left_block = DataBlock::new(nullable_left_columns, left_block.num_rows());
+        }
+        left_table.push(left_block);
         Ok(())
     }
 
@@ -271,6 +306,29 @@ impl RangeJoinState {
             }
             right_offset = 0;
             left_offset += left_block.num_rows();
+        }
+        self.partition_count
+            .fetch_add(tasks.len().try_into().unwrap(), atomic::Ordering::SeqCst);
+        // Add Fill task
+        left_offset = 0;
+        right_offset = 0;
+        if matches!(self.join_type, JoinType::Left) {
+            let mut left_match = self.left_match.write();
+            for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
+                row_offset.push((left_offset, 0));
+                tasks.push((left_idx, 0));
+                left_offset += left_block.num_rows();
+                left_match.extend_constant(left_block.num_rows(), false);
+            }
+        }
+        if matches!(self.join_type, JoinType::Right) {
+            let mut right_match = self.right_match.write();
+            for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
+                row_offset.push((0, right_offset));
+                tasks.push((0, right_idx));
+                right_offset += right_block.num_rows();
+                right_match.extend_constant(right_block.num_rows(), false);
+            }
         }
         Ok(())
     }

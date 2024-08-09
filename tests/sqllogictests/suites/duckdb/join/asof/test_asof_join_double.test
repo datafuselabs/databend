@@ -1,0 +1,58 @@
+# name: test/sql/join/asof/test_asof_join_doubles.test
+# description: Test As-Of joins for floating point
+# group: [asof]
+
+#
+# Inequality only
+#
+#
+# With equality
+#
+
+statement ok
+CREATE TABLE events (key INTEGER DEFAULT '0', begin DOUBLE NOT NULL DEFAULT '0', value INTEGER DEFAULT '0');
+
+statement ok
+INSERT INTO events VALUES
+	(1, 1, 0),
+	(1, 3, 1),
+	(1, 6, 2),
+	(1, 8, 3),
+	(2, 0, 10),
+	(2, 7, 20),
+	(2, 11, 30),
+	(3, 11, 30)
+;
+
+statement ok
+CREATE TABLE probes (key INTEGER DEFAULT '0', ts DOUBLE NOT NULL DEFAULT '0');
+
+statement ok
+INSERT INTO probes VALUES
+	(1, 1),
+	(1, 2),
+	(1, 3),
+	(2, 1),
+	(2, 2),
+	(2, 3)
+;
+
+# INNER Window version
+query III nosort inner_equality
+SELECT p.key, p.ts, e.value
+FROM 
+	probes p
+JOIN (
+	SELECT key, value, begin, 
+		LEAD(begin, 1, '999'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS ed
+	FROM events
+) e
+ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.ed
+ORDER BY 1, 2 ASC
+----
+1 1.0 0
+1 2.0 0
+1 3.0 1
+2 1.0 10
+2 2.0 10
+2 3.0 10

@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
@@ -47,6 +48,7 @@ pub struct RangeJoin {
     // Now only support inner join, will support left/right join later
     pub join_type: JoinType,
     pub range_join_type: RangeJoinType,
+    pub output_schema: DataSchemaRef,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -54,9 +56,7 @@ pub struct RangeJoin {
 
 impl RangeJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.left.output_schema()?.fields().clone();
-        fields.extend(self.right.output_schema()?.fields().clone());
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(self.output_schema.clone())
     }
 }
 
@@ -77,6 +77,7 @@ pub struct RangeJoinCondition {
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
+        join_type: JoinType,
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
@@ -102,15 +103,46 @@ impl PhysicalPlanBuilder {
         let left_side = self.build(s_expr.child(1)?, left_required).await?;
         let right_side = self.build(s_expr.child(0)?, right_required).await?;
 
-        let left_schema = left_side.output_schema()?;
-        let right_schema = right_side.output_schema()?;
+        let left_schema = match join_type {
+            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+                let left_schema = left_side.output_schema()?;
+                // Wrap nullable type for columns in build side.
+                let left_schema = DataSchemaRefExt::create(
+                    left_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                left_schema
+            }
+            _ => left_side.output_schema()?,
+        };
+        let right_schema = match join_type {
+            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+                let right_schema = right_side.output_schema()?;
+                // Wrap nullable type for columns in build side.
+                let right_schema = DataSchemaRefExt::create(
+                    right_schema
+                        .fields()
+                        .iter()
+                        .map(|field| {
+                            DataField::new(field.name(), field.data_type().wrap_nullable())
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                right_schema
+            }
+            _ => right_side.output_schema()?,
+        };
 
         let merged_schema = DataSchemaRefExt::create(
-            left_side
-                .output_schema()?
+            left_schema
                 .fields()
                 .iter()
-                .chain(right_side.output_schema()?.fields())
+                .chain(right_schema.fields())
                 .cloned()
                 .collect::<Vec<_>>(),
         );
@@ -135,8 +167,9 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
-            join_type: JoinType::Inner,
+            join_type,
             range_join_type,
+            output_schema: merged_schema,
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }

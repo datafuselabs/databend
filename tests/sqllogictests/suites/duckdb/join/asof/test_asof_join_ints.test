@@ -1,0 +1,81 @@
+# name: test/sql/join/asof/test_asof_join_integers.test
+# description: Test As-Of joins for integers
+# group: [asof]
+
+# Join on a string range
+
+statement ok
+CREATE TABLE events0 (begin INTEGER, value INTEGER);
+
+statement ok
+INSERT INTO events0 VALUES
+	(NULL, -1),
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3),
+	(999999, 9)
+;
+
+statement ok
+CREATE TABLE probe0 AS 
+	(SELECT v::INTEGER AS begin
+	FROM range(0,10) vals(v))
+;
+
+# This is not implemented yet because it requires a dedicated operator 
+# instead of LEAD(...infinity::INTEGER)
+
+# INNER ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# LEFT ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# RIGHT ON inequality only
+query II
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC, e.value ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	-1
+NULL	9

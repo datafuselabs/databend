@@ -184,7 +184,7 @@ impl HashJoinState {
     }
 }
 
-pub(crate) fn wrap_true_validity(
+pub fn wrap_true_validity(
     column: &BlockEntry,
     num_rows: usize,
     true_validity: &Bitmap,
