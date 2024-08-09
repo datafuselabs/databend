@@ -290,6 +290,7 @@ parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
 # TODO: let's use native tls instead.
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
+proj4rs = { version = "0.1.3", features = ["geo-types", "crs-definitions"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }

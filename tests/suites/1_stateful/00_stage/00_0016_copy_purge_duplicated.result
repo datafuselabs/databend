@@ -2,6 +2,7 @@
 >>>> create table t16(a int, b int)
 >>>> drop stage if exists s16
 >>>> create stage s16 url='fs:///tmp/00_0016/';
+>>>> unset global purge_duplicated_files_in_copy;
 >>>> copy into t16 from @s16 file_format = (type = CSV) purge = true
 i1.csv	2	0	NULL	NULL
 <<<<
@@ -13,7 +14,8 @@ i1.csv	2	0	NULL	NULL
 duplicate file i1 into the stage
 put the new file i2 into the stage
 enable purge_duplicated_files_in_copy and copy into from location again
->>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true
+>>>> set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = true
+purge_duplicated_files_in_copy	1	0	SESSION
 i2.csv	2	0	NULL	NULL
 <<<<
 stage should be empty, the duplicated file i1 should be removed
@@ -27,7 +29,8 @@ tow new rows from new file i2 should be copied into table t16
 4	4
 put the same files into the stage
 enable purge_duplicated_files_in_copy and copy into from location again
->>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true
+>>>> set purge_duplicated_files_in_copy =1;select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = true
+purge_duplicated_files_in_copy	1	0	SESSION
 <<<<
 stage should be empty
 >>>> list @s16
@@ -40,7 +43,8 @@ table should be unchanged
 4	4
 put the same files into the stage
 enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again
->>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false
+>>>> set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = false
+purge_duplicated_files_in_copy	1	0	SESSION
 <<<<
 stage should not be empty, contains i1 and i2
 <<<<
@@ -56,7 +60,8 @@ table should be unchanged
 put the same files into the stage
 also put the a new file into the stage
 enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again
->>>> set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false
+>>>> set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = false
+purge_duplicated_files_in_copy	1	0	SESSION
 i3.csv	2	0	NULL	NULL
 <<<<
 stage should not be empty, contains i1, i2, and i3

@@ -44,6 +44,7 @@ log = { workspace = true }
 match-template = { workspace = true }
 memchr = { version = "2", default-features = false }
 micromarshal = "0.5.0"
+num-bigint = "0.4.6"
 num-traits = "0.2.15"
 ordered-float = { workspace = true, features = ["serde", "rand", "borsh"] }
 rand = { workspace = true }

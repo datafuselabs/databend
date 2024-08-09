@@ -51,6 +51,7 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
+proj4rs = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"

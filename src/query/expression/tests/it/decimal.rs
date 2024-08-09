@@ -21,6 +21,8 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
+use ethnum::i256;
+use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -166,5 +168,53 @@ fn test_float_to_128() {
     for (a, b) in cases {
         let r = i128::from_float(a);
         assert_eq!(r, b);
+    }
+}
+
+#[test]
+fn test_from_bigint() {
+    let cases = vec![
+        ("0", 0i128),
+        ("12345", 12345i128),
+        ("-1", -1i128),
+        ("-170141183460469231731687303715884105728", i128::MIN),
+        ("170141183460469231731687303715884105727", i128::MAX),
+    ];
+
+    for (a, b) in cases {
+        let r = BigInt::parse_bytes(a.as_bytes(), 10).unwrap();
+        assert_eq!(i128::from_bigint(r), Some(b));
+    }
+
+    let cases = vec![
+        ("0".to_string(), i256::ZERO),
+        ("12345".to_string(), i256::from(12345)),
+        ("-1".to_string(), i256::from(-1)),
+        (
+            "12".repeat(25),
+            i256::from_str_radix(&"12".repeat(25), 10).unwrap(),
+        ),
+        (
+            "1".repeat(26),
+            i256::from_str_radix(&"1".repeat(26), 10).unwrap(),
+        ),
+        (i256::MIN.to_string(), i256::MIN),
+        (i256::MAX.to_string(), i256::MAX),
+    ];
+
+    for (a, b) in cases {
+        let r = BigInt::parse_bytes(a.as_bytes(), 10).unwrap();
+        assert_eq!(i256::from_bigint(r), Some(b));
+    }
+
+    let cases = vec![
+        ("1".repeat(78), None),
+        ("12".repeat(78), None),
+        ("234".repeat(78), None),
+    ];
+
+    for (a, b) in cases {
+        let r = BigInt::parse_bytes(a.as_bytes(), 10).unwrap();
+        assert_eq!(i256::from_bigint(r), b);
     }
 }

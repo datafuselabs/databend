@@ -11,6 +11,7 @@ stmt "create table t16(a int, b int)"
 
 stmt "drop stage if exists s16"
 stmt "create stage s16 url='fs:///tmp/00_0016/';"
+stmt "unset global purge_duplicated_files_in_copy;"
 
 # setup
 # copy one file from test stage @s16, with purge enabled
@@ -44,7 +45,7 @@ cat << EOF > /tmp/00_0016/i2.csv
 EOF
 
 echo "enable purge_duplicated_files_in_copy and copy into from location again"
-query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true"
+query "set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = true"
 
 echo "stage should be empty, the duplicated file i1 should be removed"
 query "list @s16"
@@ -68,7 +69,7 @@ cat << EOF > /tmp/00_0016/i2.csv
 EOF
 
 echo "enable purge_duplicated_files_in_copy and copy into from location again"
-query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = true"
+query "set purge_duplicated_files_in_copy =1;select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = true"
 
 echo "stage should be empty"
 query "list @s16"
@@ -93,7 +94,7 @@ cat << EOF > /tmp/00_0016/i2.csv
 EOF
 
 echo "enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again"
-query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false"
+query "set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = false"
 
 echo "stage should not be empty, contains i1 and i2"
 query "list @s16" | awk '{print $1}' | sort
@@ -123,7 +124,7 @@ cat << EOF > /tmp/00_0016/i3.csv
 EOF
 
 echo "enable purge_duplicated_files_in_copy, but disable the purge option, then copy into from location again"
-query "set purge_duplicated_files_in_copy =1; copy into t16 from @s16 file_format = (type = CSV) purge = false"
+query "set purge_duplicated_files_in_copy =1; select name,value,default,level from system.settings where name='purge_duplicated_files_in_copy'; copy into t16 from @s16 file_format = (type = CSV) purge = false"
 
 echo "stage should not be empty, contains i1, i2, and i3"
 query "list @s16" | awk '{print $1}' | sort
@@ -134,3 +135,4 @@ stmt "select * from t16 order by a"
 # cleanup
 stmt "drop table if exists t16"
 stmt "drop stage if exists s16"
+

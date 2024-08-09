@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -25,9 +26,13 @@ use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
+use ethnum::u256;
 use ethnum::AsI256;
 use itertools::Itertools;
+use num_bigint::BigInt;
+use num_traits::FromBytes;
 use num_traits::NumCast;
+use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -356,7 +361,7 @@ pub trait Decimal:
     fn checked_mul(self, rhs: Self) -> Option<Self>;
     fn checked_rem(self, rhs: Self) -> Option<Self>;
 
-    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self>;
+    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self>;
 
     // mul two decimals and return a decimal with rounding option
     fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self>;
@@ -368,6 +373,7 @@ pub trait Decimal:
 
     fn from_float(value: f64) -> Self;
     fn from_i128<U: Into<i128>>(value: U) -> Self;
+    fn from_bigint(value: BigInt) -> Option<Self>;
 
     fn de_binary(bytes: &mut &[u8]) -> Self;
     fn display(self, scale: u8) -> String;
@@ -471,7 +477,8 @@ impl Decimal for i128 {
         }
     }
 
-    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
+    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
+        let mul = i256::e(mul_scale);
         if self.is_negative() == rhs.is_negative() {
             let res = (i256::from(self) * i256::from(mul) + i256::from(rhs) / 2) / i256::from(rhs);
             Some(*res.low())
@@ -533,6 +540,10 @@ impl Decimal for i128 {
 
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into()
+    }
+
+    fn from_bigint(value: BigInt) -> Option<Self> {
+        value.to_i128()
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -687,19 +698,48 @@ impl Decimal for i256 {
 
     fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
         let div = i256::e(shift_scale);
-        if self.is_negative() == rhs.is_negative() {
+        let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(rhs).map(|x| (x + div / 2) / div)
         } else {
             self.checked_mul(rhs).map(|x| (x - div / 2) / div)
-        }
+        };
+
+        ret.or_else(|| {
+            let a = BigInt::from_le_bytes(&self.to_le_bytes());
+            let b = BigInt::from_le_bytes(&rhs.to_le_bytes());
+            let div = BigInt::from(10).pow(shift_scale);
+            if self.is_negative() == rhs.is_negative() {
+                Self::from_bigint((a * b + div.clone() / 2) / div)
+            } else {
+                Self::from_bigint((a * b - div.clone() / 2) / div)
+            }
+        })
     }
 
-    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
-        if self.is_negative() == rhs.is_negative() {
+    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
+        let fallback = || {
+            let a = BigInt::from_le_bytes(&self.to_le_bytes());
+            let b = BigInt::from_le_bytes(&rhs.to_le_bytes());
+            let mul = BigInt::from(10).pow(mul_scale);
+            if self.is_negative() == rhs.is_negative() {
+                Self::from_bigint((a * mul + b.clone() / 2) / b)
+            } else {
+                Self::from_bigint((a * mul - b.clone() / 2) / b)
+            }
+        };
+
+        if mul_scale >= MAX_DECIMAL256_PRECISION as _ {
+            return fallback();
+        }
+
+        let mul = i256::e(mul_scale);
+        let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(mul).map(|x| (x + rhs / 2) / rhs)
         } else {
             self.checked_mul(mul).map(|x| (x - rhs / 2) / rhs)
-        }
+        };
+
+        ret.or_else(fallback)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -723,6 +763,32 @@ impl Decimal for i256 {
 
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         i256::from(value.into())
+    }
+
+    fn from_bigint(value: BigInt) -> Option<Self> {
+        let mut ret: u256 = u256::ZERO;
+        let mut bits = 0;
+
+        for i in value.iter_u64_digits() {
+            if bits >= 256 {
+                return None;
+            }
+            ret |= u256::from(i) << bits;
+            bits += 64;
+        }
+
+        match value.sign() {
+            num_bigint::Sign::Plus => i256::try_from(ret).ok(),
+            num_bigint::Sign::NoSign => Some(i256::ZERO),
+            num_bigint::Sign::Minus => {
+                let m: u256 = u256::ONE << 255;
+                match ret.cmp(&m) {
+                    Ordering::Less => Some(-i256::try_from(ret).unwrap()),
+                    Ordering::Equal => Some(i256::MIN),
+                    Ordering::Greater => None,
+                }
+            }
+        }
     }
 
     fn de_binary(bytes: &mut &[u8]) -> Self {
@@ -947,10 +1013,9 @@ impl DecimalDataType {
             let l = a.leading_digits() + b.leading_digits();
             precision = l + scale;
         } else if is_divide {
-            let l = a.leading_digits() + b.scale();
-            scale = a.scale().max((a.scale() + 6).min(12));
-            // P = L + S
-            precision = l + scale;
+            scale = a.scale().max((a.scale() + 6).min(12)); // scale must be >= a.sale()
+            let l = a.leading_digits() + b.scale(); // l must be >= a.leading_digits()
+            precision = l + scale; // so precision must be >= a.precision()
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
             // for addition/subtraction, we add 1 to the width to ensure we don't overflow
@@ -984,8 +1049,18 @@ impl DecimalDataType {
                 result_type,
             ))
         } else if is_divide {
-            let (a, b) = Self::div_common_type(a, b, result_type.size())?;
-            Ok((a, b, result_type))
+            let p = precision.max(a.precision()).max(b.precision());
+            Ok((
+                Self::from_size(DecimalSize {
+                    precision: p,
+                    scale: a.scale(),
+                })?,
+                Self::from_size(DecimalSize {
+                    precision: p,
+                    scale: b.scale(),
+                })?,
+                result_type,
+            ))
         } else {
             Ok((result_type, result_type, result_type))
         }

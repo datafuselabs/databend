@@ -3599,6 +3599,10 @@ Functions overloads:
 1 st_srid(Geometry NULL) :: Int32 NULL
 0 st_startpoint(Geometry) :: Geometry
 1 st_startpoint(Geometry NULL) :: Geometry NULL
+0 st_transform(Geometry, Int32) :: Geometry
+1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
+2 st_transform(Geometry, Int32, Int32) :: Geometry
+3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
 0 st_x(Geometry) :: Float64 NULL
 1 st_x(Geometry NULL) :: Float64 NULL
 0 st_xmax(Geometry) :: Float64 NULL
