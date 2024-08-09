@@ -37,7 +37,7 @@ pub mod version;
 
 pub use runtime::dump_backtrace;
 pub use runtime::get_all_tasks;
-pub use runtime::match_join_handle;
 pub use runtime::set_alloc_error_hook;
 pub use runtime::AsyncTaskItem;
+pub use runtime::JoinHandle;
 pub use runtime::GLOBAL_TASK;

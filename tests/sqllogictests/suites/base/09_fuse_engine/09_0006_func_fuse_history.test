@@ -113,7 +113,7 @@ select * from fuse_snapshot('db_09_0006', 'not_exist', 'invalid_extra_arg')
 statement ok
 create table t_in_memory(a uint64 not null) engine = Memory
 
-statement error 1001
+statement error 4000
 select * from fuse_snapshot('db_09_0006', 't_in_memory')
 
 statement ok

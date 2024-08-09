@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
@@ -29,6 +32,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -36,16 +40,92 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
-pub struct ClusteringStatistics<'a> {
+pub struct ClusteringStatsArgs {
+    database_name: String,
+    table_name: String,
+}
+
+impl From<&ClusteringStatsArgs> for TableArgs {
+    fn from(args: &ClusteringStatsArgs) -> Self {
+        let tbl_args = vec![
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
+        ];
+        TableArgs::new_positioned(tbl_args)
+    }
+}
+
+impl TryFrom<(&str, TableArgs)> for ClusteringStatsArgs {
+    type Error = ErrorCode;
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (database_name, table_name) = parse_db_tb_args(&table_args, func_name)?;
+        Ok(Self {
+            database_name,
+            table_name,
+        })
+    }
+}
+
+pub type ClusteringStatisticsFunc = SimpleArgFuncTemplate<ClusteringStatistics>;
+
+pub struct ClusteringStatistics;
+
+#[async_trait::async_trait]
+impl SimpleArgFunc for ClusteringStatistics {
+    type Args = ClusteringStatsArgs;
+
+    fn schema() -> TableSchemaRef {
+        ClusteringStatisticsImpl::schema()
+    }
+
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
+        plan: &DataSourcePlan,
+    ) -> Result<DataBlock> {
+        let tenant_id = ctx.get_tenant();
+
+        let tbl = ctx
+            .get_catalog(databend_common_catalog::catalog_kind::CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                args.database_name.as_str(),
+                args.table_name.as_str(),
+            )
+            .await?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+
+        let Some(cluster_key_id) = tbl.cluster_key_id() else {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table '{}.{}'",
+                args.database_name, args.table_name,
+            )));
+        };
+
+        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
+        ClusteringStatisticsImpl::new(ctx.clone(), tbl, limit, cluster_key_id)
+            .get_blocks()
+            .await
+    }
+}
+
+pub struct ClusteringStatisticsImpl<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub limit: Option<usize>,
     pub cluster_key_id: u32,
 }
 
-impl<'a> ClusteringStatistics<'a> {
+impl<'a> ClusteringStatisticsImpl<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,

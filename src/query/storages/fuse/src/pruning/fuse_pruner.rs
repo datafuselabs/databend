@@ -368,27 +368,21 @@ impl FusePruner {
             }));
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let mut res = worker?;
-                    metas.extend(res.0);
-                    self.deleted_segments.append(&mut res.1);
-                }
-                if delete_pruning {
-                    Ok(metas)
-                } else {
-                    // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                    // will get here, we can prevent other mutations like update and so on.
-                    // TopN pruner.
-                    self.topn_pruning(metas)
-                }
-            }
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let mut res = worker?;
+            metas.extend(res.0);
+            self.deleted_segments.append(&mut res.1);
+        }
+        if delete_pruning {
+            Ok(metas)
+        } else {
+            // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+            // will get here, we can prevent other mutations like update and so on.
+            // TopN pruner.
+            self.topn_pruning(metas)
         }
     }
 
@@ -451,23 +445,17 @@ impl FusePruner {
             segment_idx += 1;
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let res = worker?;
-                    metas.extend(res);
-                }
-                // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
-                // will get here, we can prevent other mutations like update and so on.
-                // TopN pruner.
-                self.topn_pruning(metas)
-            }
+        let workers = futures::future::try_join_all(works).await?;
+
+        let mut metas = vec![];
+        for worker in workers {
+            let res = worker?;
+            metas.extend(res);
         }
+        // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+        // will get here, we can prevent other mutations like update and so on.
+        // TopN pruner.
+        self.topn_pruning(metas)
     }
 
     // topn pruner:

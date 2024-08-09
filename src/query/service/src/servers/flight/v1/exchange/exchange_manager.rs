@@ -28,6 +28,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,7 +41,6 @@ use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
-use tokio::task::JoinHandle;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;

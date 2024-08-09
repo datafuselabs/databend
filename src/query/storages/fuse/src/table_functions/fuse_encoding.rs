@@ -19,8 +19,12 @@ use databend_common_arrow::native::read::reader::NativeReader;
 use databend_common_arrow::native::stat::stat_simple;
 use databend_common_arrow::native::stat::ColumnInfo;
 use databend_common_arrow::native::stat::PageBody;
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -41,6 +45,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -50,27 +55,88 @@ use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_col_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
-pub struct FuseEncoding<'a> {
+pub struct FuseEncodingArgs {
+    database_name: String,
+}
+
+impl TryFrom<(&str, TableArgs)> for FuseEncodingArgs {
+    type Error = ErrorCode;
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let database_name = parse_db_tb_col_args(&table_args, func_name)?;
+        Ok(Self { database_name })
+    }
+}
+
+impl From<&FuseEncodingArgs> for TableArgs {
+    fn from(args: &FuseEncodingArgs) -> Self {
+        TableArgs::new_positioned(vec![string_literal(args.database_name.as_str())])
+    }
+}
+
+pub type FuseEncodingFunc = SimpleArgFuncTemplate<FuseEncoding>;
+pub struct FuseEncoding;
+
+#[async_trait::async_trait]
+impl SimpleArgFunc for FuseEncoding {
+    type Args = FuseEncodingArgs;
+
+    fn schema() -> TableSchemaRef {
+        FuseEncodingImpl::schema()
+    }
+
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
+        plan: &DataSourcePlan,
+    ) -> Result<DataBlock> {
+        let tenant_id = ctx.get_tenant();
+        let tbls = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_database(&tenant_id, args.database_name.as_str())
+            .await?
+            .list_tables()
+            .await?;
+
+        let fuse_tables = tbls
+            .iter()
+            .map(|tbl| {
+                let tbl = FuseTable::try_from_table(tbl.as_ref()).unwrap();
+                tbl
+            })
+            .collect::<Vec<_>>();
+
+        let filters = plan.push_downs.as_ref().and_then(|x| x.filters.clone());
+        FuseEncodingImpl::new(ctx.clone(), fuse_tables, filters)
+            .get_blocks()
+            .await
+    }
+}
+
+pub struct FuseEncodingImpl<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub tables: Vec<&'a FuseTable>,
-    pub limit: Option<usize>,
     pub filters: Option<Filters>,
 }
 
-impl<'a> FuseEncoding<'a> {
+impl<'a> FuseEncodingImpl<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         tables: Vec<&'a FuseTable>,
-        limit: Option<usize>,
         filters: Option<Filters>,
     ) -> Self {
         Self {
             ctx,
             tables,
-            limit,
             filters,
         }
     }
@@ -146,7 +212,7 @@ impl<'a> FuseEncoding<'a> {
                 .run(&as_expr(
                     filter,
                     &BUILTIN_FUNCTIONS,
-                    &FuseEncoding::schema(),
+                    &FuseEncodingImpl::schema(),
                 ))?
                 .try_downcast::<BooleanType>()
                 .unwrap();

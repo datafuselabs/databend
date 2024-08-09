@@ -19,6 +19,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_scalars;
@@ -42,6 +45,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -57,8 +61,80 @@ use serde_json::Value as JsonValue;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::cmp_with_null;
+use crate::table_functions::parse_db_tb_opt_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 use crate::Table;
+
+pub struct ClusteringInformationArgs {
+    database_name: String,
+    table_name: String,
+    cluster_key: Option<String>,
+}
+
+impl From<&ClusteringInformationArgs> for TableArgs {
+    fn from(args: &ClusteringInformationArgs) -> Self {
+        let mut tbl_args = Vec::new();
+        tbl_args.push(string_literal(args.database_name.as_str()));
+        tbl_args.push(string_literal(args.table_name.as_str()));
+        if let Some(arg_cluster_key) = &args.cluster_key {
+            tbl_args.push(string_literal(arg_cluster_key));
+        }
+        TableArgs::new_positioned(tbl_args)
+    }
+}
+impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
+    type Error = ErrorCode;
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (database_name, table_name, cluster_key) =
+            parse_db_tb_opt_args(&table_args, func_name)?;
+
+        Ok(Self {
+            database_name,
+            table_name,
+            cluster_key,
+        })
+    }
+}
+
+pub type ClusteringInformationFunc = SimpleArgFuncTemplate<ClusteringInformationNew>;
+pub struct ClusteringInformationNew;
+
+#[async_trait::async_trait]
+impl SimpleArgFunc for ClusteringInformationNew {
+    type Args = ClusteringInformationArgs;
+
+    fn schema() -> TableSchemaRef {
+        ClusteringInformation::schema()
+    }
+
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
+        _plan: &DataSourcePlan,
+    ) -> Result<DataBlock> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                args.database_name.as_str(),
+                args.table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+
+        ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
+            .get_clustering_info()
+            .await
+    }
+}
 
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,

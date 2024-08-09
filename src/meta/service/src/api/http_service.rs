@@ -29,8 +29,7 @@ use databend_common_meta_types::MetaNetworkError;
 use log::info;
 use log::warn;
 use poem::get;
-use poem::listener::RustlsCertificate;
-use poem::listener::RustlsConfig;
+use poem::listener::OpensslTlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
@@ -104,17 +103,10 @@ impl HttpService {
         route.data(self.meta_node.clone()).data(self.cfg.clone())
     }
 
-    fn build_tls(config: &Config) -> Result<RustlsConfig, MetaNetworkError> {
-        let conf = config.clone();
-
-        let tls_cert = std::fs::read(conf.admin_tls_server_cert.as_str())
-            .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
-
-        let tls_key = std::fs::read(conf.admin_tls_server_key)
-            .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
-
-        let certificate = RustlsCertificate::new().cert(tls_cert).key(tls_key);
-        let cfg = RustlsConfig::new().fallback(certificate);
+    fn build_tls(config: &Config) -> Result<OpensslTlsConfig, MetaNetworkError> {
+        let cfg = OpensslTlsConfig::new()
+            .cert_from_file(config.admin_tls_server_cert.as_str())
+            .key_from_file(config.admin_tls_server_key.as_str());
         Ok(cfg)
     }
 

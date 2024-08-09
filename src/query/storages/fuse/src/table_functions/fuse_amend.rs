@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -36,17 +37,16 @@ use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
 
-const FUSE_AEEND_ENGINE_NAME: &str = "fuse_failsafe_amend_table";
 struct AmendTableArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+    database_name: String,
+    table_name: String,
 }
 
 impl From<&AmendTableArgs> for TableArgs {
-    fn from(value: &AmendTableArgs) -> Self {
+    fn from(args: &AmendTableArgs) -> Self {
         TableArgs::new_positioned(vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ])
     }
 }
@@ -66,7 +66,11 @@ impl SimpleTableFunc for FuseAmendTable {
         TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)])
     }
 
-    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -77,8 +81,8 @@ impl SimpleTableFunc for FuseAmendTable {
             .await?
             .get_table(
                 &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
+                self.args.database_name.as_str(),
+                self.args.table_name.as_str(),
             )
             .await?;
 
@@ -97,15 +101,14 @@ impl SimpleTableFunc for FuseAmendTable {
         ])))
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let fail_safe_handler = get_fail_safe_handler();
-        let (arg_database_name, arg_table_name) =
-            parse_db_tb_args(&table_args, FUSE_AEEND_ENGINE_NAME)?;
+        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
         Ok(Self {
             args: AmendTableArgs {
-                arg_database_name,
-                arg_table_name,
+                database_name: arg_database_name,
+                table_name: arg_table_name,
             },
             fail_safe_handler,
         })

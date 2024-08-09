@@ -15,27 +15,71 @@
 use std::backtrace::Backtrace;
 use std::future::Future;
 use std::panic::Location;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::future;
+use futures::FutureExt;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
 
+// use tokio::task::JoinHandle;
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::drop_guard;
 use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;
+
+pub struct JoinHandle<Output> {
+    inner: tokio::task::JoinHandle<Output>,
+}
+
+impl<Output> JoinHandle<Output> {
+    pub fn create(inner: tokio::task::JoinHandle<Output>) -> Self {
+        Self { inner }
+    }
+
+    pub fn abort(&self) {
+        self.inner.abort();
+    }
+}
+
+impl<Output> Future for JoinHandle<Output> {
+    type Output = Result<Output>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.inner.poll_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(res) => match res {
+                Ok(res) => Poll::Ready(Ok(res)),
+                Err(error) => match error.is_panic() {
+                    true => {
+                        let cause = error.into_panic();
+                        Poll::Ready(Err(match cause.downcast_ref::<&'static str>() {
+                            None => match cause.downcast_ref::<String>() {
+                                None => ErrorCode::PanicError("Sorry, unknown panic message"),
+                                Some(message) => ErrorCode::PanicError(message.to_string()),
+                            },
+                            Some(message) => ErrorCode::PanicError(message.to_string()),
+                        }))
+                    }
+                    false => Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled"))),
+                },
+            },
+        }
+    }
+}
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -277,7 +321,7 @@ impl Runtime {
                     fut(permit).await
                 }),
             ));
-            handlers.push(handler)
+            handlers.push(JoinHandle::create(handler))
         }
 
         Ok(handlers)
@@ -292,11 +336,11 @@ impl Runtime {
         R: Send + 'static,
     {
         #[allow(clippy::disallowed_methods)]
-        match_join_handle(
+        let handle = JoinHandle::create(
             self.handle
                 .spawn_blocking(ThreadTracker::tracking_function(f)),
-        )
-        .await
+        );
+        handle.await.flatten()
     }
 }
 
@@ -317,7 +361,7 @@ impl TrySpawn for Runtime {
         };
 
         #[expect(clippy::disallowed_methods)]
-        Ok(self.handle.spawn(task))
+        Ok(JoinHandle::create(self.handle.spawn(task)))
     }
 }
 
@@ -353,26 +397,6 @@ impl Drop for Dropper {
     }
 }
 
-pub async fn match_join_handle<T>(handle: JoinHandle<Result<T>>) -> Result<T> {
-    match handle.await {
-        Ok(Ok(res)) => Ok(res),
-        Ok(Err(cause)) => Err(cause),
-        Err(join_error) => match join_error.is_cancelled() {
-            true => Err(ErrorCode::TokioError("Tokio error is cancelled.")),
-            false => {
-                let panic_error = join_error.into_panic();
-                match panic_error.downcast_ref::<&'static str>() {
-                    None => match panic_error.downcast_ref::<String>() {
-                        None => Err(ErrorCode::PanicError("Sorry, unknown panic message")),
-                        Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                    },
-                    Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                }
-            }
-        },
-    }
-}
-
 /// Run multiple futures parallel
 /// using a semaphore to limit the parallelism number, and a specified thread pool to run the futures.
 /// It waits for all futures to complete and returns their results.
@@ -397,9 +421,7 @@ where
     let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;
 
     // 3. get all the result.
-    future::try_join_all(join_handlers)
-        .await
-        .map_err(|e| ErrorCode::Internal(format!("try join all futures failure, {}", e)))
+    future::try_join_all(join_handlers).await
 }
 
 pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";

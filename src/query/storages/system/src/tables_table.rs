@@ -104,8 +104,9 @@ impl_history_aware!(true, false, "views_with_history");
 impl_history_aware!(false, false, "views");
 
 #[async_trait::async_trait]
-impl<const T: bool, const U: bool> AsyncSystemTable for TablesTable<T, U>
-where TablesTable<T, U>: HistoryAware
+impl<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> AsyncSystemTable
+    for TablesTable<WITH_HISTORY, WITHOUT_VIEW>
+where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 {
     const NAME: &'static str = Self::TABLE_NAME;
 
@@ -134,11 +135,11 @@ where TablesTable<T, U>: HistoryAware
     }
 }
 
-impl<const T: bool, const U: bool> TablesTable<T, U>
-where TablesTable<T, U>: HistoryAware
+impl<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> TablesTable<WITH_HISTORY, WITHOUT_VIEW>
+where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 {
     pub fn schema() -> TableSchemaRef {
-        if U {
+        if WITHOUT_VIEW {
             TableSchemaRefExt::create(vec![
                 TableField::new("catalog", TableDataType::String),
                 TableField::new("database", TableDataType::String),
@@ -254,7 +255,7 @@ where TablesTable<T, U>: HistoryAware
         let mut get_ownership = true;
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
-        let schema = TablesTable::<T, U>::schema();
+        let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
         for (i, name) in schema.fields.iter().enumerate() {
             match name.name().as_str() {
                 "num_rows"
@@ -335,7 +336,7 @@ where TablesTable<T, U>: HistoryAware
                         }
                     }
 
-                    if !T {
+                    if !WITH_HISTORY {
                         match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
@@ -389,11 +390,12 @@ where TablesTable<T, U>: HistoryAware
                 let db_name = db.name();
                 let tables = if tables_names.is_empty()
                     || tables_names.len() > 10
-                    || T
+                    || WITH_HISTORY
                     || invalid_tables_ids
                     || invalid_optimize
                 {
-                    match Self::list_tables(ctl, &tenant, db_name, T, U).await {
+                    match Self::list_tables(ctl, &tenant, db_name, WITH_HISTORY, WITHOUT_VIEW).await
+                    {
                         Ok(tables) => tables,
                         Err(err) => {
                             // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
@@ -443,7 +445,7 @@ where TablesTable<T, U>: HistoryAware
                         table_id,
                     ) && table.engine() != "STREAM"
                     {
-                        if !U && table.get_table_info().engine() == "VIEW" {
+                        if !WITHOUT_VIEW && table.get_table_info().engine() == "VIEW" {
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -460,7 +462,7 @@ where TablesTable<T, U>: HistoryAware
                                         .map(|role| role.to_string()),
                                 );
                             }
-                        } else if U && table.get_table_info().engine() != "VIEW" {
+                        } else if WITHOUT_VIEW && table.get_table_info().engine() != "VIEW" {
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -490,7 +492,7 @@ where TablesTable<T, U>: HistoryAware
         let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
-        if U {
+        if WITHOUT_VIEW {
             for tbl in &database_tables {
                 // For performance considerations, allows using stale statistics data.
                 let require_fresh = false;
@@ -604,7 +606,7 @@ where TablesTable<T, U>: HistoryAware
             })
             .collect();
 
-        if U {
+        if WITHOUT_VIEW {
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
@@ -652,7 +654,7 @@ where TablesTable<T, U>: HistoryAware
             name: Self::NAME.to_owned(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
-                schema: TablesTable::<T, U>::schema(),
+                schema: TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema(),
                 engine: "SystemTables".to_string(),
 
                 ..Default::default()
@@ -660,6 +662,6 @@ where TablesTable<T, U>: HistoryAware
             ..Default::default()
         };
 
-        AsyncOneBlockSystemTable::create(TablesTable::<T, U> { table_info })
+        AsyncOneBlockSystemTable::create(TablesTable::<WITH_HISTORY, WITHOUT_VIEW> { table_info })
     }
 }

@@ -28,7 +28,7 @@ use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
 use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
-use poem::listener::RustlsConfig;
+use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
 use poem::Endpoint;
 
@@ -52,7 +52,7 @@ impl HttpShutdownHandler {
     pub async fn start_service(
         &mut self,
         listening: SocketAddr,
-        tls_config: Option<RustlsConfig>,
+        tls_config: Option<OpensslTlsConfig>,
         ep: impl Endpoint + 'static,
         graceful_shutdown_timeout: Option<Duration>,
     ) -> Result<SocketAddr, HttpError> {
@@ -76,7 +76,7 @@ impl HttpShutdownHandler {
                 .into_stream()
                 .map_err(|err| HttpError::TlsConfigError(AnyError::new(&err)))?;
 
-            acceptor = acceptor.rustls(conf_stream).boxed();
+            acceptor = acceptor.openssl_tls(conf_stream).boxed();
         }
 
         let (tx, rx) = oneshot::channel();

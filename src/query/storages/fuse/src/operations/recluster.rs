@@ -275,19 +275,13 @@ impl FuseTable {
             }));
         }
 
-        match futures::future::try_join_all(works).await {
-            Err(e) => Err(ErrorCode::StorageOther(format!(
-                "segment pruning failure, {}",
-                e
-            ))),
-            Ok(workers) => {
-                let mut metas = vec![];
-                for worker in workers {
-                    let res = worker?;
-                    metas.extend(res);
-                }
-                Ok(metas)
-            }
+        let mut metas = vec![];
+        let workers = futures::future::try_join_all(works).await?;
+        for worker in workers {
+            let res = worker?;
+            metas.extend(res);
         }
+
+        Ok(metas)
     }
 }

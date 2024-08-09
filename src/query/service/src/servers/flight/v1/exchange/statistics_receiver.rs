@@ -17,10 +17,9 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::broadcast::channel;
 use databend_common_base::base::tokio::sync::broadcast::Sender;
-use databend_common_base::base::tokio::task::JoinHandle;
-use databend_common_base::match_join_handle;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use futures_util::future::select;
@@ -161,7 +160,7 @@ impl StatisticsReceiver {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                match_join_handle(exchange_handler).await?;
+                exchange_handler.await.flatten()?;
             }
 
             Ok(())

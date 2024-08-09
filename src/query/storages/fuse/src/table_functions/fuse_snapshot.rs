@@ -14,6 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
@@ -32,71 +35,30 @@ use log::info;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
-pub struct FuseSnapshot<'a> {
-    pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
+pub struct FuseSnapshotArgs {
+    database_name: String,
+    table_name: String,
 }
 
-impl<'a> FuseSnapshot<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
-        Self { ctx, table }
+pub struct FuseSnapshotFunc {
+    args: FuseSnapshotArgs,
+}
+
+impl From<&FuseSnapshotArgs> for TableArgs {
+    fn from(args: &FuseSnapshotArgs) -> Self {
+        TableArgs::new_positioned(vec![
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
+        ])
     }
+}
 
-    #[async_backtrace::framed]
-    pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
-        let meta_location_generator = self.table.meta_location_generator.clone();
-        let snapshot_location = self.table.snapshot_loc().await?;
-        let snapshot = self.table.read_table_snapshot().await?;
-        if let Some(snapshot_location) = snapshot_location {
-            let snapshot_version =
-                TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-            let snapshots_io = SnapshotsIO::create(self.ctx.clone(), self.table.operator.clone());
-            let snapshot_lite = if limit.is_none() {
-                info!("getting snapshots, using parallel strategy");
-                // Use SnapshotsIO::read_snapshot_lites only if limit is None
-                //
-                // SnapshotsIO::read_snapshot lists snapshots from object storage, taking limit into
-                // account, BEFORE the snapshots are chained, so there might be the case that although
-                // there are more than limited number of snapshots could be chained, the number of
-                // snapshots returned is lesser.
-                let (chained_snapshot_lites, _) = snapshots_io
-                    .read_snapshot_lites_ext(
-                        snapshot_location,
-                        snapshot.and_then(|s| s.timestamp),
-                        &|_| {},
-                    )
-                    .await?;
-                Ok::<_, ErrorCode>(chained_snapshot_lites)
-            } else {
-                // SnapshotsIO::read_chained_snapshot_lists traverses the history of snapshot sequentially, by using the
-                // TableSnapshot::prev_snapshot_id, which guarantees that the number of snapshot
-                // returned is as expected
-                let snapshot_lites = snapshots_io
-                    .read_chained_snapshot_lites(
-                        self.table.operator.clone(),
-                        meta_location_generator.clone(),
-                        snapshot_location,
-                        limit,
-                    )
-                    .await?;
-                info!(
-                    "getting snapshots in chained mod, limit: {:?}, number of snapshot_lite found: {}",
-                    limit,
-                    snapshot_lites.len()
-                );
-                Ok(snapshot_lites)
-            }?;
-
-            info!("got {} snapshots", snapshot_lite.len());
-            return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
-        }
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            FuseSnapshot::schema().into(),
-        )))
-    }
-
+impl FuseSnapshotFunc {
     fn to_block(
         &self,
         location_generator: &TableMetaLocationGenerator,
@@ -151,8 +113,15 @@ impl<'a> FuseSnapshot<'a> {
             TimestampType::from_opt_data(timestamps),
         ]))
     }
+}
 
-    pub fn schema() -> Arc<TableSchema> {
+#[async_trait::async_trait]
+impl SimpleTableFunc for FuseSnapshotFunc {
+    fn table_args(&self) -> Option<TableArgs> {
+        Some((&self.args).into())
+    }
+
+    fn schema(&self) -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("snapshot_location", TableDataType::String),
@@ -181,5 +150,93 @@ impl<'a> FuseSnapshot<'a> {
             TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
         ])
+    }
+
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                self.args.database_name.as_str(),
+                self.args.table_name.as_str(),
+            )
+            .await?;
+
+        let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
+            ErrorCode::StorageOther("Invalid table engine, only FUSE table supports fuse_snapshot")
+        })?;
+
+        let meta_location_generator = table.meta_location_generator.clone();
+        let snapshot_location = table.snapshot_loc().await?;
+        let snapshot = table.read_table_snapshot().await?;
+        if let Some(snapshot_location) = snapshot_location {
+            let snapshot_version =
+                TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+            let snapshots_io = SnapshotsIO::create(ctx.clone(), table.operator.clone());
+
+            let limit = plan.push_downs.as_ref().and_then(|v| v.limit);
+            let snapshot_lite = if limit.is_none() {
+                info!("getting snapshots, using parallel strategy");
+                // Use SnapshotsIO::read_snapshot_lites only if limit is None
+                //
+                // SnapshotsIO::read_snapshot lists snapshots from object storage, taking limit into
+                // account, BEFORE the snapshots are chained, so there might be the case that although
+                // there are more than limited number of snapshots could be chained, the number of
+                // snapshots returned is lesser.
+                let (chained_snapshot_lites, _) = snapshots_io
+                    .read_snapshot_lites_ext(
+                        snapshot_location,
+                        snapshot.and_then(|s| s.timestamp),
+                        &|_| {},
+                    )
+                    .await?;
+                Ok::<_, ErrorCode>(chained_snapshot_lites)
+            } else {
+                // SnapshotsIO::read_chained_snapshot_lists traverses the history of snapshot sequentially, by using the
+                // TableSnapshot::prev_snapshot_id, which guarantees that the number of snapshot
+                // returned is as expected
+                let snapshot_lites = snapshots_io
+                    .read_chained_snapshot_lites(
+                        table.operator.clone(),
+                        meta_location_generator.clone(),
+                        snapshot_location,
+                        limit,
+                    )
+                    .await?;
+                info!(
+                    "getting snapshots in chained mod, limit: {:?}, number of snapshot_lite found: {}",
+                    limit,
+                    snapshot_lites.len()
+                );
+                Ok(snapshot_lites)
+            }?;
+
+            info!("got {} snapshots", snapshot_lite.len());
+            return Ok(Some(self.to_block(
+                &meta_location_generator,
+                &snapshot_lite,
+                snapshot_version,
+            )?));
+        }
+        Ok(Some(DataBlock::empty_with_schema(Arc::new(
+            self.schema().into(),
+        ))))
+    }
+
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
+    where Self: Sized {
+        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
+        Ok(Self {
+            args: FuseSnapshotArgs {
+                database_name: arg_database_name,
+                table_name: arg_table_name,
+            },
+        })
     }
 }

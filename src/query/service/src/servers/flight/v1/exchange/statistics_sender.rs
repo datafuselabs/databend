@@ -16,9 +16,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

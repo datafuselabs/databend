@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::match_join_handle;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
@@ -37,7 +36,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }));
 
-    if let Err(cause) = match_join_handle(join_handler).await {
+    if let Err(cause) = join_handler.await.flatten() {
         DataExchangeManager::instance().on_finished_query(&query_id);
         return Err(cause);
     }

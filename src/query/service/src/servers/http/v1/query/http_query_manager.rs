@@ -26,12 +26,12 @@ use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::JoinHandle;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
-use tokio::task;
 
 use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
@@ -84,7 +84,7 @@ pub struct HttpQueryManager {
     pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
     pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
-    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, task::JoinHandle<()>)>>>,
+    pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
 }
 

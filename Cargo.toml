@@ -255,7 +255,7 @@ itertools = "0.10.5"
 jsonb = "0.4.1"
 jwt-simple = "0.11.0"
 match-template = "0.0.1"
-mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
 object_store_opendal = "0.45"
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
@@ -288,7 +288,8 @@ ordq = "0.2.0"
 parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
-poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
+# TODO: let's use native tls instead.
+poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
@@ -297,8 +298,8 @@ regex = "1.8.1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "http2",
-    "rustls-tls",
-    "rustls-tls-native-roots",
+    "native-tls-vendored",
+    "native-tls-alpn",
 ] }
 reqwest-hickory-resolver = "0.1"
 rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }

@@ -242,7 +242,7 @@ impl Binder {
                     } else {
                         // e.g. select v0.c0 from v0;
                         for column in new_bind_context.columns.iter_mut() {
-                            column.database_name = None;
+                            column.database_name = Some(database.clone());
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }

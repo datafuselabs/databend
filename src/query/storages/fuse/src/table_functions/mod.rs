@@ -12,38 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache_admin;
 mod clustering_information;
 mod clustering_statistics;
 mod function_template;
 mod fuse_amend;
-mod fuse_blocks;
-mod fuse_columns;
-mod fuse_encodings;
-mod fuse_segments;
-mod fuse_snapshots;
-mod fuse_statistics;
+mod fuse_block;
+mod fuse_column;
+mod fuse_encoding;
+mod fuse_segment;
+mod fuse_snapshot;
+mod fuse_statistic;
+mod set_cache_capacity;
 mod table_args;
 
-pub use cache_admin::SetCacheCapacity;
-pub use clustering_information::ClusteringInformation;
-pub use clustering_information::ClusteringInformationTable;
-pub use clustering_statistics::ClusteringStatistics;
-pub use clustering_statistics::ClusteringStatisticsTable;
+pub use clustering_information::ClusteringInformationFunc;
+pub use clustering_statistics::ClusteringStatisticsFunc;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 pub use function_template::SimpleTableFunc;
 pub use function_template::TableFunctionTemplate;
+pub use function_template::*;
 pub use fuse_amend::FuseAmendTable;
-pub use fuse_blocks::FuseBlock;
-pub use fuse_blocks::FuseBlockTable;
-pub use fuse_columns::FuseColumn;
-pub use fuse_columns::FuseColumnTable;
-pub use fuse_encodings::FuseEncoding;
-pub use fuse_encodings::FuseEncodingTable;
-pub use fuse_segments::FuseSegment;
-pub use fuse_segments::FuseSegmentTable;
-pub use fuse_snapshots::FuseSnapshot;
-pub use fuse_snapshots::FuseSnapshotTable;
-pub use fuse_statistics::FuseStatisticTable;
+pub use fuse_block::FuseBlockFunc;
+pub use fuse_column::FuseColumnFunc;
+pub use fuse_encoding::FuseEncodingFunc;
+pub use fuse_segment::FuseSegmentFunc;
+pub use fuse_snapshot::FuseSnapshotFunc;
+pub use fuse_statistic::FuseStatisticsFunc;
+pub use set_cache_capacity::SetCacheCapacityFunc;
 pub use table_args::*;

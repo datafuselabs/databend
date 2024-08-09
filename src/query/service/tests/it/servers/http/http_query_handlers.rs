@@ -1297,6 +1297,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     Ok(())
 }
 
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let config = ConfigBuilder::create()
@@ -1347,6 +1348,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 }
 
 // cannot connect with server unless it have CA signed identity
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let config = ConfigBuilder::create()

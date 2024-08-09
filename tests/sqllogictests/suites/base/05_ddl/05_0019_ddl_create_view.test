@@ -154,3 +154,24 @@ select b from replace_view;
 
 statement ok
 drop view if exists replace_view;
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop view if exists v;
+
+statement ok
+create table t(id int);
+
+statement ok
+create view v as select id from t;
+
+statement ok
+select default.v.id from v;
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop view if exists v;
