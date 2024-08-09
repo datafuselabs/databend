@@ -364,7 +364,7 @@ impl Client for ScriptClient {
                 span: None,
                 value: Literal::Null,
             },
-            Scalar::Bitmap(_) | Scalar::Binary(_) | Scalar::Geometry(_) => {
+            Scalar::Bitmap(_) | Scalar::Binary(_) | Scalar::Geometry(_) | Scalar::Geography(_) => {
                 return Err(ErrorCode::Unimplemented(format!(
                     "variable of type {} is not supported yet",
                     scalar.as_ref().infer_data_type()

@@ -147,6 +147,13 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(geom.as_bytes(), out_buf);
             }
 
+            Column::Geography(c) => {
+                use databend_common_geobuf::Wkt;
+                let geog = unsafe { c.index_unchecked(row_index) };
+                let Wkt(str) = geog.0.try_into().unwrap();
+                self.string_formatter.write_string(str.as_bytes(), out_buf);
+            }
+
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {
                 let mut buf = Vec::new();
                 self.nested.write_field(column, row_index, &mut buf, false);

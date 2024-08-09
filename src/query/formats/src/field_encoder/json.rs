@@ -16,6 +16,7 @@ use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
+use databend_common_geobuf::GeoJson;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -82,6 +83,11 @@ impl FieldEncoderJSON {
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
                 out_buf.extend_from_slice(Ewkb(v.to_vec()).to_json().unwrap().as_bytes())
+            }
+            Column::Geography(c) => {
+                let v = unsafe { c.index_unchecked(row_index) };
+                let GeoJson(str) = v.0.try_into().unwrap();
+                out_buf.extend_from_slice(str.as_bytes())
             }
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),

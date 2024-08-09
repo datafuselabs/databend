@@ -1704,7 +1704,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7aadb5b6ccbd078890f6d7003694e33816e6b784358f18e15e7e6d9f065a57cd"
 dependencies = [
  "once_cell",
- "proc-macro-crate",
+ "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
@@ -3419,6 +3419,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
+ "databend-common-geobuf",
  "databend-common-hashtable",
  "databend-common-io",
  "educe",
@@ -3468,6 +3469,7 @@ dependencies = [
  "databend-common-arrow",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-geobuf",
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
@@ -3551,6 +3553,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-geobuf"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "databend-common-arrow",
+ "flatbuffers",
+ "flexbuffers",
+ "geo",
+ "geo-types",
+ "geojson",
+ "geos",
+ "geozero 0.13.0",
+ "ordered-float 4.2.0",
+ "serde",
+ "serde_json",
+ "wkt",
+]
+
+[[package]]
 name = "databend-common-grpc"
 version = "0.1.0"
 dependencies = [
@@ -3608,6 +3629,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "databend-common-exception",
+ "databend-common-geobuf",
  "ethnum",
  "geo",
  "geos",
@@ -6780,6 +6802,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "flexbuffers"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15d14128f06405808ce75bfebe11e9b0f9da18719ede6d7bdb1702d6bfe0f7e8"
+dependencies = [
+ "bitflags 1.3.2",
+ "byteorder",
+ "num_enum 0.5.11",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "float-cmp"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7268,6 +7303,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5d728c1df1fbf328d74151efe6cb0586f79ee813346ea981add69bd22c9241b"
 dependencies = [
+ "geo-types",
  "log",
  "serde",
  "serde_json",
@@ -10624,7 +10660,7 @@ dependencies = [
  "darling",
  "heck 0.4.1",
  "num-bigint",
- "proc-macro-crate",
+ "proc-macro-crate 3.1.0",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -10987,11 +11023,32 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
+dependencies = [
+ "num_enum_derive 0.5.11",
+]
+
+[[package]]
+name = "num_enum"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
 dependencies = [
- "num_enum_derive",
+ "num_enum_derive 0.7.2",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
+dependencies = [
+ "proc-macro-crate 1.3.1",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -11000,7 +11057,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
@@ -11979,7 +12036,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2b961d58a6c53380c20236394381d9292fda03577f902b158f1638932964dcf"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
@@ -12151,6 +12208,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
 dependencies = [
  "elliptic-curve 0.13.8",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
+dependencies = [
+ "once_cell",
+ "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -16119,7 +16186,7 @@ dependencies = [
  "linkedbytes",
  "metainfo",
  "motore",
- "num_enum",
+ "num_enum 0.7.2",
  "parking_lot 0.12.1",
  "paste",
  "pilota",

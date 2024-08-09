@@ -52,7 +52,11 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             let values = x.iter().map(scalar_to_datavalue).collect();
             DataValue::Struct(values)
         }
-        Scalar::EmptyMap | Scalar::Binary(_) | Scalar::Map(_) | Scalar::Bitmap(_) => {
+        Scalar::EmptyMap
+        | Scalar::Binary(_)
+        | Scalar::Map(_)
+        | Scalar::Bitmap(_)
+        | Scalar::Geography(_) => {
             unimplemented!()
         }
     }

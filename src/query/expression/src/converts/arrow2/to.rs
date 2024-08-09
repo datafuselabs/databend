@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowDataType;
@@ -23,6 +24,7 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
@@ -161,6 +163,25 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         TableDataType::Geometry => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOMETRY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geography => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
+            Box::new(ArrowDataType::Struct(vec![
+                ArrowField::new("buf", ArrowDataType::LargeBinary, false),
+                ArrowField::new(
+                    "points",
+                    ArrowDataType::LargeList(Box::new(ArrowField::new(
+                        "point",
+                        ArrowDataType::Struct(vec![
+                            ArrowField::new("x", ArrowDataType::Float64, false),
+                            ArrowField::new("y", ArrowDataType::Float64, false),
+                        ]),
+                        false,
+                    ))),
+                    false,
+                ),
+            ])),
             None,
         ),
     }
@@ -339,6 +360,59 @@ impl Column {
                 )
                 .unwrap(),
             ),
+            Column::Geography(col) => {
+                use databend_common_arrow::arrow::array;
+                let arr_buf = Column::Binary(col.buf.clone()).as_arrow();
+
+                let arr_x = Box::new(
+                    array::PrimitiveArray::<f64>::try_new(
+                        ArrowDataType::Float64,
+                        col.x.clone(),
+                        None,
+                    )
+                    .unwrap(),
+                );
+                let arr_y = Box::new(
+                    array::PrimitiveArray::<f64>::try_new(
+                        ArrowDataType::Float64,
+                        col.y.clone(),
+                        None,
+                    )
+                    .unwrap(),
+                );
+                let arr_point = Box::new(
+                    array::StructArray::try_new(
+                        ArrowDataType::Struct(vec![
+                            ArrowField::new("x", ArrowDataType::Float64, false),
+                            ArrowField::new("y", ArrowDataType::Float64, false),
+                        ]),
+                        vec![arr_x, arr_y],
+                        None,
+                    )
+                    .unwrap(),
+                );
+
+                let point_offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                let arr_list_point = Box::new(
+                    array::ListArray::<i64>::try_new(
+                        ArrowDataType::LargeList(Box::new(ArrowField::new(
+                            "point",
+                            arr_point.data_type().clone(),
+                            false,
+                        ))),
+                        unsafe { OffsetsBuffer::new_unchecked(point_offsets) },
+                        arr_point,
+                        None,
+                    )
+                    .unwrap(),
+                );
+
+                Box::new(
+                    array::StructArray::try_new(arrow_type, vec![arr_buf, arr_list_point], None)
+                        .unwrap(),
+                )
+            }
             Column::Array(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();

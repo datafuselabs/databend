@@ -176,6 +176,7 @@ impl<'a> Debug for ScalarRef<'a> {
                     .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "{geom:?}")
             }
+            ScalarRef::Geography(v) => write!(f, "{v:?}"),
         }
     }
 }
@@ -200,6 +201,7 @@ impl Debug for Column {
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
             Column::Geometry(col) => write!(f, "{col:?}"),
+            Column::Geography(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -265,6 +267,7 @@ impl<'a> Display for ScalarRef<'a> {
                     .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "'{geom}'")
             }
+            ScalarRef::Geography(v) => write!(f, "'{:?}'", v),
         }
     }
 }
@@ -530,6 +533,7 @@ impl Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
+            DataType::Geography => write!(f, "Geography"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -578,6 +582,7 @@ impl Display for TableDataType {
             }
             TableDataType::Variant => write!(f, "Variant"),
             TableDataType::Geometry => write!(f, "Geometry"),
+            TableDataType::Geography => write!(f, "Geography"),
         }
     }
 }

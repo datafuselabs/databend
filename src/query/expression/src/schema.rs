@@ -207,6 +207,7 @@ pub enum TableDataType {
     },
     Variant,
     Geometry,
+    Geography,
 }
 
 impl DataSchema {
@@ -1197,6 +1198,7 @@ impl From<&TableDataType> for DataType {
             }
             TableDataType::Variant => DataType::Variant,
             TableDataType::Geometry => DataType::Geometry,
+            TableDataType::Geography => DataType::Geography,
         }
     }
 }
@@ -1436,6 +1438,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
         DataType::Geometry => Ok(TableDataType::Geometry),
+        DataType::Geography => Ok(TableDataType::Geography),
         DataType::Tuple(fields) => {
             let fields_type = fields
                 .iter()

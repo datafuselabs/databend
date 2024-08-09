@@ -34,8 +34,10 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::ValueType;
 use crate::with_decimal_type;
@@ -185,6 +187,10 @@ impl Column {
             Column::Geometry(column) => {
                 let column = Self::filter_binary_scalars(column, filter);
                 Column::Geometry(column)
+            }
+            Column::Geography(column) => {
+                let builder = GeographyType::create_builder(length, &[]);
+                Self::filter_scalar_types::<GeographyType>(column, builder, filter)
             }
         }
     }

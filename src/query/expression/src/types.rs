@@ -22,6 +22,7 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geography;
 pub mod geometry;
 pub mod map;
 pub mod null;
@@ -53,6 +54,7 @@ pub use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
+pub use self::geography::GeographyType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
@@ -88,6 +90,7 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Geometry,
+    Geography,
 
     // Used internally for generic types
     Generic(usize),
@@ -141,7 +144,8 @@ impl DataType {
             | DataType::Date
             | DataType::Bitmap
             | DataType::Variant
-            | DataType::Geometry => false,
+            | DataType::Geometry
+            | DataType::Geography => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
@@ -165,6 +169,7 @@ impl DataType {
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
+            | DataType::Geography
             | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),

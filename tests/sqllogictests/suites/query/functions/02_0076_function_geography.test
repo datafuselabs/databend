@@ -1,0 +1,22 @@
+query T
+SELECT st_point(60,37);
+----
+{"type": "Point", "coordinates": [60,37]}
+
+statement error 1801
+SELECT st_point(60,100);
+
+query T
+SELECT lon, st_point(lon,lat) FROM (VALUES (1,2), (9,10), (5,6), (3,4), (7,8)) as t1(lon,lat) having lon > 3;
+----
+9 {"type": "Point", "coordinates": [9,10]}
+5 {"type": "Point", "coordinates": [5,6]}
+7 {"type": "Point", "coordinates": [7,8]}
+
+statement ok
+SET geometry_output_format='EWKT'
+
+query T
+SELECT st_point(60,37);
+----
+POINT(60 37)

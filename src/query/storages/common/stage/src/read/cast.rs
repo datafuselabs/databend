@@ -139,5 +139,9 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         // Binary: EWKB format
         (String | Binary | Variant, Geometry) => true,
         (_, Geometry) => false,
+
+        // TODO:
+        // (String | Binary | Variant, Geography) => true,
+        (_, Geography) => false,
     }
 }

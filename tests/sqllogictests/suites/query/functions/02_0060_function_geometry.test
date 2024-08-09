@@ -53,19 +53,19 @@ SELECT to_string(st_makeline(ST_GEOMFROMWKT('POINT(33.0 44.2)', 32633), ST_GEOMF
 SRID=32633;LINESTRING(33 44.2,224.5 41.5)
 
 statement ok
-CREATE TABLE t1 (lat Float64, lon Float64) ENGINE=Memory
+CREATE TABLE t1 (x Float64, y Float64) ENGINE=Memory
 
 statement ok
 INSERT INTO t1 VALUES(55.77922738, 37.63098076), (5.77922738, 7.63098076)
 
 query T
-SELECT to_string(st_makegeompoint(lat, lon)) FROM t1
+SELECT to_string(st_makegeompoint(x, y)) FROM t1
 ----
 POINT(55.77922738 37.63098076)
 POINT(5.77922738 7.63098076)
 
 query T
-SELECT st_makegeompoint(lat, lon)::String FROM t1
+SELECT st_makegeompoint(x, y)::String FROM t1
 ----
 POINT(55.77922738 37.63098076)
 POINT(5.77922738 7.63098076)

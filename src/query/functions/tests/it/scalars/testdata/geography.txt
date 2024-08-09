@@ -1,0 +1,9 @@
+ast            : st_makepoint(40.7127, -74.0059)
+raw expr       : st_makepoint(40.7127, minus(74.0059))
+checked expr   : st_makepoint<Float64, Float64>(to_float64<Decimal(6, 4)>(40.7127_d128(6,4)), to_float64<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d128(6,4))))
+optimized expr : GeographyRef({"type": "Point", "coordinates": [40.7127,-74.0059]})
+output type    : Geography
+output domain  : Undefined
+output         : 'GeographyRef({"type": "Point", "coordinates": [40.7127,-74.0059]})'
+
+

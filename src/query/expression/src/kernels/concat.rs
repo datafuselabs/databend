@@ -39,6 +39,7 @@ use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -294,6 +295,13 @@ impl Column {
                 .into_int32()
                 .unwrap();
                 Column::Date(d)
+            }
+            Column::Geography(_) => {
+                let mut builder = GeographyType::create_builder(capacity, &[]);
+                for col in columns.map(|col| col.into_geography().unwrap()) {
+                    GeographyType::append_column(&mut builder, &col)
+                }
+                Column::Geography(GeographyType::build_column(builder))
             }
             Column::Array(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);

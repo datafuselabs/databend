@@ -650,3 +650,22 @@ fn test_leaf_columns_of() -> Result<()> {
     assert_eq!(schema.leaf_columns_of(&"e".to_string()), vec![7]);
     Ok(())
 }
+
+#[test]
+fn test_geography_as_arrow() {
+    use databend_common_expression::types::geography::GeographyColumnBuilder;
+    use databend_common_expression::types::GeographyType;
+    use databend_common_expression::Column;
+
+    let mut builder = GeographyColumnBuilder::with_capacity(3, 0);
+    builder.push(GeographyType::point(1.0, 2.0).as_ref());
+    builder.push(GeographyType::point(2.0, 3.0).as_ref());
+    builder.push(GeographyType::point(4.0, 5.0).as_ref());
+    let col = Column::Geography(builder.build());
+
+    let got = col.as_arrow();
+    assert_eq!(
+        "StructArray[{buf: [1], points: [{x: 1, y: 2}]}, {buf: [1], points: [{x: 2, y: 3}]}, {buf: [1], points: [{x: 4, y: 5}]}]",
+        format!("{:?}", got)
+    );
+}

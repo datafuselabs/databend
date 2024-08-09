@@ -91,6 +91,13 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
         }
         Column::Timestamp(v) => store_advance::<i64>(&v[row], row_space),
         Column::Date(v) => store_advance::<i32>(&v[row], row_space),
+        Column::Geography(v) => {
+            let value = unsafe { v.index_unchecked(row) };
+            let value = borsh::to_vec(&value.0).unwrap();
+            let len = value.len();
+            store_advance::<u64>(&(len as u64), row_space);
+            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
+        }
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             store_advance::<u64>(&(data.len() as u64), row_space);

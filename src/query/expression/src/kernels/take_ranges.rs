@@ -32,7 +32,9 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::ValueType;
 use crate::with_decimal_type;
@@ -164,6 +166,16 @@ impl Column {
             Column::Geometry(column) => {
                 let column = Self::take_ranges_binary_types(column, ranges, num_rows);
                 Column::Geometry(column)
+            }
+            Column::Geography(column) => {
+                let mut builder = GeographyType::create_builder(num_rows, &[]);
+                for range in ranges {
+                    GeographyType::append_column(
+                        &mut builder,
+                        &column.slice(range.start as usize..range.end as usize),
+                    )
+                }
+                GeographyType::upcast_column(GeographyType::build_column(builder))
             }
         }
     }

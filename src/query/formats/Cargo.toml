@@ -19,6 +19,7 @@ chrono-tz = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-geobuf = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-settings = { workspace = true }

@@ -43,6 +43,7 @@ mod geo;
 // TODO: fix this in running on linux
 #[cfg(not(target_os = "macos"))]
 mod geo_h3;
+mod geography;
 mod geometry;
 mod hash;
 mod map;

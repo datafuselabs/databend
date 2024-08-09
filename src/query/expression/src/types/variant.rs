@@ -15,6 +15,7 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_geobuf::GeoJson;
 use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
@@ -279,6 +280,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 .to_json()
                 .expect("failed to decode wkb data");
             jsonb::parse_value(geom.as_bytes())
+                .expect("failed to parse geojson to json value")
+                .write_to_vec(buf);
+            return;
+        }
+        ScalarRef::Geography(geog) => {
+            // todo: Implement direct conversion, omitting intermediate processes
+            let GeoJson(str) = geog.0.try_into().expect("failed to encode geojson");
+            jsonb::parse_value(str.as_bytes())
                 .expect("failed to parse geojson to json value")
                 .write_to_vec(buf);
             return;

@@ -47,6 +47,7 @@ st_geomfromwkb -> st_geometryfromwkb
 st_geomfromwkt -> st_geometryfromwkt
 st_make_line -> st_makeline
 st_numpoints -> st_npoints
+st_point -> st_makepoint
 st_polygon -> st_makepolygon
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
@@ -3587,6 +3588,8 @@ Functions overloads:
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
 1 st_makeline(Geometry NULL, Geometry NULL) :: Geometry NULL
+0 st_makepoint(Float64, Float64) :: Geography
+1 st_makepoint(Float64 NULL, Float64 NULL) :: Geography NULL
 0 st_makepolygon(Geometry) :: Geometry
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
 0 st_npoints(Geometry) :: UInt32 NULL

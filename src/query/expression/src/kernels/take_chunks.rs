@@ -41,6 +41,7 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberColumnVec;
 use crate::types::NumberType;
@@ -411,6 +412,10 @@ impl Column {
                 let builder = GeometryType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<GeometryType>(columns, builder, indices)
             }
+            Column::Geography(_) => {
+                let builder = GeographyType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
+            }
         }
     }
 
@@ -626,6 +631,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geometry(columns)
             }
+            Column::Geography(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| GeographyType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::Geography(columns)
+            }
         }
     }
 
@@ -766,6 +778,17 @@ impl Column {
             ColumnVec::Geometry(columns) => GeometryType::upcast_column(
                 Self::take_block_vec_binary_types(columns, indices, binary_items_buf.as_mut()),
             ),
+            ColumnVec::Geography(columns) => {
+                let num_rows = indices.len();
+                let mut builder = GeographyType::create_builder(num_rows, &[]);
+                for item in indices.iter().map(|row_ptr| unsafe {
+                    let col = columns.get_unchecked(row_ptr.chunk_index as usize);
+                    col.index_unchecked(row_ptr.row_index as usize)
+                }) {
+                    builder.push(item)
+                }
+                Column::Geography(GeographyType::build_column(builder))
+            }
         }
     }
 

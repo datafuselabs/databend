@@ -103,6 +103,7 @@ members = [
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
+    "src/common/geobuf",
 ]
 
 # Workspace dependencies
@@ -125,6 +126,7 @@ databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
 databend-common-formats = { path = "src/query/formats" }
 databend-common-functions = { path = "src/query/functions" }
+databend-common-geobuf = { path = "src/common/geobuf" }
 databend-common-grpc = { path = "src/common/grpc" }
 databend-common-hashtable = { path = "src/common/hashtable" }
 databend-common-http = { path = "src/common/http" }

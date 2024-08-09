@@ -58,7 +58,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         | DataType::Variant
         | DataType::Geometry => 4 + 8, // u32 len + address
         DataType::Nullable(x) => rowformat_size(x),
-        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) => 4 + 8,
+        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) | DataType::Geography => 4 + 8,
         DataType::Generic(_) => unreachable!(),
     }
 }

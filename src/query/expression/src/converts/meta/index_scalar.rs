@@ -87,6 +87,7 @@ impl TryFrom<Scalar> for IndexScalar {
             | Scalar::Bitmap(_)
             | Scalar::Variant(_)
             | Scalar::Geometry(_)
+            | Scalar::Geography(_)
             | Scalar::EmptyArray
             | Scalar::EmptyMap => return Err(ErrorCode::Unimplemented("Unsupported scalar type")),
         })

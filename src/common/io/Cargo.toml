@@ -17,6 +17,7 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-geobuf = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geos = { workspace = true }

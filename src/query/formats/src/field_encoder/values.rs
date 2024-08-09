@@ -20,6 +20,7 @@ use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
@@ -144,6 +145,7 @@ impl FieldEncoderValues {
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
+            Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
@@ -326,6 +328,47 @@ impl FieldEncoderValues {
         };
 
         self.write_string_inner(&s, out_buf, in_nested);
+    }
+
+    fn write_geography(
+        &self,
+        column: &GeographyColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        use databend_common_geobuf::Ewkb;
+        use databend_common_geobuf::Ewkt;
+        use databend_common_geobuf::GeoJson;
+        use databend_common_geobuf::Wkb;
+        use databend_common_geobuf::Wkt;
+
+        let geog = unsafe { column.index_unchecked(row_index) };
+
+        let s = match self.common_settings().geometry_format {
+            GeometryDataType::WKB => {
+                let Wkb(data) = geog.0.try_into().unwrap();
+                hex::encode_upper(data)
+            }
+            GeometryDataType::WKT => {
+                let Wkt(str) = geog.0.try_into().unwrap();
+                str
+            }
+            GeometryDataType::EWKB => {
+                let Ewkb(data) = geog.0.try_into().unwrap();
+                hex::encode_upper(data)
+            }
+            GeometryDataType::EWKT => {
+                let Ewkt(str) = geog.0.try_into().unwrap();
+                str
+            }
+            GeometryDataType::GEOJSON => {
+                let GeoJson(str) = geog.0.try_into().unwrap();
+                str
+            }
+        };
+
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(

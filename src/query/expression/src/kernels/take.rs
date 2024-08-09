@@ -35,6 +35,7 @@ use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
+use crate::types::GeographyType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -197,6 +198,15 @@ impl Column {
                 indices,
                 string_items_buf.as_mut(),
             )),
+            Column::Geography(column) => {
+                let num_rows = indices.len();
+                let mut builder = GeographyType::create_builder(num_rows, &[]);
+                for index in indices.iter() {
+                    let data = unsafe { column.index_unchecked(index.to_usize()) };
+                    builder.push(data);
+                }
+                GeographyType::upcast_column(GeographyType::build_column(builder))
+            }
         }
     }
 

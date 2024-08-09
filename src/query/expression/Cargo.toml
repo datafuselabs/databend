@@ -27,6 +27,7 @@ databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-geobuf = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 educe = "0.4"

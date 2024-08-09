@@ -33,6 +33,8 @@ use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::geography::Geography;
+use databend_common_expression::types::geography::GeographyColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -54,6 +56,7 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_geometry;
 use databend_common_io::parse_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
 use jsonb::parse_value;
@@ -150,6 +153,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, positions),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader, positions),
             ColumnBuilder::Binary(_) => Err(ErrorCode::Unimplemented("binary literal")),
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
                 Err(ErrorCode::Unimplemented("empty array/map literal"))
@@ -497,6 +501,20 @@ impl FastFieldDecoderValues {
         let geom = parse_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
+        Ok(())
+    }
+
+    #[allow(clippy::ptr_arg)]
+    fn read_geography<R: AsRef<[u8]>>(
+        &self,
+        column: &mut GeographyColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let geom = parse_geometry(&buf)?;
+        column.push(Geography(geom).as_ref());
         Ok(())
     }
 }
