@@ -112,7 +112,7 @@ impl Interpreter for AddTableColumnInterpreter {
         };
         new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
-        let _ = generate_new_snapshot(tbl.as_ref(), &mut new_table_meta).await?;
+        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -162,6 +162,7 @@ impl Interpreter for AddTableColumnInterpreter {
 }
 
 pub(crate) async fn generate_new_snapshot(
+    ctx: &QueryContext,
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
 ) -> Result<()> {
@@ -188,16 +189,16 @@ pub(crate) async fn generate_new_snapshot(
 
             // write down hint
             FuseTable::write_last_snapshot_hint(
+                ctx,
                 fuse_table.get_operator_ref(),
                 fuse_table.meta_location_generator(),
-                new_snapshot_location.clone(),
+                &new_snapshot_location,
             )
             .await;
 
-            new_table_meta.options.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                new_snapshot_location.clone(),
-            );
+            new_table_meta
+                .options
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
         } else {
             info!("Snapshot not found, no need to generate new snapshot");
         }

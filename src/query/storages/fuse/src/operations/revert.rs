@@ -63,14 +63,15 @@ impl FuseTable {
         // 4. let's roll
         let reply = catalog.update_single_table_meta(req, table_info).await;
         if reply.is_ok() {
-            // try keep the snapshot hit
+            // try keeping the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
             Self::write_last_snapshot_hint(
+                ctx.as_ref(),
                 &table_reverting_to.operator,
                 &table_reverting_to.meta_location_generator,
-                snapshot_location,
+                &snapshot_location,
             )
             .await;
         };

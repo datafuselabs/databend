@@ -677,4 +677,8 @@ impl Settings {
     pub fn get_format_null_as_str(&self) -> Result<bool> {
         Ok(self.try_get_u64("format_null_as_str")? == 1)
     }
+
+    pub fn get_enable_last_snapshot_location_hint(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_last_snapshot_location_hint")? == 1)
+    }
 }

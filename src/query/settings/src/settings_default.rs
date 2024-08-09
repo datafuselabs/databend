@@ -813,6 +813,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_last_snapshot_location_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables writing last_snapshot_location_hint object",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("format_null_as_str", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Format NULL as str in query api response",
