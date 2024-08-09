@@ -47,6 +47,22 @@ fn test_convert_timezone(file: &mut impl Write) {
     run_ast(file, "convert_timezone('America/New_York', -100)", &[]);
     run_ast(file, "convert_timezone('America/New_York', 0)", &[]);
     run_ast(file, "convert_timezone('America/New_York', 100)", &[]);
+
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', 'Europe/Simferopol', 315360000000)",
+        &[],
+    );
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', 'Europe/Simferopol', 100)",
+        &[],
+    );
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', 'Europe/Simferopol', 0)",
+        &[],
+    );
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
