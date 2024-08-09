@@ -40,7 +40,7 @@ where ID: Clone + PartialEq
 impl<T, ID> Change<T, ID>
 where
     ID: Clone + PartialEq + Debug,
-    T: PartialEq + Debug,
+    T: Debug,
 {
     pub fn new(prev: Option<SeqV<T>>, result: Option<SeqV<T>>) -> Self {
         Change {
@@ -76,7 +76,7 @@ where
     }
 
     pub fn is_changed(&self) -> bool {
-        self.prev != self.result
+        self.prev.seq() != self.result.seq()
     }
 
     /// Assumes it is a state transition of an add operation and return Ok if the add operation succeed.

@@ -17,6 +17,7 @@
 mod errors;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -36,6 +37,7 @@ use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 pub use errors::CrudError;
 use futures::TryStreamExt;
+use log::info;
 
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
@@ -80,6 +82,9 @@ where
     // As a kvapi::Key, the corresponding value contains a name.
     ValueOf<R>: ValueWithName + FromToProto + Clone,
 {
+    /// Add a record.
+    ///
+    /// `create_option` specifies the behavior when the record already exists.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add(
@@ -87,10 +92,31 @@ where
         value: ValueOf<R>,
         create_option: &CreateOption,
     ) -> Result<(), CrudError<ExistError<R>>> {
+        self.add_with_ttl(value, None, create_option).await
+    }
+
+    /// Add a record with an optional time-to-live(TTL) argument.
+    ///
+    /// If `ttl` is `None`, the record will not expire.
+    /// `create_option` specifies the behavior when the record already exists.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn add_with_ttl(
+        &self,
+        value: ValueOf<R>,
+        ttl: Option<Duration>,
+        create_option: &CreateOption,
+    ) -> Result<(), CrudError<ExistError<R>>> {
         let ident = self.ident(value.name());
 
         let seq = MatchSeq::from(*create_option);
         let upsert = UpsertPB::insert(ident, value.clone()).with(seq);
+
+        let upsert = if let Some(ttl) = ttl {
+            upsert.with_ttl(ttl)
+        } else {
+            upsert
+        };
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
@@ -110,14 +136,70 @@ where
         value: ValueOf<R>,
         match_seq: MatchSeq,
     ) -> Result<u64, CrudError<UnknownError<R>>> {
+        self.update_with_ttl(value, match_seq, None).await
+    }
+
+    /// Update a record with an optional time-to-live(TTL) argument.
+    ///
+    /// Returns the seq of the updated record.
+    /// If `ttl` is `None`, the record will not expire.
+    /// `match_seq` specifies what existing value will be overridden,
+    /// if the seq of existing value does not match the provided `match_seq`,
+    /// nothing will be done.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn update_with_ttl(
+        &self,
+        value: ValueOf<R>,
+        match_seq: MatchSeq,
+        ttl: Option<Duration>,
+    ) -> Result<u64, CrudError<UnknownError<R>>> {
         let ident = self.ident(value.name());
         let upsert = UpsertPB::update(ident, value.clone()).with(match_seq);
 
+        let upsert = if let Some(ttl) = ttl {
+            upsert.with_ttl(ttl)
+        } else {
+            upsert
+        };
+
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
-        match res.result {
-            Some(SeqV { seq, .. }) => Ok(seq),
-            None => Err(UnknownError::new(value.name(), "NotFound when update").into()),
+        if res.is_changed() {
+            Ok(res.result.seq())
+        } else {
+            Err(UnknownError::new(value.name(), match_seq, "NotFound when update").into())
+        }
+    }
+
+    /// Fetch the record with the given `name`, update it with the provided function `update`,
+    /// then save it back if the seq number did not change.
+    ///
+    /// The `seq` is the initial seq number to fetch the record.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn cas_with(
+        &self,
+        name: &str,
+        seq: MatchSeq,
+        update: impl Fn(SeqV<ValueOf<R>>) -> ValueOf<R> + Send,
+    ) -> Result<u64, CrudError<UnknownError<R>>> {
+        loop {
+            let seq_v = self.get(name, seq).await?;
+
+            let seq = seq_v.seq;
+            let new_value = update(seq_v);
+
+            let ident = self.ident(name);
+            let upsert = UpsertPB::update(ident, new_value).with(MatchSeq::Exact(seq));
+
+            let res = self.kv_api.upsert_pb(&upsert).await?;
+
+            if res.is_changed() {
+                return Ok(res.result.seq());
+            } else {
+                info!("cas: retrying, name: {}, seq: {}", name, seq);
+            }
         }
     }
 
@@ -136,6 +218,7 @@ where
         res.removed_or_else(|e| {
             UnknownError::new(
                 name,
+                seq,
                 format_args!("NotFound when remove, seq of existing record: {}", e.seq()),
             )
         })?;
@@ -154,11 +237,13 @@ where
 
         let res = self.kv_api.get_pb(&ident).await?;
 
-        let seq_value = res.ok_or_else(|| UnknownError::new(name, "NotFound when get"))?;
+        let seq_value = res.ok_or_else(|| UnknownError::new(name, seq, "NotFound when get"))?;
 
         match seq.match_seq(&seq_value) {
             Ok(_) => Ok(seq_value),
-            Err(e) => Err(UnknownError::new(name, format_args!("NotFound when get: {}", e)).into()),
+            Err(e) => {
+                Err(UnknownError::new(name, seq, format_args!("NotFound when get: {}", e)).into())
+            }
         }
     }
 
