@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -27,6 +28,7 @@ use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
 
+use crate::servers::http::v1::TokenManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -34,6 +36,11 @@ pub struct AuthMgr {
 }
 
 pub enum Credential {
+    Databend {
+        token: String,
+        token_type: TokenType,
+        set_user: bool,
+    },
     Jwt {
         token: String,
         client_ip: Option<String>,
@@ -68,6 +75,22 @@ impl AuthMgr {
     pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
         let user_api = UserApiProvider::instance();
         match credential {
+            Credential::Databend {
+                token,
+                set_user,
+                token_type,
+            } => {
+                let claim = TokenManager::instance()
+                    .verify_token(token, token_type.clone())
+                    .await?;
+                let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                if *set_user {
+                    let identity = UserIdentity::new(claim.user, "%");
+                    session.set_current_tenant(tenant.clone());
+                    let user_info = user_api.get_user(&tenant, identity.clone()).await?;
+                    session.set_authed_user(user_info, claim.auth_role).await?;
+                }
+            }
             Credential::Jwt {
                 token: t,
                 client_ip,

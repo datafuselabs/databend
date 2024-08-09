@@ -41,6 +41,7 @@ use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::renew_handler;
 use crate::servers::Server;
 
 #[derive(Copy, Clone)]
@@ -95,7 +96,8 @@ impl HttpHandler {
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
             .nest("/query", query_route())
-            .at("/login", post(login_handler))
+            .at("/session/login", post(login_handler))
+            .at("/session/renew", post(renew_handler))
             .at("/upload_to_stage", put(upload_to_stage))
             .at("/suggested_background_tasks", get(list_suggestions));
         let ep_v1 = self.wrap_auth(ep_v1);

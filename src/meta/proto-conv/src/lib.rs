@@ -85,6 +85,7 @@ mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod tenant_quota_from_to_protobuf_impl;
 mod tident_from_to_protobuf_impl;
+mod token_from_to_protobuf_impl;
 mod udf_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;

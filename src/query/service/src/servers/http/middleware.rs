@@ -24,6 +24,7 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
@@ -56,6 +57,7 @@ use poem::Response;
 use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
+use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
@@ -123,7 +125,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip)
+        auth_by_header(&std_auth_headers, client_ip, req.uri().path())
     }
 }
 
@@ -157,6 +159,7 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
 fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
+    path: &str,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -176,10 +179,29 @@ fn auth_by_header(
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
-            Some(bearer) => Ok(Credential::Jwt {
-                token: bearer.token().to_string(),
-                client_ip,
-            }),
+            Some(bearer) => {
+                let token = bearer.token().to_string();
+                if SessionClaim::is_databend_token(&token) {
+                    let (token_type, set_user) = if path == "/query" {
+                        (TokenType::Session, true)
+                    } else if path == "/session/renew" {
+                        (TokenType::Refresh, true)
+                    } else if path != "/session/login" {
+                        (TokenType::Session, false)
+                    } else {
+                        return Err(ErrorCode::AuthenticateFailure(format!(
+                            "should not use databend auth when accessing {path}"
+                        )));
+                    };
+                    Ok(Credential::Databend {
+                        token,
+                        token_type,
+                        set_user,
+                    })
+                } else {
+                    Ok(Credential::Jwt { token, client_ip })
+                }
+            }
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
     } else {
@@ -251,6 +273,10 @@ impl<E> HTTPSessionEndpoint<E> {
         }
 
         self.auth_manager.auth(&mut session, &credential).await?;
+        let databend_token = match credential {
+            Credential::Databend { token, .. } => Some(token),
+            _ => None,
+        };
 
         let session = session_manager.register_session(session)?;
 
@@ -291,6 +317,7 @@ impl<E> HTTPSessionEndpoint<E> {
             http_method: req.method().to_string(),
             uri: req.uri().to_string(),
             client_host,
+            databend_token,
         })
     }
 }
@@ -321,7 +348,12 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     self.ep.call(req).await
                 }
                 Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
+                    ErrorCode::AUTHENTICATE_FAILURE
+                    | ErrorCode::SESSION_TOKEN_EXPIRED
+                    | ErrorCode::SESSION_TOKEN_NOT_FOUND
+                    | ErrorCode::REFRESH_TOKEN_EXPIRED
+                    | ErrorCode::REFRESH_TOKEN_NOT_FOUND
+                    | ErrorCode::UNKNOWN_USER => {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),

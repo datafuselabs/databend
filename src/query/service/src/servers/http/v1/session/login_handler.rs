@@ -22,6 +22,8 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
 
+use crate::servers::http::v1::session::token_manager::TokenManager;
+use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::QueryError;
 
@@ -33,10 +35,19 @@ struct LoginRequest {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct LoginResponse {
-    pub version: String,
-    pub error: Option<QueryError>,
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum LoginResponse {
+    Ok {
+        version: String,
+        session_id: String,
+        session_token: String,
+        refresh_token: String,
+        refresh_token_validity_in_secs: u64,
+    },
+    Error {
+        error: QueryError,
+    },
 }
 
 /// Although theses can be checked for each /v1/query for now,
@@ -70,7 +81,7 @@ async fn check_login(
 }
 
 ///  # For SQL driver implementer:
-/// - It is encouraged to call `/v1/login` when establishing connection, not mandatory for now.
+/// - It is encouraged to call `/v1/session/login` when establishing connection, not mandatory for now.
 /// - May get 404 when talk to old server, may check `/health` (no `/v1` prefix) to ensure the host:port is not wrong.
 ///
 ///  # TODO (need design):
@@ -78,14 +89,30 @@ async fn check_login(
 /// - Return token for auth in the following queries from this session, to make it a real login.
 #[poem::handler]
 #[async_backtrace::framed]
-pub(crate) async fn login_handler(
+pub async fn login_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<LoginRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let version = QUERY_SEMVER.to_string();
-    let error = check_login(ctx, &req)
+    if let Err(error) = check_login(ctx, &req).await {
+        return Ok(Json(LoginResponse::Error {
+            error: QueryError::from_error_code(error),
+        }));
+    }
+
+    match TokenManager::instance()
+        .new_token_pair(&ctx.session, None)
         .await
-        .map_err(QueryError::from_error_code)
-        .err();
-    Ok(Json(LoginResponse { version, error }))
+    {
+        Ok((session_id, token_pair)) => Ok(Json(LoginResponse::Ok {
+            version,
+            session_id,
+            session_token: token_pair.session,
+            refresh_token: token_pair.refresh,
+            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.whole_seconds() as u64,
+        })),
+        Err(e) => Ok(Json(LoginResponse::Error {
+            error: QueryError::from_error_code(e),
+        })),
+    }
 }

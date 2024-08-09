@@ -46,6 +46,8 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
+    fn get_auth_role(&self) -> Option<String>;
+
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
 
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
@@ -134,7 +136,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
 impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set session.role in the HTTP query.
     #[async_backtrace::framed]
     async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
@@ -185,6 +187,9 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
 
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.session_ctx.get_current_role()
+    }
+    fn get_auth_role(&self) -> Option<String> {
+        self.session_ctx.get_auth_role()
     }
 
     #[async_backtrace::framed]

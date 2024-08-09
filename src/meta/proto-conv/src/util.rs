@@ -134,6 +134,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (102, "2024-07-11: Add: UserOption add must_change_password, AuthInfo.Password add need_change"),
     (103, "2024-07-31: Add: ShareMetaV2"),
     (104, "2024-08-02: Add: add share catalog into Catalog meta"),
+    (105, "2024-08-08: Add: add QueryTokenInfo"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

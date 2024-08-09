@@ -623,45 +623,6 @@ async fn test_pagination() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn test_http_session() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
-
-    let ep = create_endpoint().await?;
-    let json =
-        serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
-
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert!(result.next_uri.is_some(), "{:?}", result);
-    assert!(result.schema.is_empty(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-    let session_id = &result.session_id.unwrap();
-
-    let json = serde_json::json!({"sql": "select database()", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    let data = unwrap_data(&result.data, "");
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(data.len(), 1, "{:?}", result);
-    assert_eq!(data[0][0], "system", "{:?}", result);
-
-    let json = serde_json::json!({"sql": "select * from x", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_some(), "{:?}", result);
-
-    let json = serde_json::json!({"sql": "select 1", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(result.data.len(), 1, "{:?}", result);
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore]
 async fn test_result_timeout() -> Result<()> {

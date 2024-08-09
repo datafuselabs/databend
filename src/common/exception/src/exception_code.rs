@@ -413,4 +413,9 @@ build_exceptions! {
 build_exceptions! {
     // A task that already stopped and can not stopped twice.
     AlreadyStopped(5002),
+
+    SessionTokenExpired(5100),
+    RefreshTokenExpired(5101),
+    SessionTokenNotFound(5102),
+    RefreshTokenNotFound(5103)
 }

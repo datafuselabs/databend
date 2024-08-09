@@ -40,5 +40,6 @@ pub use session_ctx::SessionContext;
 pub use session_info::ProcessInfo;
 pub use session_mgr::SessionManager;
 pub use session_mgr_status::SessionManagerStatus;
+pub use session_privilege_mgr::SessionPrivilegeManager;
 pub use session_status::SessionStatus;
 pub use session_type::SessionType;

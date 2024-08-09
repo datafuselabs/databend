@@ -5261,6 +5261,7 @@ dependencies = [
  "serde_json",
  "serde_stacker",
  "serde_urlencoded",
+ "sha2",
  "socket2 0.5.6",
  "strength_reduce",
  "sysinfo",

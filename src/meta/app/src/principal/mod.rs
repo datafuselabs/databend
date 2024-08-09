@@ -46,6 +46,8 @@ pub mod tenant_user_ident;
 pub mod user_defined_file_format_ident;
 pub mod user_setting_ident;
 pub mod user_stage_ident;
+pub mod user_token;
+pub mod user_token_ident;
 
 pub use connection::*;
 pub use file_format::*;

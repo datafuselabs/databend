@@ -35,7 +35,6 @@ use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
@@ -120,9 +119,6 @@ impl Session {
                 shutdown_fun();
             }
         }
-
-        let http_queries_manager = HttpQueryManager::instance();
-        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(&self) {
@@ -219,7 +215,7 @@ impl Session {
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(

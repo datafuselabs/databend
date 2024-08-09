@@ -13,8 +13,8 @@
 // limitations under the License.
 
 mod http_query_handlers;
-mod login;
 mod query;
+mod session;
 mod stage;
 pub mod string_block;
 mod suggestions;
@@ -26,13 +26,18 @@ pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryError;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
-pub(crate) use login::login_handler;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
 pub use query::ExpiringState;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
+pub use session::login_handler::login_handler;
+pub use session::login_handler::LoginResponse;
+pub use session::renew_handler::renew_handler;
+pub use session::renew_handler::RenewResponse;
+pub(crate) use session::SessionClaim;
+pub use session::TokenManager;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub(crate) use string_block::StringBlock;

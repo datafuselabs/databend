@@ -21,7 +21,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::short_sql;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::runtime::CatchUnwindFuture;
@@ -49,8 +48,6 @@ use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
 use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
-use crate::servers::http::v1::query::expirable::Expirable;
-use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
@@ -326,40 +323,9 @@ impl HttpQuery {
     ) -> Result<Arc<HttpQuery>> {
         let http_query_manager = HttpQueryManager::instance();
 
-        // If session_id is specified, the new query will be attached in the same session.
-        let session = if let Some(id) = &request.session_id {
-            let session = http_query_manager.get_session(id).await.ok_or_else(|| {
-                ErrorCode::UnknownSession(format!("unknown session-id {}, maybe expired", id))
-            })?;
-            let mut n = 1;
-            while let ExpiringState::InUse(query_id) = session.expire_state() {
-                if let Some(last_query) = &http_query_manager.get_query(&query_id) {
-                    if last_query.get_state().await.state == ExecuteStateKind::Running {
-                        return Err(ErrorCode::BadArguments(
-                            "last query on the session not finished",
-                        ));
-                    }
-                    let _ = http_query_manager
-                        .remove_query(
-                            &query_id,
-                            RemoveReason::Canceled,
-                            ErrorCode::ClosedQuery("closed by next query"),
-                        )
-                        .await;
-                }
-                // wait for Arc<QueryContextShared> to drop and detach itself from session
-                // should not take too long
-                tokio::time::sleep(Duration::from_millis(1)).await;
-                n += 1;
-                if n > 10 {
-                    return Err(ErrorCode::Internal("last query stop but not released"));
-                }
-            }
-            session
-        } else {
-            ctx.upgrade_session(SessionType::HTTPQuery)
-                .map_err(|err| ErrorCode::Internal(format!("{err}")))?
-        };
+        let session = ctx
+            .upgrade_session(SessionType::HTTPQuery)
+            .map_err(|err| ErrorCode::Internal(format!("{err}")))?;
 
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
@@ -395,14 +361,6 @@ impl HttpQuery {
                 }
             }
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
-
-            if let Some(secs) = session_conf.keep_server_session_secs {
-                if secs > 0 && request.session_id.is_none() {
-                    http_query_manager
-                        .add_session(session.clone(), Duration::from_secs(secs))
-                        .await;
-                }
-            }
         };
 
         let settings = session.get_settings();
