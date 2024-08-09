@@ -152,6 +152,12 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
+                    None => {
+                        return ctx.set_error(
+                            output.len(),
+                            "`target_tz` is `None`.".to_string(),
+                        );
+                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
@@ -161,6 +167,12 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 };
                 let s_tz: Tz = match src_tz.parse() {
                     Ok(tz) => tz,
+                    None => {
+                        return ctx.set_error(
+                            output.len(),
+                            "`src_tz` is `None`.".to_string(),
+                        );
+                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
@@ -171,8 +183,14 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
                 let p_src_timestamp: i64 = match Some(src_timestamp){
                     Ok(timestamp) => {
-                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                        timestamp.unwrap().Utc.timestamp_opt(src_timestamp, 0).unwrap();
                     },
+                    None => {
+                        return ctx.set_error(
+                            output.len(),
+                            "source `src_timestamp` is `None`.".to_string(),
+                        );
+                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
@@ -206,13 +224,25 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
             |target_tz, src_timestamp, output, ctx| {
                 // Assume the source timestamp is in UTC
                 let utc_datetime: DateTime<Utc> = match Some(src_timestamp) {
-                    Ok(timestamp) => {
-                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                    Ok(timestamp) => match Utc.timestamp_opt(timestamp, 0) {
+                        chrono::LocalResult::Single(dt) => dt,
+                        _ => {
+                            return ctx.set_error(
+                                output.len(),
+                                "cannot parse source `src_timestamp`.".to_string(),
+                            );
+                        }
+                    },
+                    None => {
+                        return ctx.set_error(
+                            output.len(),
+                            "source `src_timestamp` is `None`.".to_string(),
+                        );
                     }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
-                            format!("cannot parse target `timezone`. {}", e),
+                            format!("cannot parse target `src_timestamp`. {}", e),
                         );
                     }
                 };
@@ -220,6 +250,9 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 // Parse the target timezone
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
+                    None => {
+                        return ctx.set_error(output.len(), "`target_tz` is `None`.".to_string());
+                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
