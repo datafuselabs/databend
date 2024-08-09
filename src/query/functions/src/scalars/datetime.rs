@@ -158,21 +158,9 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                             "`target_tz` is `None`.".to_string(),
                         );
                     }
-                    Err(e) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("cannot parse target `timezone`. {}", e),
-                        );
-                    }
                 };
                 let s_tz: Tz = match src_tz.parse() {
                     Ok(tz) => tz,
-                    None => {
-                        return ctx.set_error(
-                            output.len(),
-                            "`src_tz` is `None`.".to_string(),
-                        );
-                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
@@ -185,12 +173,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     Ok(timestamp) => {
                         timestamp.unwrap().Utc.timestamp_opt(src_timestamp, 0).unwrap();
                     },
-                    None => {
-                        return ctx.set_error(
-                            output.len(),
-                            "source `src_timestamp` is `None`.".to_string(),
-                        );
-                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
@@ -239,20 +221,11 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                             "source `src_timestamp` is `None`.".to_string(),
                         );
                     }
-                    Err(e) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("cannot parse target `src_timestamp`. {}", e),
-                        );
-                    }
                 };
 
                 // Parse the target timezone
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
-                    None => {
-                        return ctx.set_error(output.len(), "`target_tz` is `None`.".to_string());
-                    }
                     Err(e) => {
                         return ctx.set_error(
                             output.len(),
