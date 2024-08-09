@@ -129,10 +129,14 @@ impl LockManager {
             let reply = catalog
                 .list_lock_revisions(list_table_lock_req.clone())
                 .await?;
-            let position = reply.iter().position(|(x, _)| *x == revision).ok_or_else(||
+            let rev_list = reply.into_iter().map(|(x, _)| x).collect::<Vec<_>>();
+            let position = rev_list.iter().position(|x| *x == revision).ok_or_else(||
                 // If the current is not found in list,  it means that the current has been expired.
-                ErrorCode::TableLockExpired("the acquired table lock has been expired".to_string()),
-            )?;
+                ErrorCode::TableLockExpired(format!(
+                    "the acquired table lock with revision '{}' is not in {:?}, maybe expired", 
+                    revision,
+                    rev_list
+                )))?;
 
             if position == 0 {
                 // The lock is acquired by current session.
@@ -155,7 +159,7 @@ impl LockManager {
                 ));
             }
 
-            let watch_delete_ident = TableLockIdent::new(tenant, table_id, reply[position - 1].0);
+            let watch_delete_ident = TableLockIdent::new(tenant, table_id, rev_list[position - 1]);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
