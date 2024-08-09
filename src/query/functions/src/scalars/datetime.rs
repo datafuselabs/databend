@@ -152,10 +152,10 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
-                    None => {
+                    Err(e) => {
                         return ctx.set_error(
                             output.len(),
-                            "`target_tz` is `None`.".to_string(),
+                            format!("cannot parse target `timezone`. {}", e),
                         );
                     }
                 };
@@ -171,7 +171,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
                 let p_src_timestamp: i64 = match Some(src_timestamp){
                     Ok(timestamp) => {
-                        timestamp.unwrap().Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
                     },
                     Err(e) => {
                         return ctx.set_error(
@@ -204,25 +204,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
-                // Assume the source timestamp is in UTC
-                let utc_datetime: DateTime<Utc> = match Some(src_timestamp) {
-                    Ok(timestamp) => match Utc.timestamp_opt(timestamp, 0) {
-                        chrono::LocalResult::Single(dt) => dt,
-                        _ => {
-                            return ctx.set_error(
-                                output.len(),
-                                "cannot parse source `src_timestamp`.".to_string(),
-                            );
-                        }
-                    },
-                    None => {
-                        return ctx.set_error(
-                            output.len(),
-                            "source `src_timestamp` is `None`.".to_string(),
-                        );
-                    }
-                };
-
                 // Parse the target timezone
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
@@ -234,11 +215,25 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                // Convert the UTC time to the specified target timezone
-                let target_datetime: DateTime<Tz> = utc_datetime.with_timezone(&t_tz);
-                let result_timestamp = target_datetime.timestamp();
-                // Return the adjusted timestamp as a Unix timestamp in seconds
-                output.push(result_timestamp)
+                // Assume the source timestamp is in UTC
+                match Some(src_timestamp) {
+                    Ok(src_timestamp) => {
+                        let timestamp: i64 = src_timestamp;
+                        let datetime: DateTime<Utc> = Utc.timestamp_opt(src_timestamp, 0).unwrap();
+
+                        // Convert the UTC time to the specified target timezone
+                        let target_datetime: DateTime<Tz> = datetime.with_timezone(&t_tz);
+                        let result_timestamp = target_datetime.timestamp();
+                        // Return the adjusted timestamp as a Unix timestamp in seconds
+                        output.push(result_timestamp)
+                    }
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
             },
         )(target_tz, src_timestamp, ctx)
     }
