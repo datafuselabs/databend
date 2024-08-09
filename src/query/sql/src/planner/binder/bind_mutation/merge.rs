@@ -59,6 +59,7 @@ impl Binder {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
         let source_reference = stmt.source.transform_table_reference();
 

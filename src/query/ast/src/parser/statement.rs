@@ -4149,6 +4149,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }
@@ -4168,6 +4169,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
     )(i)
 }

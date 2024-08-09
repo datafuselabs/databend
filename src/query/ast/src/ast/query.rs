@@ -19,6 +19,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use super::Lambda;
+use super::Literal;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
@@ -608,6 +609,39 @@ impl Display for TemporalClause {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SampleLevel {
+    ROW,
+    BLOCK,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SampleConfig {
+    Probability(Literal),
+    RowsNum(Literal),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct Sample {
+    pub sample_level: SampleLevel,
+    pub sample_conf: SampleConfig,
+}
+
+impl Display for Sample {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SAMPLE ")?;
+        match self.sample_level {
+            SampleLevel::ROW => write!(f, "ROW ")?,
+            SampleLevel::BLOCK => write!(f, "BLOCK ")?,
+        }
+        match &self.sample_conf {
+            SampleConfig::Probability(prob) => write!(f, "({})", prob)?,
+            SampleConfig::RowsNum(rows) => write!(f, "({} ROWS)", rows)?,
+        }
+        Ok(())
+    }
+}
+
 /// A table name or a parenthesized subquery with an optional alias
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TableReference {
@@ -623,6 +657,7 @@ pub enum TableReference {
         consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
+        sample: Option<Sample>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -697,6 +732,7 @@ impl Display for TableReference {
                 consume,
                 pivot,
                 unpivot,
+                sample,
             } => {
                 write_dot_separated_list(
                     f,
@@ -720,6 +756,10 @@ impl Display for TableReference {
 
                 if let Some(unpivot) = unpivot {
                     write!(f, " {unpivot}")?;
+                }
+
+                if let Some(sample) = sample {
+                    write!(f, " {sample}")?;
                 }
             }
             TableReference::TableFunction {

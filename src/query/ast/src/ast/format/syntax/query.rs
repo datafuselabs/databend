@@ -322,6 +322,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
             consume,
             pivot,
             unpivot,
+            sample,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -350,6 +351,11 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
         })
         .append(if let Some(unpivot) = unpivot {
             RcDoc::text(format!(" {unpivot}"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(sample) = sample {
+            RcDoc::text(format!(" {sample}"))
         } else {
             RcDoc::nil()
         })

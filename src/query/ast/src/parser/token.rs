@@ -405,6 +405,8 @@ pub enum TokenKind {
     BROTLI,
     #[token("BZ2", ignore(ascii_case))]
     BZ2,
+    #[token("BLOCK", ignore(ascii_case))]
+    BLOCK,
     #[token("CALL", ignore(ascii_case))]
     CALL,
     #[token("CASE", ignore(ascii_case))]
@@ -924,6 +926,8 @@ pub enum TokenKind {
     RETURN_FAILED_ONLY,
     #[token("REVERSE", ignore(ascii_case))]
     REVERSE,
+    #[token("SAMPLE", ignore(ascii_case))]
+    SAMPLE,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -1567,6 +1571,7 @@ impl TokenKind {
             // | TokenKind::AUTHORIZATION
             // | TokenKind::BINARY
             | TokenKind::BOTH
+            | TokenKind::BLOCK
             | TokenKind::CASE
             | TokenKind::CAST
             // | TokenKind::CHECK
@@ -1620,10 +1625,13 @@ impl TokenKind {
             | TokenKind::SELECT
             | TokenKind::PIVOT
             | TokenKind::UNPIVOT
+            | TokenKind::ROW
+            | TokenKind::ROWS
             // | TokenKind::SESSION_USER
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE
             | TokenKind::THEN
@@ -1660,7 +1668,6 @@ impl TokenKind {
             | TokenKind::OVER
             | TokenKind::PARTITION
             | TokenKind::QUALIFY
-            | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING

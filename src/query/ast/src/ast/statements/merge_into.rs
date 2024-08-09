@@ -218,6 +218,7 @@ impl MergeSource {
                 consume: false,
                 pivot: None,
                 unpivot: None,
+                sample: None,
             },
         }
     }

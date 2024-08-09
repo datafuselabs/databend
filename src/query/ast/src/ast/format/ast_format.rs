@@ -3327,6 +3327,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 consume,
                 pivot,
                 unpivot,
+                sample,
             } => {
                 let mut name = String::new();
                 name.push_str("TableIdentifier ");
@@ -3352,6 +3353,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 if let Some(unpivot) = unpivot {
                     name.push(' ');
                     name.push_str(&unpivot.to_string());
+                }
+
+                if let Some(sample) = sample {
+                    name.push(' ');
+                    name.push_str(&sample.to_string());
                 }
 
                 let mut children = Vec::new();

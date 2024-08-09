@@ -34,6 +34,7 @@ impl ViewRewriter {
             consume,
             pivot,
             unpivot,
+            sample,
         } = table_ref
         {
             // Must rewrite view query when table_ref::database is none. If not:
@@ -53,6 +54,7 @@ impl ViewRewriter {
                     consume: *consume,
                     pivot: pivot.clone(),
                     unpivot: unpivot.clone(),
+                    sample: sample.clone(),
                 }
             }
         }

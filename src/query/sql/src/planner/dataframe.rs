@@ -65,6 +65,7 @@ impl Dataframe {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
 
         let settings = query_ctx.get_settings();
@@ -104,7 +105,7 @@ impl Dataframe {
                 false,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None)
+            binder.bind_base_table(&bind_context, database, table_index, None, &None)
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;
@@ -469,6 +470,7 @@ impl Dataframe {
                 consume: false,
                 pivot: None,
                 unpivot: None,
+                sample: None,
             };
             table_ref.push(table);
         }

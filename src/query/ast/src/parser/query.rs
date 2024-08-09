@@ -685,6 +685,7 @@ pub enum TableReferenceElement {
         consume: bool,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,
+        sample: Option<Sample>,
     },
     // `TABLE(expr)[ AS alias ]`
     TableFunction {
@@ -741,9 +742,45 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ (WITH ~ CONSUME)? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (ROW | BLOCK)? ~ ("(" ~ #expr ~ ROWS? ~ ")")?
         },
-        |((catalog, database, table), temporal, opt_consume, alias, pivot, unpivot)| {
+        |(
+            (catalog, database, table),
+            temporal,
+            opt_consume,
+            alias,
+            pivot,
+            unpivot,
+            sample,
+            level,
+            sample_conf,
+        )| {
+            let mut table_sample = None;
+            if sample.is_some() {
+                let sample_level = match level {
+                    // If the sample level is not specified, it defaults to ROW
+                    Some(level) => match level.kind {
+                        ROW => SampleLevel::ROW,
+                        BLOCK => SampleLevel::BLOCK,
+                        _ => unreachable!(),
+                    },
+                    None => SampleLevel::ROW,
+                };
+                let mut default_sample_conf = SampleConfig::Probability(Literal::Float64(100.0));
+                if let Some((_, expr, rows, _)) = sample_conf {
+                    if let Expr::Literal { value, .. } = expr {
+                        default_sample_conf = if rows.is_some() {
+                            SampleConfig::RowsNum(value)
+                        } else {
+                            SampleConfig::Probability(value)
+                        };
+                    }
+                }
+                table_sample = Some(Sample {
+                    sample_level,
+                    sample_conf: default_sample_conf,
+                })
+            };
             TableReferenceElement::Table {
                 catalog,
                 database,
@@ -753,6 +790,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 consume: opt_consume.is_some(),
                 pivot: pivot.map(Box::new),
                 unpivot: unpivot.map(Box::new),
+                sample: table_sample,
             }
         },
     );
@@ -864,6 +902,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 consume,
                 pivot,
                 unpivot,
+                sample,
             } => TableReference::Table {
                 span: transform_span(input.span.tokens),
                 catalog,
@@ -874,6 +913,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 consume,
                 pivot,
                 unpivot,
+                sample,
             },
             TableReferenceElement::TableFunction {
                 lateral,

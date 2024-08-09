@@ -23,6 +23,7 @@ use log::info;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
+use crate::plans::Filter;
 use crate::plans::RelOperator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -68,6 +69,9 @@ impl CollectStatisticsOptimizer {
                     .table_statistics(self.table_ctx.clone(), true, scan.change_type.clone())
                     .await?;
 
+                let sample_filter = scan.sample_filter(&table_stats)?;
+                dbg!(&sample_filter);
+
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
                 for column in columns.iter() {
@@ -104,8 +108,14 @@ impl CollectStatisticsOptimizer {
                     column_stats,
                     histograms,
                 });
-
-                Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))
+                let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan)));
+                if let Some(sample_filter) = sample_filter {
+                    let filter = Filter {
+                        predicates: vec![sample_filter],
+                    };
+                    s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr))
+                }
+                Ok(s_expr)
             }
             RelOperator::MaterializedCte(materialized_cte) => {
                 // Collect the common table expression statistics first.

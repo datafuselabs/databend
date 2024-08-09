@@ -302,6 +302,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
         (table, table_reference)
     }
@@ -505,6 +506,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         };
         Some((
             AlterTableStmt {

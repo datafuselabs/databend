@@ -483,6 +483,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             pivot: None,
             // TODO
             unpivot: None,
+            sample: None,
         };
         (table_ref, schema)
     }
