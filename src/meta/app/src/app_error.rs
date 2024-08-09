@@ -1075,6 +1075,66 @@ impl WrongSequenceCount {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DictionaryAlreadyExists: `{dictionary_name}` while `{context}`")]
+pub struct DictionaryAlreadyExists {
+    dictionary_name: String,
+    context: String,
+}
+
+impl DictionaryAlreadyExists {
+    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("UnknownDictionary: `{dictionary_name}` while `{context}`")]
+pub struct UnknownDictionary {
+    dictionary_name: String,
+    context: String,
+}
+
+impl UnknownDictionary {
+    pub fn new(dictionary_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DropDictionaryWithDropTime: drop {dictionary_name} with drop time")]
+pub struct DropDictionaryWithDropTime {
+    dictionary_name: String,
+}
+
+impl DropDictionaryWithDropTime {
+    pub fn new(dictionary_name: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateDictionaryWithDropTime: create {dictionary_name} with drop time")]
+pub struct CreateDictionaryWithDropTime {
+    dictionary_name: String,
+}
+
+impl CreateDictionaryWithDropTime {
+    pub fn new(dictionary_name: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1264,6 +1324,19 @@ pub enum AppError {
 
     #[error(transparent)]
     UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
+
+    // dictionary
+    #[error(transparent)]
+    DictionaryAlreadyExists(#[from] DictionaryAlreadyExists),
+
+    #[error(transparent)]
+    UnknownDictionary(#[from] UnknownDictionary),
+
+    #[error(transparent)]
+    DropDictionaryWithDropTime(#[from] DropDictionaryWithDropTime),
+
+    #[error(transparent)]
+    CreateDictionaryWithDropTime(#[from] CreateDictionaryWithDropTime),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1707,6 +1780,34 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
+// dictionary
+impl AppErrorMessage for DictionaryAlreadyExists {
+    fn message(&self) -> String {
+        format!("dictionary '{}' already exists", self.dictionary_name)
+    }
+}
+
+impl AppErrorMessage for UnknownDictionary {
+    fn message(&self) -> String {
+        format!("Unknown dictionary '{}'", self.dictionary_name)
+    }
+}
+
+impl AppErrorMessage for DropDictionaryWithDropTime {
+    fn message(&self) -> String {
+        format!("Drop Dictionary '{}' with drop time", self.dictionary_name)
+    }
+}
+
+impl AppErrorMessage for CreateDictionaryWithDropTime {
+    fn message(&self) -> String {
+        format!(
+            "Create Dictionary '{}' with drop time",
+            self.dictionary_name
+        )
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1817,6 +1918,17 @@ impl From<AppError> for ErrorCode {
             }
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
             AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
+            // dictionary
+            AppError::DictionaryAlreadyExists(err) => {
+                ErrorCode::DictionaryAlreadyExists(err.message())
+            }
+            AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
+            AppError::DropDictionaryWithDropTime(err) => {
+                ErrorCode::DropDictionaryWithDropTime(err.message())
+            }
+            AppError::CreateDictionaryWithDropTime(err) => {
+                ErrorCode::CreateDictionaryWithDropTime(err.message())
+            }
         }
     }
 }

@@ -68,6 +68,7 @@ mod connection_from_to_protobuf_impl;
 mod data_mask_from_to_protobuf_impl;
 mod database_from_to_protobuf_impl;
 mod datetime_from_to_protobuf_impl;
+mod dictionary_from_to_protobuf_impl;
 mod file_format_from_to_protobuf_impl;
 mod from_to_protobuf;
 mod index_from_to_protobuf_impl;
