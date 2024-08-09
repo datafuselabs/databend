@@ -143,7 +143,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
         eval_convert_timezone,
     );
 
-    // 3 arguments function [target_timezone, src_timestamp, src_timezone]
+    // 3 arguments function [src_timezone, target_timezone, src_timestamp]
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, TimestampType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _, _| FunctionDomain::MayThrow,
@@ -168,6 +168,20 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                         );
                     }
                 };
+
+                let p_src_timestamp: i64 = match Some(src_timestamp){
+                    Ok(timestamp) => {
+                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                    },
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+
+
                 // Create dummy timezone
                 let utc_now: DateTime<Utc> = Utc::now();
 
@@ -176,7 +190,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
                 // Calculate the difference in seconds
                 let delta = target_time.signed_duration_since(src_time);
-                let result_timestamp = src_timestamp + delta.num_seconds();
+                let result_timestamp = p_src_timestamp + delta.num_seconds();
 
                 output.push(result_timestamp)
             },
@@ -191,7 +205,17 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Assume the source timestamp is in UTC
-                let utc_datetime: DateTime<Utc> = Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                let utc_datetime: DateTime<Utc> = match Some(src_timestamp) {
+                    Ok(timestamp) => {
+                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                    }
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
 
                 // Parse the target timezone
                 let t_tz: Tz = match target_tz.parse() {
