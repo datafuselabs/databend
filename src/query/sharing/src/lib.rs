@@ -27,3 +27,6 @@ pub use signer::SharedSigner;
 
 mod share_endpoint;
 pub use share_endpoint::ShareEndpointManager;
+
+mod share_presigned_cache_manager;
+pub use share_presigned_cache_manager::SharePresignedCacheManager;

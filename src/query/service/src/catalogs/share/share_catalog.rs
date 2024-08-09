@@ -51,6 +51,7 @@ use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -165,6 +166,8 @@ pub struct ShareCatalog {
     info: Arc<CatalogInfo>,
 
     option: ShareCatalogOption,
+
+    client: ShareEndpointClient,
 }
 
 impl Debug for ShareCatalog {
@@ -190,8 +193,14 @@ impl ShareCatalog {
             },
             disable_table_info_refresh: false,
         };
+        let client = ShareEndpointClient::new();
 
-        Ok(Self { info, option, ctx })
+        Ok(Self {
+            info,
+            option,
+            ctx,
+            client,
+        })
     }
 
     async fn get_share_spec(&self) -> Result<ShareSpec> {
@@ -219,8 +228,8 @@ impl ShareCatalog {
 
         // 2. check if ShareSpec exists using share endpoint
         let share_endpoint_meta = &reply.share_endpoint_meta_vec[0].1;
-        let client = ShareEndpointClient::new();
-        let share_spec = client
+        let share_spec = self
+            .client
             .get_share_spec_by_name(share_endpoint_meta, tenant, provider, share_name)
             .await?;
 
@@ -390,72 +399,112 @@ impl Catalog for ShareCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let share_spec = self.get_share_spec().await?;
-        if let Some(use_database) = &share_spec.use_database {
-            if use_database.name == db_name {
-                let db_info = self.generate_share_database_info(use_database);
-                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
-                db.get_table(table_name).await
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "cannot find database {} from share {}",
-                    db_name, self.option.share_name,
-                )))
-            }
+        let share_option = &self.option;
+        let share_name = &share_option.share_name;
+        let share_endpoint = &share_option.share_endpoint;
+        let provider = &share_option.provider;
+        let tenant = &self.info.name_ident.tenant;
+
+        // 1. get share endpoint
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let req = GetShareEndpointReq {
+            tenant: Tenant {
+                tenant: tenant.to_owned(),
+            },
+            endpoint: Some(share_endpoint.clone()),
+        };
+        let reply = meta_api.get_share_endpoint(req).await?;
+        if reply.share_endpoint_meta_vec.is_empty() {
+            return Err(ErrorCode::UnknownShareEndpoint(format!(
+                "UnknownShareEndpoint {:?}",
+                share_endpoint
+            )));
+        }
+
+        // 2. check if ShareSpec exists using share endpoint
+        let share_endpoint_meta = reply.share_endpoint_meta_vec[0].1.clone();
+        let mut table_info = self
+            .client
+            .get_share_table(
+                &share_endpoint_meta,
+                tenant,
+                provider,
+                share_name,
+                db_name,
+                table_name,
+            )
+            .await?;
+
+        let db_type = table_info.db_type.clone();
+        if let DatabaseType::ShareDB(params) = db_type {
+            let mut params = params;
+            params.share_endpoint_url = share_endpoint_meta.url.clone();
+            params.share_endpoint_credential = share_endpoint_meta.credential.clone().unwrap();
+            table_info.db_type = DatabaseType::ShareDB(params);
+
+            self.ctx.storage_factory.get_table(&table_info)
         } else {
-            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                "share {}.{} has no granted database",
-                self.option.provider, self.option.share_name,
-            )))
+            unreachable!()
         }
     }
 
     #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let share_spec = self.get_share_spec().await?;
-        if let Some(use_database) = &share_spec.use_database {
-            if use_database.name == db_name {
-                let db_info = self.generate_share_database_info(use_database);
-                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
-                db.list_tables().await
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "cannot find database {} from share {}",
-                    db_name, self.option.share_name,
-                )))
-            }
-        } else {
-            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                "share {}.{} has no granted database",
-                self.option.provider, self.option.share_name,
-            )))
+        let share_option = &self.option;
+        let share_name = &share_option.share_name;
+        let share_endpoint = &share_option.share_endpoint;
+        let provider = &share_option.provider;
+        let tenant = &self.info.name_ident.tenant;
+
+        // 1. get share endpoint
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let req = GetShareEndpointReq {
+            tenant: Tenant {
+                tenant: tenant.to_owned(),
+            },
+            endpoint: Some(share_endpoint.clone()),
+        };
+        let reply = meta_api.get_share_endpoint(req).await?;
+        if reply.share_endpoint_meta_vec.is_empty() {
+            return Err(ErrorCode::UnknownShareEndpoint(format!(
+                "UnknownShareEndpoint {:?}",
+                share_endpoint
+            )));
         }
+
+        // 2. check if ShareSpec exists using share endpoint
+        let share_endpoint_meta = reply.share_endpoint_meta_vec[0].1.clone();
+        let table_info_map = self
+            .client
+            .get_share_tables(&share_endpoint_meta, tenant, provider, share_name, db_name)
+            .await?;
+
+        let mut table_info_vec = vec![];
+        for info in table_info_map.values() {
+            let mut table_info = info.clone();
+            if let DatabaseType::ShareDB(params) = &table_info.db_type {
+                let mut params = params.clone();
+                params.share_endpoint_url = share_endpoint_meta.url.clone();
+                params.share_endpoint_credential = share_endpoint_meta.credential.clone().unwrap();
+                table_info.db_type = DatabaseType::ShareDB(params);
+
+                table_info_vec.push(self.ctx.storage_factory.get_table(&table_info)?);
+            } else {
+                unreachable!()
+            }
+        }
+        Ok(table_info_vec)
     }
 
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         _tenant: &Tenant,
-        db_name: &str,
+        _db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        let share_spec = self.get_share_spec().await?;
-        if let Some(use_database) = &share_spec.use_database {
-            if use_database.name == db_name {
-                let db_info = self.generate_share_database_info(use_database);
-                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
-                db.list_tables_history().await
-            } else {
-                Err(ErrorCode::UnknownDatabase(format!(
-                    "cannot find database {} from share {}",
-                    db_name, self.option.share_name,
-                )))
-            }
-        } else {
-            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                "share {}.{} has no granted database",
-                self.option.provider, self.option.share_name,
-            )))
-        }
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot list table history from a shared database".to_string(),
+        ))
     }
 
     #[async_backtrace::framed]

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::time;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -24,11 +23,11 @@ use databend_common_config::GlobalConfig;
 use databend_common_meta_app::share::ShareCredential;
 use http::HeaderMap;
 use log::info;
-use moka::sync::Cache;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 
 use crate::ShareEndpointClient;
+use crate::SharePresignedCacheManager;
 
 pub(crate) const HMAC_AUTH_METHOD: &str = "HMAC";
 
@@ -39,7 +38,6 @@ pub(crate) const HMAC_AUTH_METHOD: &str = "HMAC";
 #[derive(Clone)]
 pub struct SharedSigner {
     uri: String,
-    cache: Cache<PresignRequest, PresignedRequest>,
     client: reqwest::Client,
     auth_header_map: HeaderMap,
 }
@@ -55,12 +53,6 @@ impl Debug for SharedSigner {
 impl SharedSigner {
     /// Create a new SharedSigner.
     pub fn new(endpoint_url: &str, path: &str, credential: ShareCredential) -> Self {
-        let cache = Cache::builder()
-            // Databend Cloud Presign will expire after 3600s (1 hour).
-            // We will expire them 10 minutes before to avoid edge cases.
-            .time_to_live(Duration::from_secs(3000))
-            .build();
-
         let from_tenant = GlobalConfig::instance()
             .as_ref()
             .query
@@ -71,7 +63,6 @@ impl SharedSigner {
             ShareEndpointClient::generate_auth_headers(path, &credential, &from_tenant);
         Self {
             uri: format!("{}{}", endpoint_url, &path[1..]),
-            cache,
             client: reqwest::Client::new(),
             auth_header_map,
         }
@@ -79,10 +70,10 @@ impl SharedSigner {
 
     /// Get a presign request.
     pub fn get(&self, path: &str, op: Operation) -> Option<PresignedRequest> {
-        self.cache.get(&PresignRequest {
-            path: path.to_string(),
-            op,
-        })
+        if op == Operation::Stat {
+            return None;
+        }
+        SharePresignedCacheManager::instance().get(path, op)
     }
 
     /// Fetch a presigned request. If not found, build a new one by sign.
@@ -102,7 +93,7 @@ impl SharedSigner {
     ///
     /// This operation will update the expiry time about this request.
     pub fn set(&self, path: &str, op: Operation, signed: PresignedRequest) {
-        self.cache.insert(PresignRequest::new(path, op), signed)
+        SharePresignedCacheManager::instance().set(path, op, signed)
     }
 
     /// Sign a request.
@@ -171,9 +162,10 @@ impl SharedSigner {
         let items: Vec<PresignResponseItem> = serde_json::from_str(&body)?;
 
         for item in items {
-            self.cache.insert(
-                PresignRequest::new(&item.path, from_method(&item.method)),
-                item.into(),
+            SharePresignedCacheManager::instance().set(
+                &item.path,
+                from_method(&item.method),
+                item.clone().into(),
             );
         }
 

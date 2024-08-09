@@ -172,7 +172,7 @@ impl ShareDatabase {
 
         let client = ShareEndpointClient::new();
         let table_info_map = client
-            .get_share_tables(
+            .get_share_tables_by_db_id(
                 &share_endpoint_meta,
                 self.get_tenant().tenant_name(),
                 from_share.tenant_name(),

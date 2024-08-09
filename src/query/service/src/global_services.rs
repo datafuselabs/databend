@@ -26,6 +26,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_sharing::ShareEndpointManager;
+use databend_common_sharing::SharePresignedCacheManager;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
@@ -113,6 +114,7 @@ impl GlobalServices {
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config)?;
+        SharePresignedCacheManager::init()?;
 
         // Init user manager.
         // Builtin users and udfs are created here.
