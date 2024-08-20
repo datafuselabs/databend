@@ -300,6 +300,7 @@ pub trait PhysicalPlanReplacer {
             other_conditions: plan.other_conditions.clone(),
             join_type: plan.join_type.clone(),
             range_join_type: plan.range_join_type.clone(),
+            output_schema: plan.output_schema.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }

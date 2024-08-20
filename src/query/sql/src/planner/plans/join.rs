@@ -63,6 +63,10 @@ pub enum JoinType {
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
     RightSingle,
+    /// Asof Join special for  Speed ​​up timestamp join
+    Asof,
+    LeftAsof,
+    RightAsof,
 }
 
 impl JoinType {
@@ -78,6 +82,8 @@ impl JoinType {
             JoinType::RightAnti => JoinType::LeftAnti,
             JoinType::LeftMark => JoinType::RightMark,
             JoinType::RightMark => JoinType::LeftMark,
+            JoinType::RightAsof => JoinType::LeftAsof,
+            JoinType::LeftAsof => JoinType::RightAsof,
             _ => self.clone(),
         }
     }
@@ -90,6 +96,8 @@ impl JoinType {
                 | JoinType::Full
                 | JoinType::LeftSingle
                 | JoinType::RightSingle
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         )
     }
 
@@ -139,6 +147,15 @@ impl Display for JoinType {
             }
             JoinType::RightSingle => {
                 write!(f, "RIGHT SINGLE")
+            }
+            JoinType::Asof => {
+                write!(f, "ASOF")
+            }
+            JoinType::LeftAsof => {
+                write!(f, "LEFT ASOF")
+            }
+            JoinType::RightAsof => {
+                write!(f, "RIGHT ASOF")
             }
         }
     }
@@ -536,8 +553,12 @@ impl Operator for Join {
         )?;
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => {
+                f64::max(left_cardinality, inner_join_cardinality)
+            }
+            JoinType::Right | JoinType::RightAsof => {
+                f64::max(right_cardinality, inner_join_cardinality)
+            }
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)

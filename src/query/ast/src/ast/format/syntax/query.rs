@@ -437,6 +437,9 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
                 JoinOperator::RightAnti => RcDoc::text("RIGHT ANTI JOIN"),
                 JoinOperator::LeftSemi => RcDoc::text("LEFT SEMI JOIN"),
                 JoinOperator::RightSemi => RcDoc::text("RIGHT SEMI JOIN"),
+                JoinOperator::Asof => RcDoc::text("ASOF JOIN"),
+                JoinOperator::LeftAsof => RcDoc::text("ASOF LEFT JOIN"),
+                JoinOperator::RightAsof => RcDoc::text("ASOF RIGHT JOIN"),
             })
             .append(RcDoc::space().append(pretty_table(*join.right)))
             .append(match &join.condition {
