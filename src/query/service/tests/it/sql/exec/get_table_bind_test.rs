@@ -149,6 +149,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -493,7 +494,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn txn_mgr(&self) -> TxnManagerRef {
-        todo!()
+        self.ctx.txn_mgr()
     }
 
     fn incr_total_scan_value(&self, _value: ProgressValues) {
@@ -995,6 +996,15 @@ impl TableContext for CtxDelegation {
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx
+            .get_table_meta_timestamps(table_id, previous_snapshot)
     }
 
     fn get_temp_table_prefix(&self) -> Result<String> {

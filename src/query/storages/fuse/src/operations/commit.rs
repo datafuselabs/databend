@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -55,6 +56,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use super::decorate_snapshot;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -78,13 +80,20 @@ impl FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
 
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc = TransformSerializeSegment::new(
+                input,
+                output,
+                self,
+                block_thresholds,
+                table_meta_timestamps,
+            );
             proc.into_processor()
         })?;
 
@@ -97,6 +106,7 @@ impl FuseTable {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
+                table_meta_timestamps,
             )
         });
 
@@ -112,6 +122,7 @@ impl FuseTable {
                 None,
                 prev_snapshot_id,
                 deduplicated_label.clone(),
+                table_meta_timestamps,
             )
         })?;
 
@@ -335,12 +346,15 @@ impl FuseTable {
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(self.get_id(), Some(base_snapshot.clone()))?;
 
         loop {
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(
-                latest_snapshot.as_ref(),
+            let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
+                latest_snapshot.clone(),
                 Some(latest_table_info.ident.seq),
-            );
+                table_meta_timestamps,
+            )?;
 
             let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
@@ -355,6 +369,13 @@ impl FuseTable {
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
+
+            decorate_snapshot(
+                &mut snapshot_tobe_committed,
+                ctx.txn_mgr(),
+                Some(base_snapshot.clone()),
+                self.get_id(),
+            )?;
 
             match Self::commit_to_meta_server(
                 ctx.as_ref(),

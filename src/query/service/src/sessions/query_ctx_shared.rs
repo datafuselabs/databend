@@ -54,6 +54,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -137,6 +138,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+    pub(in crate::sessions) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 }
 
 impl QueryContextShared {
@@ -190,6 +192,7 @@ impl QueryContextShared {
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+            table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -622,6 +625,10 @@ impl QueryContextShared {
                 }
             };
         }
+    }
+
+    pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
+        self.table_meta_timestamps.clone()
     }
 }
 

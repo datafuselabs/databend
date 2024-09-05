@@ -35,6 +35,7 @@ impl PipelineBuilder {
             compact_block.parts.clone(),
             compact_block.column_ids.clone(),
             &mut self.main_pipeline,
+            compact_block.table_meta_timestamps,
         )
     }
 }

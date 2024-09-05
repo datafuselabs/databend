@@ -111,7 +111,7 @@ impl Interpreter for AddTableColumnInterpreter {
         };
         new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
-        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
+        generate_new_snapshot(tbl.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -148,16 +148,17 @@ impl Interpreter for AddTableColumnInterpreter {
 }
 
 pub(crate) async fn generate_new_snapshot(
-    ctx: &QueryContext,
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
+    ctx: &dyn TableContext,
 ) -> Result<()> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            let mut new_snapshot = TableSnapshot::from_previous(
-                snapshot.as_ref(),
+            let mut new_snapshot = TableSnapshot::try_from_previous(
+                snapshot.clone(),
                 Some(fuse_table.get_table_info().ident.seq),
-            );
+                ctx.get_table_meta_timestamps(table.get_id(), Some(snapshot))?,
+            )?;
 
             // replace schema
             new_snapshot.schema = new_table_meta.schema.as_ref().clone();

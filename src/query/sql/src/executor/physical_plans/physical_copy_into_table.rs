@@ -18,6 +18,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use enum_as_inner::EnumAsInner;
 
 use crate::executor::physical_plan::PhysicalPlan;
@@ -41,6 +42,7 @@ pub struct CopyIntoTable {
     pub project_columns: Option<Vec<ColumnBinding>>,
     pub source: CopyIntoTableSource,
     pub is_transform: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]

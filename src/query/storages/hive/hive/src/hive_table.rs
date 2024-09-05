@@ -54,6 +54,7 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
@@ -590,6 +591,7 @@ impl Table for HiveTable {
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",

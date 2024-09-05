@@ -25,7 +25,6 @@ mod v2;
 mod v3;
 mod v4;
 mod versions;
-
 pub use compression::Compression;
 // table meta types of current version
 pub use current::*;
@@ -38,7 +37,12 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub use utils::parse_storage_prefix;
+pub use utils::trim_v5_object_prefix;
+pub use utils::try_extract_uuid_str_from_path;
+pub use utils::uuid_from_date_time;
+pub use utils::TableMetaTimestamps;
 pub use utils::TEMP_TABLE_STORAGE_PREFIX;
+pub use utils::V5_OBJECT_KEY_PREFIX;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
@@ -57,4 +61,5 @@ pub mod testing {
     pub use super::v2::TableSnapshot as TableSnapshotV2;
     pub use super::v3::SegmentInfo as SegmentInfoV3;
     pub use super::v3::TableSnapshot as TableSnapshotV3;
+    pub use super::v4::TableSnapshot as TableSnapshotV4;
 }

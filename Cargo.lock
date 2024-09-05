@@ -3634,6 +3634,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "enumflags2",
  "fastrace",
  "futures",
  "log",
@@ -4409,6 +4410,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4870,6 +4872,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
@@ -4881,6 +4884,7 @@ dependencies = [
  "opendal",
  "tantivy",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

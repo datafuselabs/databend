@@ -32,6 +32,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
 use crate::io::create_inverted_index_builders;
@@ -80,8 +81,18 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, false)
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            kind,
+            false,
+            table_meta_timestamps,
+        )
     }
 
     pub fn try_create_with_tid(
@@ -91,8 +102,18 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, true)
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            kind,
+            true,
+            table_meta_timestamps,
+        )
     }
 
     fn do_create(
@@ -103,6 +124,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         // remove virtual computed fields.
         let mut fields = table
@@ -137,6 +159,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            table_meta_timestamps,
         };
         Ok(TransformSerializeBlock {
             state: State::Consume,

@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -35,6 +36,7 @@ pub struct CompactSource {
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -64,12 +66,17 @@ impl PhysicalPlanBuilder {
             )));
         };
 
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
+
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            table_meta_timestamps,
         }));
 
         let is_distributed = (!self.ctx.get_cluster().is_empty())
@@ -95,6 +102,7 @@ impl PhysicalPlanBuilder {
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps,
         }));
 
         root.adjust_plan_id(&mut 0);

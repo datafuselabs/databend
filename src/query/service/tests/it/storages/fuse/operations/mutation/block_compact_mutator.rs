@@ -44,7 +44,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 use rand::thread_rng;
 use rand::Rng;
-use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
@@ -121,12 +120,15 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     let table_info = table.get_table_info().clone();
     if let Some((parts, snapshot)) = res {
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            table_meta_timestamps,
         }));
 
         let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
@@ -139,6 +141,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps,
         }));
 
         let build_res =
@@ -223,18 +226,16 @@ async fn test_safety() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
-        let id = Uuid::new_v4();
-        let snapshot = TableSnapshot::new(
-            id,
+        let snapshot = TableSnapshot::try_new(
             None,
-            &None,
             None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
             None,
-        );
+            Default::default(),
+        )?;
 
         let limit: usize = rand.gen_range(1..15);
         let compact_params = CompactOptions {

@@ -22,6 +22,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::PhysicalPlan;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -122,6 +123,7 @@ pub struct ChunkAppendData {
 pub struct SerializableTable {
     pub target_catalog_info: Arc<CatalogInfo>,
     pub target_table_info: TableInfo,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

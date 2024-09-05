@@ -26,7 +26,6 @@ use databend_storages_common_session::TxnManager;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-#[test]
 /// base snapshot contains segments 1, 2, 3,
 ///
 /// a delete operation wants to remove segment 2,
@@ -36,6 +35,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 /// i.e. in this test, segment 2 and 3 are compacted into segment 4
 ///
 /// so the delete operation cannot be applied
+#[test]
 fn test_unresolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
@@ -65,6 +65,7 @@ fn test_unresolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
+        Default::default(),
     );
     assert!(result.is_err());
 }
@@ -156,6 +157,7 @@ fn test_resolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -263,6 +265,7 @@ fn test_resolvable_replace_conflict() {
         None,
         TxnManager::init(),
         0,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![

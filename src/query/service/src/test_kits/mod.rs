@@ -21,6 +21,7 @@ pub mod config;
 mod context;
 mod fixture;
 mod fuse;
+mod old_version_generator;
 
 pub use block_writer::BlockWriter;
 pub use check::*;

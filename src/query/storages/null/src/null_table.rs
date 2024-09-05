@@ -33,6 +33,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::EmptySink;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 pub struct NullTable {
     table_info: TableInfo,
@@ -93,6 +94,7 @@ impl Table for NullTable {
         _: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         Ok(())

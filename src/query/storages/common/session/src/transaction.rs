@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -28,6 +29,8 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -60,6 +63,8 @@ pub struct TxnBuffer {
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+
+    pub table_meta_timestamps: HashMap<u64, TableMetaTimestamps>,
 
     temp_table_desc_to_id: HashMap<String, u64>,
     mutated_temp_tables: HashMap<u64, TempTable>,
@@ -347,5 +352,27 @@ impl TxnManager {
 
     pub fn need_purge_files(&mut self) -> Vec<(StageInfo, Vec<String>)> {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
+    }
+
+    pub fn get_table_meta_timestamps(
+        &mut self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        data_retention_time_in_days: i64,
+    ) -> TableMetaTimestamps {
+        if !self.is_active() {
+            return TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
+        }
+
+        let entry = self.txn_buffer.table_meta_timestamps.entry(table_id);
+        match entry {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let timestamps =
+                    TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
+                e.insert(timestamps);
+                timestamps
+            }
+        }
     }
 }

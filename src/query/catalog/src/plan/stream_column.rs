@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_base::base::uuid::Uuid;
@@ -40,6 +39,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
 use databend_common_expression::ROW_VERSION_COLUMN_ID;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 
 use crate::plan::PartInfo;
 use crate::plan::PartInfoPtr;
@@ -222,22 +222,10 @@ impl StreamColumn {
 }
 
 pub fn block_id_from_location(path: &str) -> Result<i128> {
-    if let Some(file_stem) = Path::new(path).file_stem() {
-        let file_strs = file_stem
-            .to_str()
-            .unwrap_or("")
-            .split('_')
-            .collect::<Vec<&str>>();
-        let block_id = Uuid::parse_str(file_strs[0])
-            .map_err(|e| e.to_string())?
-            .as_u128();
-        Ok(block_id as i128)
-    } else {
-        Err(ErrorCode::Internal(format!(
-            "Illegal meta file format: {}",
-            path
-        )))
-    }
+    let uuid = try_extract_uuid_str_from_path(path)
+        .map_err(|e| e.add_message(format!("invalid block path {}", path)))?;
+    let block_id = Uuid::parse_str(uuid).map_err(|e| e.to_string())?.as_u128();
+    Ok(block_id as i128)
 }
 
 pub fn gen_mutation_stream_meta(

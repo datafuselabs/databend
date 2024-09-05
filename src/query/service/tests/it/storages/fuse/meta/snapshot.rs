@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::ops::Add;
+use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::testing::StatisticsV0;
@@ -23,10 +24,19 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {
-    let uuid = Uuid::new_v4();
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::new(uuid, None, &None, None, schema, stats, vec![], None, None)
+    TableSnapshot::try_new(
+        None,
+        None,
+        schema,
+        stats,
+        vec![],
+        None,
+        None,
+        Default::default(),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -39,18 +49,17 @@ fn snapshot_timestamp_is_some() {
 fn snapshot_timestamp_monotonic_increase() {
     let prev = default_snapshot();
     let schema = TableSchema::empty();
-    let uuid = Uuid::new_v4();
-    let current = TableSnapshot::new(
-        uuid,
+    let current = TableSnapshot::try_new(
         None,
-        &prev.timestamp,
-        prev.prev_snapshot_id,
+        None,
         schema,
         Default::default(),
         vec![],
         None,
         None,
-    );
+        Default::default(),
+    )
+    .unwrap();
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();
     assert!(current_ts > prev_ts)
@@ -60,22 +69,21 @@ fn snapshot_timestamp_monotonic_increase() {
 fn snapshot_timestamp_time_skew_tolerance() {
     let mut prev = default_snapshot();
     let schema = TableSchema::empty();
-    let uuid = Uuid::new_v4();
 
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
 
-    let current = TableSnapshot::new(
-        uuid,
+    let current = TableSnapshot::try_new(
         None,
-        &prev.timestamp,
-        prev.prev_snapshot_id,
+        Some(Arc::new(prev.clone())),
         schema,
         Default::default(),
         vec![],
         None,
         None,
-    );
+        Default::default(),
+    )
+    .unwrap();
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();
     assert!(current_ts > prev_ts)

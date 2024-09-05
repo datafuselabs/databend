@@ -17,6 +17,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::common::OnConflictField;
 use crate::executor::PhysicalPlan;
@@ -34,4 +35,5 @@ pub struct ReplaceInto {
     pub segments: Vec<(usize, Location)>,
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }

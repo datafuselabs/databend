@@ -58,6 +58,7 @@ impl PipelineBuilder {
                     recluster_info.removed_segment_indexes,
                     recluster_info.removed_statistics,
                     plan.mutation_kind,
+                    plan.table_meta_timestamps,
                 )
             });
         }
@@ -74,6 +75,7 @@ impl PipelineBuilder {
                 None,
                 None,
                 plan.deduplicated_label.clone(),
+                plan.table_meta_timestamps,
             )
         })
     }

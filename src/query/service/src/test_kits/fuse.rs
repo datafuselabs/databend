@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::merge_statistics;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -38,10 +37,12 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_storages_common_table_meta::meta::testing::SegmentInfoV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
+use databend_storages_common_table_meta::meta::testing::TableSnapshotV4;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures_util::TryStreamExt;
@@ -50,6 +51,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
+use super::old_version_generator;
 use super::TestFixture;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
@@ -65,10 +67,11 @@ pub async fn generate_snapshot_with_segments(
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
-    let mut new_snapshot = TableSnapshot::from_previous(
-        current_snapshot.as_ref(),
+    let mut new_snapshot = TableSnapshot::try_from_previous(
+        current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
-    );
+        Default::default(),
+    )?;
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -104,7 +107,8 @@ pub async fn generate_segments_v2(
     let mut segs = vec![];
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
+        let block_metas =
+            generate_blocks(fuse_table, blocks_per_segment, false, Default::default()).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfoV2::new(block_metas, summary);
         let uuid = Uuid::new_v4();
@@ -125,24 +129,52 @@ pub async fn generate_segments(
     fuse_table: &FuseTable,
     number_of_segments: usize,
     blocks_per_segment: usize,
+    is_greater_than_v5: bool,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<Vec<(Location, SegmentInfo)>> {
     let mut segs = vec![];
+    let location_generator = fuse_table.meta_location_generator();
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
+        let block_metas = generate_blocks(
+            fuse_table,
+            blocks_per_segment,
+            is_greater_than_v5,
+            table_meta_timestamps,
+        )
+        .await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
+        let location = if is_greater_than_v5 {
+            location_generator.gen_segment_info_location(table_meta_timestamps)
+        } else {
+            let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
+                location_generator.prefix().to_string(),
+            );
+            location_generator.gen_segment_info_location(table_meta_timestamps)
+        };
+        segment_info.write_meta(dal, location.as_str()).await?;
+        let segment_location = (location, SegmentInfo::VERSION);
         segs.push((segment_location, segment_info))
     }
     Ok(segs)
 }
 
-async fn generate_blocks(fuse_table: &FuseTable, num_blocks: usize) -> Result<Vec<Arc<BlockMeta>>> {
+async fn generate_blocks(
+    fuse_table: &FuseTable,
+    num_blocks: usize,
+    is_greater_than_v5: bool,
+    table_meta_timestamps: TableMetaTimestamps,
+) -> Result<Vec<Arc<BlockMeta>>> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
-    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator());
+    let location_generator = fuse_table.meta_location_generator();
+    let block_writer = BlockWriter::new(
+        dal,
+        location_generator,
+        table_meta_timestamps,
+        is_greater_than_v5,
+    );
     let mut block_metas = vec![];
 
     // does not matter in this suite
@@ -197,21 +229,27 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     // generate 2 segments, 4 blocks.
     let num_of_segments = 2;
     let blocks_per_segment = 2;
-    let segments_v3 = generate_segments(fuse_table, num_of_segments, blocks_per_segment).await?;
+    let segments_v3 = generate_segments(
+        fuse_table,
+        num_of_segments,
+        blocks_per_segment,
+        false,
+        Default::default(),
+    )
+    .await?;
 
     // create snapshot 1, the format version is 3.
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
-    let mut snapshot_1 = TableSnapshot::new(
-        Uuid::new_v4(),
+    let mut snapshot_1 = TableSnapshot::try_new(
         None,
-        &snapshot_0.timestamp,
-        Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),
+        None,
         schema.as_ref().clone(),
         Statistics::default(),
         locations,
         None,
         None,
-    );
+        Default::default(),
+    )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =
         merge_statistics(snapshot_0.summary.clone(), &segments_v3[0].1.summary, None);
@@ -227,7 +265,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1, None);
+    let mut snapshot_2 =
+        TableSnapshot::try_from_previous(Arc::new(snapshot_1.clone()), None, Default::default())?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary =
@@ -335,4 +374,75 @@ pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixtur
     fixture
         .append_commit_blocks(table.clone(), blocks, true, true)
         .await
+}
+
+pub async fn generate_snapshot_v2(
+    fixture: &TestFixture,
+    number_of_segments: usize,
+    blocks_per_segment: usize,
+    prev: Option<&TableSnapshot>,
+) -> Result<TableSnapshot> {
+    let schema = TestFixture::default_table_schema();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let location_gen = fuse_table.meta_location_generator();
+    let operator = fuse_table.get_operator();
+
+    let segments = generate_segments_v2(fuse_table, number_of_segments, blocks_per_segment).await?;
+
+    let id = Uuid::new_v4();
+    let snapshot = TableSnapshotV2::new(
+        id,
+        &prev.as_ref().and_then(|p| p.timestamp),
+        prev.map(|p| (p.snapshot_id, p.format_version)),
+        schema.as_ref().clone(),
+        Statistics::default(),
+        segments.iter().map(|s| s.0.clone()).collect(),
+        None,
+        None,
+    );
+
+    let new_snapshot_location = location_gen
+        .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshotV2::VERSION)?;
+    write_v2_to_storage(&operator, &new_snapshot_location, &snapshot).await?;
+    Ok(snapshot.into())
+}
+
+pub async fn generate_snapshot_v4(
+    fixture: &TestFixture,
+    number_of_segments: usize,
+    blocks_per_segment: usize,
+    prev: Option<&TableSnapshot>,
+) -> Result<TableSnapshot> {
+    let schema = TestFixture::default_table_schema();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let location_gen = fuse_table.meta_location_generator();
+    let operator = fuse_table.get_operator();
+
+    let segments = generate_segments(
+        fuse_table,
+        number_of_segments,
+        blocks_per_segment,
+        false,
+        Default::default(),
+    )
+    .await?;
+
+    let snapshot = TableSnapshotV4::try_new(
+        None,
+        prev.map(|p| Arc::new(p.clone())),
+        schema.as_ref().clone(),
+        Statistics::default(),
+        segments.iter().map(|s| s.0.clone()).collect(),
+        None,
+        None,
+        Default::default(),
+    )?;
+    let new_snapshot_location = location_gen
+        .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshotV4::VERSION)?;
+    operator
+        .write(&new_snapshot_location, snapshot.to_bytes()?)
+        .await?;
+    Ok(snapshot)
 }

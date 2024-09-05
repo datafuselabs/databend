@@ -39,6 +39,7 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
@@ -90,6 +91,7 @@ pub struct Mutation {
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -190,6 +192,7 @@ impl PhysicalPlanBuilder {
                 field_id_to_schema_index,
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             });
 
             if *distributed {
@@ -214,6 +217,7 @@ impl PhysicalPlanBuilder {
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 plan_id: u32::MAX,
                 recluster_info: None,
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             }));
 
             plan.adjust_plan_id(&mut 0);
@@ -412,6 +416,7 @@ impl PhysicalPlanBuilder {
             need_match: !is_not_matched_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
+            table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         }));
 
         let commit_input = if !distributed {
@@ -449,6 +454,7 @@ impl PhysicalPlanBuilder {
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

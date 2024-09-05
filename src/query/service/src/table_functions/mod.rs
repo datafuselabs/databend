@@ -14,6 +14,7 @@
 
 mod async_crash_me;
 mod cloud;
+mod fuse_vacuum2;
 mod infer_schema;
 mod inspect_parquet;
 mod list_stage;

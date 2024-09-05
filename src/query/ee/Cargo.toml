@@ -50,6 +50,7 @@ databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
@@ -59,6 +60,7 @@ jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = "3.4.0"
+uuid = { workspace = true }
 
 # aws sdk
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
