@@ -28,6 +28,7 @@ use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 use jwt_simple::prelude::ECDSAP256PublicKeyLike;
+use jwt_simple::JWTError;
 
 const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
@@ -60,34 +61,42 @@ impl LicenseManager for RealLicenseManager {
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
-            return Err(ErrorCode::LicenseKeyInvalid(format!(
-                "use of {feature} requires an enterprise license. license key is not found for {}",
+            return feature.verify_default(format!(
+                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
                 self.tenant
-            )));
+            ));
         }
 
         if let Some(v) = self.cache.get(&license_key) {
-            return Self::verify_feature(v.value(), feature);
+            return self.verify_feature(v.value(), feature);
         }
 
-        let license = self.parse_license(&license_key).map_err_to_code(
-            ErrorCode::LicenseKeyInvalid,
-            || format!("use of {feature} requires an enterprise license. current license is invalid for {}", self.tenant),
-        )?;
-        Self::verify_feature(&license, feature)?;
-        self.cache.insert(license_key, license);
-        Ok(())
+        match self.parse_license(&license_key) {
+            Ok(license) => {
+                self.verify_feature(&license, feature)?;
+                self.cache.insert(license_key, license);
+                Ok(())
+            }
+            Err(e) => match e.code() == ErrorCode::LICENSE_KEY_EXPIRED {
+                true => self.verify_if_expired(feature),
+                false => Err(e),
+            },
+        }
     }
 
     fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
         let public_key = ES256PublicKey::from_pem(self.public_key.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
-        public_key
-            .verify_token::<LicenseInfo>(raw, None)
-            .map_err_to_code(
-                ErrorCode::LicenseKeyParseError,
-                || "jwt claim decode failed",
-            )
+
+        match public_key.verify_token::<LicenseInfo>(raw, None) {
+            Ok(v) => Ok(v),
+            Err(cause) => match cause.downcast_ref::<JWTError>() {
+                Some(JWTError::TokenHasExpired) => {
+                    Err(ErrorCode::LicenseKeyExpired("license key is expired."))
+                }
+                _ => Err(ErrorCode::LicenseKeyParseError("jwt claim decode failed")),
+            },
+        }
     }
 
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
@@ -96,7 +105,13 @@ impl LicenseManager for RealLicenseManager {
         }
 
         if let Some(v) = self.cache.get(&license_key) {
-            Self::verify_license(v.value())?;
+            if Self::verify_license_expired(v.value())? {
+                return Err(ErrorCode::LicenseKeyExpired(format!(
+                    "license key expired in {:?}",
+                    v.value().expires_at,
+                )));
+            }
+
             return Ok(v.custom.get_storage_quota());
         }
 
@@ -104,7 +119,13 @@ impl LicenseManager for RealLicenseManager {
             ErrorCode::LicenseKeyInvalid,
             || format!("use of storage requires an enterprise license. current license is invalid for {}", self.tenant),
         )?;
-        Self::verify_license(&license)?;
+
+        if Self::verify_license_expired(&license)? {
+            return Err(ErrorCode::LicenseKeyExpired(format!(
+                "license key expired in {:?}",
+                license.expires_at,
+            )));
+        }
 
         let quota = license.custom.get_storage_quota();
         self.cache.insert(license_key, license);
@@ -123,28 +144,20 @@ impl RealLicenseManager {
         }
     }
 
-    fn verify_license(l: &JWTClaims<LicenseInfo>) -> Result<()> {
+    fn verify_license_expired(l: &JWTClaims<LicenseInfo>) -> Result<bool> {
         let now = Clock::now_since_epoch();
         match l.expires_at {
-            Some(expire_at) => {
-                if now > expire_at {
-                    return Err(ErrorCode::LicenseKeyInvalid(format!(
-                        "license key expired in {:?}",
-                        expire_at
-                    )));
-                }
-            }
-            None => {
-                return Err(ErrorCode::LicenseKeyInvalid(
-                    "cannot find valid expire time",
-                ));
-            }
+            Some(expire_at) => Ok(now > expire_at),
+            None => Err(ErrorCode::LicenseKeyInvalid(
+                "cannot find valid expire time",
+            )),
         }
-        Ok(())
     }
 
-    fn verify_feature(l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
-        Self::verify_license(l)?;
+    fn verify_feature(&self, l: &JWTClaims<LicenseInfo>, feature: Feature) -> Result<()> {
+        if Self::verify_license_expired(l)? {
+            return self.verify_if_expired(feature);
+        }
 
         if l.custom.features.is_none() {
             return Ok(());
@@ -152,7 +165,7 @@ impl RealLicenseManager {
 
         let verify_features = l.custom.features.as_ref().unwrap();
         for verify_feature in verify_features {
-            if verify_feature.verify(&feature) {
+            if verify_feature.verify(&feature)? {
                 return Ok(());
             }
         }
@@ -162,5 +175,14 @@ impl RealLicenseManager {
             feature,
             l.custom.display_features()
         )))
+    }
+
+    fn verify_if_expired(&self, feature: Feature) -> Result<()> {
+        feature.verify_default("").map_err(|_|
+            ErrorCode::LicenseKeyExpired(format!(
+                "The use of this feature requires a Databend Enterprise Edition license. License key has expired for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                self.tenant
+            ))
+        )
     }
 }

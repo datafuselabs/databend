@@ -30,7 +30,7 @@ async fn test_successfully_add_node() -> Result<()> {
     let now_ms = SeqV::<()>::now_ms();
     let (kv_api, cluster_api) = new_cluster_api().await?;
 
-    let node_info = create_test_node_info();
+    let node_info = create_test_node_info("test_node");
     cluster_api.add_node(node_info.clone()).await?;
     let value = kv_api
         .get_kv("__fd_clusters_v3/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
@@ -55,7 +55,7 @@ async fn test_successfully_add_node() -> Result<()> {
 async fn test_already_exists_add_node() -> Result<()> {
     let (_, cluster_api) = new_cluster_api().await?;
 
-    let node_info = create_test_node_info();
+    let node_info = create_test_node_info("test_node");
     cluster_api.add_node(node_info.clone()).await?;
 
     match cluster_api.add_node(node_info.clone()).await {
@@ -73,7 +73,7 @@ async fn test_successfully_get_nodes() -> Result<()> {
     let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![]);
 
-    let node_info = create_test_node_info();
+    let node_info = create_test_node_info("test_node");
     cluster_api.add_node(node_info.clone()).await?;
 
     let nodes = cluster_api.get_nodes().await?;
@@ -82,10 +82,80 @@ async fn test_successfully_get_nodes() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_get_tenant_nodes() -> Result<()> {
+    let (metastore, cluster_api_1) = new_cluster_api().await?;
+
+    let nodes = cluster_api_1.get_tenant_nodes().await?;
+    assert!(nodes.is_empty());
+
+    cluster_api_1
+        .add_node(create_test_node_info("test_cluster_1_node_1"))
+        .await?;
+    cluster_api_1
+        .add_node(create_test_node_info("test_cluster_1_node_2"))
+        .await?;
+
+    let cluster_api_2 = ClusterMgr::create(
+        metastore,
+        "test-tenant-id",
+        "test_cluster_2",
+        Duration::from_secs(60),
+    )?;
+
+    cluster_api_2
+        .add_node(create_test_node_info("test_cluster_2_node_1"))
+        .await?;
+    cluster_api_2
+        .add_node(create_test_node_info("test_cluster_2_node_2"))
+        .await?;
+    cluster_api_2
+        .add_node(create_test_node_info("test_cluster_2_node_3"))
+        .await?;
+
+    for tenant_nodes in [
+        cluster_api_1.get_tenant_nodes().await?,
+        cluster_api_2.get_tenant_nodes().await?,
+    ] {
+        assert_eq!(tenant_nodes.len(), 2);
+        assert_eq!(tenant_nodes["test_cluster_2"].len(), 3);
+        assert_eq!(tenant_nodes["test-cluster-id"].len(), 2);
+
+        assert!(
+            tenant_nodes["test-cluster-id"]
+                .iter()
+                .any(|x| x.id == "test_cluster_1_node_1")
+        );
+        assert!(
+            tenant_nodes["test-cluster-id"]
+                .iter()
+                .any(|x| x.id == "test_cluster_1_node_2")
+        );
+
+        assert!(
+            tenant_nodes["test_cluster_2"]
+                .iter()
+                .any(|x| x.id == "test_cluster_2_node_1")
+        );
+        assert!(
+            tenant_nodes["test_cluster_2"]
+                .iter()
+                .any(|x| x.id == "test_cluster_2_node_2")
+        );
+        assert!(
+            tenant_nodes["test_cluster_2"]
+                .iter()
+                .any(|x| x.id == "test_cluster_2_node_3")
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_drop_node() -> Result<()> {
     let (_, cluster_api) = new_cluster_api().await?;
 
-    let node_info = create_test_node_info();
+    let node_info = create_test_node_info("test_node");
     cluster_api.add_node(node_info.clone()).await?;
 
     let nodes = cluster_api.get_nodes().await?;
@@ -118,7 +188,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     let now_ms = SeqV::<()>::now_ms();
     let (kv_api, cluster_api) = new_cluster_api().await?;
 
-    let node_info = create_test_node_info();
+    let node_info = create_test_node_info("test_node");
     cluster_api.add_node(node_info.clone()).await?;
 
     let value = kv_api

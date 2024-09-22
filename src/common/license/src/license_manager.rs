@@ -94,10 +94,9 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
-        Err(ErrorCode::LicenseKeyInvalid(
-            "Need Commercial License".to_string(),
-        ))
+    fn check_enterprise_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
+        // oss ignore license key.
+        feature.verify_default("Need Commercial License".to_string())
     }
 
     fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {

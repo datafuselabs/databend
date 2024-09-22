@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_base::base::escape_for_key;
@@ -35,6 +37,7 @@ pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters_v3";
 pub struct ClusterMgr {
     metastore: MetaStore,
     lift_time: Duration,
+    tenant_prefix: String,
     cluster_prefix: String,
 }
 
@@ -51,15 +54,18 @@ impl ClusterMgr {
             ));
         }
 
+        let tenant_prefix = format!("{}/{}", CLUSTER_API_KEY_PREFIX, escape_for_key(tenant)?);
+        let cluster_prefix = format!(
+            "{}/{}/databend_query",
+            tenant_prefix,
+            escape_for_key(cluster_id)?
+        );
+
         Ok(ClusterMgr {
             metastore,
             lift_time,
-            cluster_prefix: format!(
-                "{}/{}/{}/databend_query",
-                CLUSTER_API_KEY_PREFIX,
-                escape_for_key(tenant)?,
-                escape_for_key(cluster_id)?
-            ),
+            tenant_prefix,
+            cluster_prefix,
         })
     }
 
@@ -103,6 +109,33 @@ impl ClusterApi for ClusterMgr {
 
             node_info.id = unescape_for_key(&node_key[self.cluster_prefix.len() + 1..])?;
             nodes_info.push(node_info);
+        }
+
+        Ok(nodes_info)
+    }
+
+    async fn get_tenant_nodes(&self) -> Result<HashMap<String, Vec<NodeInfo>>> {
+        let values = self.metastore.prefix_list_kv(&self.tenant_prefix).await?;
+        let mut nodes_info = HashMap::with_capacity(12);
+
+        for (node_key, value) in values {
+            let key_parts = node_key.split('/').collect::<Vec<_>>();
+
+            assert_eq!(key_parts.len(), 5);
+            assert_eq!(key_parts[0], "__fd_clusters_v2");
+            assert_eq!(key_parts[3], "databend_query");
+
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
+            node_info.id = unescape_for_key(key_parts[4])?;
+
+            match nodes_info.entry(unescape_for_key(key_parts[2])?) {
+                Entry::Vacant(v) => {
+                    v.insert(vec![node_info]);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().push(node_info);
+                }
+            }
         }
 
         Ok(nodes_info)

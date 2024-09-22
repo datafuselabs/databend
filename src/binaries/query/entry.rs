@@ -125,6 +125,30 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     info!("Databend Query start with config: {:?}", conf);
 
+    // Cluster register.
+    {
+        ClusterDiscovery::instance()
+            .register_to_metastore()
+            .await
+            .with_context(make_error)?;
+        info!(
+            "Databend query has been registered:{:?} to metasrv:{:?}.",
+            conf.query.cluster_id, conf.meta.endpoints
+        );
+    }
+
+    // RPC API service.
+    {
+        let address = conf.query.flight_api_address.clone();
+        let mut srv = FlightService::create(conf.clone()).with_context(make_error)?;
+        let listening = srv
+            .start(address.parse().with_context(make_error)?)
+            .await
+            .with_context(make_error)?;
+        shutdown_handle.add_service("RPCService", srv);
+        info!("Listening for RPC API (interserver): {}", listening);
+    }
+
     // MySQL handler.
     {
         let hostname = conf.query.mysql_handler_host.clone();
@@ -227,30 +251,6 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .with_context(make_error)?;
         shutdown_handle.add_service("FlightSQLService", srv);
         info!("Listening for FlightSQL API: {}", listening);
-    }
-
-    // RPC API service.
-    {
-        let address = conf.query.flight_api_address.clone();
-        let mut srv = FlightService::create(conf.clone()).with_context(make_error)?;
-        let listening = srv
-            .start(address.parse().with_context(make_error)?)
-            .await
-            .with_context(make_error)?;
-        shutdown_handle.add_service("RPCService", srv);
-        info!("Listening for RPC API (interserver): {}", listening);
-    }
-
-    // Cluster register.
-    {
-        ClusterDiscovery::instance()
-            .register_to_metastore(conf)
-            .await
-            .with_context(make_error)?;
-        info!(
-            "Databend query has been registered:{:?} to metasrv:{:?}.",
-            conf.query.cluster_id, conf.meta.endpoints
-        );
     }
 
     // Print information to users.

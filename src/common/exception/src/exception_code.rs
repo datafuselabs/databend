@@ -193,6 +193,7 @@ build_exceptions! {
     /// For example: license key is expired
     LicenseKeyInvalid(1402),
     EnterpriseFeatureNotEnable(1403),
+    LicenseKeyExpired(1404),
 
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),

@@ -16,6 +16,8 @@ use std::fmt;
 use std::net::AddrParseError;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -81,6 +83,7 @@ pub struct NodeInfo {
     pub flight_address: String,
     pub discovery_address: String,
     pub binary_version: String,
+    pub start_time_ms: usize,
 }
 
 impl NodeInfo {
@@ -100,6 +103,10 @@ impl NodeInfo {
             flight_address,
             discovery_address,
             binary_version,
+            start_time_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as usize,
         }
     }
 

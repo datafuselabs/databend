@@ -59,9 +59,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
 
     // Cluster register.
-    ClusterDiscovery::instance()
-        .register_to_metastore(&conf)
-        .await?;
+    ClusterDiscovery::instance().register_to_metastore().await?;
 
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && query_sql.is_empty();

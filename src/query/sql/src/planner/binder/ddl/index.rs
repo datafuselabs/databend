@@ -140,6 +140,7 @@ impl Binder {
             let table = table_entry.table();
             // Avoid death loop
             let mut agg_indexes = vec![];
+            #[allow(clippy::collapsible_if)]
             if self.ctx.get_can_scan_from_agg_index()
                 && self
                     .ctx
@@ -149,7 +150,6 @@ impl Binder {
                 && table.support_index()
                 && !matches!(table.engine(), "VIEW" | "STREAM")
             {
-                #[allow(clippy::collapsible_if)]
                 if LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
                     .is_ok()

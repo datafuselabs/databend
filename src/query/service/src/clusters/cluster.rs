@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
@@ -38,13 +39,18 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_license::license::ClusterQuota;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::ClusterApi;
 use databend_common_management::ClusterMgr;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 use databend_common_metrics::cluster::*;
+use databend_common_settings::Settings;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -59,13 +65,11 @@ use serde::Serialize;
 use crate::servers::flight::FlightClient;
 
 pub struct ClusterDiscovery {
-    local_id: String,
-    local_secret: String,
+    localhost: NodeInfo,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
-    cluster_id: String,
     tenant_id: String,
-    flight_address: String,
+    cluster_id: String,
 }
 
 // avoid leak FlightClient to common-xxx
@@ -187,9 +191,10 @@ impl ClusterDiscovery {
     ) -> Result<Arc<ClusterDiscovery>> {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
+        let local_node = Self::detect_local(cfg, &provider).await?;
+
         Ok(Arc::new(ClusterDiscovery {
-            local_id: cfg.query.node_id.clone(),
-            local_secret: cfg.query.node_secret.clone(),
+            localhost: local_node,
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -199,7 +204,6 @@ impl ClusterDiscovery {
             )),
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
-            flight_address: cfg.query.flight_api_address.clone(),
         }))
     }
 
@@ -223,21 +227,21 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self.api_provider.get_nodes().await {
+        match self.quota_cluster().await {
             Err(cause) => {
                 metric_incr_cluster_error_count(
-                    &self.local_id,
+                    &self.localhost.id,
                     "discover",
                     &self.cluster_id,
                     &self.tenant_id,
-                    &self.flight_address,
+                    &self.localhost.flight_address,
                 );
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
-                    if node.id != self.local_id {
+                    if node.id != self.localhost.id {
                         let start_at = Instant::now();
                         if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
@@ -255,13 +259,13 @@ impl ClusterDiscovery {
                 }
 
                 metrics_gauge_discovered_nodes(
-                    &self.local_id,
+                    &self.localhost.id,
                     &self.cluster_id,
                     &self.tenant_id,
-                    &self.flight_address,
+                    &self.localhost.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                Ok(Cluster::create(res, self.local_id.clone()))
+                Ok(Cluster::create(res, self.localhost.id.clone()))
             }
         }
     }
@@ -272,11 +276,11 @@ impl ClusterDiscovery {
             Ok(nodes) => nodes,
             Err(cause) => {
                 metric_incr_cluster_error_count(
-                    &self.local_id,
+                    &self.localhost.id,
                     "drop_invalid_ndes.get_nodes",
                     &self.cluster_id,
                     &self.tenant_id,
-                    &self.flight_address,
+                    &self.localhost.flight_address,
                 );
                 return Err(cause.add_message_back("(while drop_invalid_nodes)"));
             }
@@ -312,7 +316,7 @@ impl ClusterDiscovery {
         let signal_future = Box::pin(mut_signal_pin.next());
         let drop_node = Box::pin(
             self.api_provider
-                .drop_node(self.local_id.clone(), MatchSeq::GE(1)),
+                .drop_node(self.localhost.id.clone(), MatchSeq::GE(1)),
         );
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
@@ -333,7 +337,17 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
+    pub async fn register_to_metastore(self: &Arc<Self>) -> Result<()> {
+        let node_info = self.localhost.clone();
+
+        self.drop_invalid_nodes(&node_info).await?;
+        match self.api_provider.add_node(node_info.clone()).await {
+            Ok(_) => self.start_heartbeat(node_info).await,
+            Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
+        }
+    }
+
+    async fn detect_local(cfg: &InnerConfig, api: &Arc<dyn ClusterApi>) -> Result<NodeInfo> {
         let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
         let mut discovery_address = match cfg.query.discovery_address.is_empty() {
@@ -351,7 +365,7 @@ impl ClusterDiscovery {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
                 if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                    if let Some(local_addr) = self.api_provider.get_local_addr().await? {
+                    if let Some(local_addr) = api.get_local_addr().await? {
                         let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                         let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                         warn!(
@@ -367,24 +381,94 @@ impl ClusterDiscovery {
             }
         }
 
-        let node_info = NodeInfo::create(
-            self.local_id.clone(),
-            self.local_secret.clone(),
+        Ok(NodeInfo::create(
+            cfg.query.node_id.clone(),
+            cfg.query.node_secret.clone(),
             cpus,
             address,
             discovery_address,
             DATABEND_COMMIT_VERSION.to_string(),
-        );
+        ))
+    }
 
-        self.drop_invalid_nodes(&node_info).await?;
-        match self.api_provider.add_node(node_info.clone()).await {
-            Ok(_) => self.start_heartbeat(node_info).await,
-            Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
+    pub async fn quota_cluster(&self) -> Result<Vec<NodeInfo>> {
+        let mut tenant_clusters = self.api_provider.get_tenant_nodes().await?;
+
+        match self.check_license_key(&tenant_clusters).await {
+            Ok(_) => match tenant_clusters.remove(&self.cluster_id) {
+                Some(v) => Ok(v),
+                None => Err(ErrorCode::ClusterUnknownNode(format!(
+                    "Not found any node in cluster {}",
+                    self.cluster_id
+                ))),
+            },
+            Err(cause) => {
+                if cause.code() == ErrorCode::LICENSE_KEY_EXPIRED
+                    || cause.code() == ErrorCode::LICENSE_KEY_INVALID
+                {
+                    tenant_clusters.retain(|_, value| {
+                        value.retain(|node| {
+                            node.start_time_ms < self.localhost.start_time_ms
+                                || (node.start_time_ms == self.localhost.start_time_ms
+                                    && node.id < self.localhost.id)
+                        });
+
+                        !value.is_empty()
+                    });
+
+                    match tenant_clusters.entry(self.cluster_id.clone()) {
+                        Entry::Vacant(v) => {
+                            v.insert(vec![self.localhost.clone()]);
+                        }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().push(self.localhost.clone());
+                        }
+                    };
+
+                    return match self.check_license_key(&tenant_clusters).await {
+                        Err(cause) => Err(cause),
+                        Ok(_) => match tenant_clusters.remove(&self.cluster_id) {
+                            Some(v) => Ok(v),
+                            None => Err(ErrorCode::ClusterUnknownNode(format!(
+                                "Not found any node in cluster {}",
+                                self.cluster_id
+                            ))),
+                        },
+                    };
+                }
+
+                Err(cause)
+            }
         }
+    }
+
+    async fn check_license_key(&self, clusters: &HashMap<String, Vec<NodeInfo>>) -> Result<()> {
+        let max_nodes = clusters
+            .values()
+            .map(|nodes| nodes.len())
+            .max()
+            .unwrap_or_default();
+
+        let license_key = Self::get_license_key(&self.tenant_id).await?;
+
+        LicenseManagerSwitch::instance().check_enterprise_enabled(
+            license_key,
+            Feature::ClusterQuota(ClusterQuota::limit_full(clusters.len(), max_nodes)),
+        )
+    }
+
+    async fn get_license_key(tenant: &str) -> Result<String> {
+        // We must get the license key from settings. It may be in the configuration file.
+        let settings = Settings::create(Tenant::new_literal(tenant));
+        settings.load_changes().await?;
+        unsafe { settings.get_enterprise_license() }
     }
 
     #[async_backtrace::framed]
     async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
+        // Check cluster quota
+        let _ = self.quota_cluster().await?;
+
         let mut heartbeat = self.heartbeat.lock().await;
         heartbeat.start(node_info);
         Ok(())
@@ -444,6 +528,7 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
+
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
                             metric_incr_cluster_heartbeat_count(
@@ -467,7 +552,7 @@ impl ClusterHeartbeat {
 
     pub fn start(&mut self, node_info: NodeInfo) {
         self.shutdown_handler = Some(databend_common_base::runtime::spawn(
-            self.heartbeat_loop(node_info),
+            self.heartbeat_loop(node_info.clone()),
         ));
     }
 
