@@ -21,6 +21,7 @@ use databend_common_ast::ast::ExecuteImmediateStmt;
 use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::GetProcedureReq;
@@ -138,26 +139,32 @@ impl Binder {
             }
             arg_types.push(arg_type.to_string());
         }
+        let procedure_ident = ProcedureIdentity::new(name, arg_types.join(","));
         let req = GetProcedureReq {
-            inner: ProcedureNameIdent::new(
-                tenant.clone(),
-                ProcedureIdentity::new(name, arg_types.join(",")),
-            ),
+            inner: ProcedureNameIdent::new(tenant.clone(), procedure_ident.clone()),
         };
 
         let procedure = UserApiProvider::instance()
-            .get_procedure(&tenant, req)
+            .procedure_api(&tenant)
+            .get_procedure(&req)
             .await?;
-        if arg_types.is_empty() {
-            Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-                script: procedure.procedure_meta.script,
-            })))
+        if let Some(procedure) = procedure {
+            if arg_types.is_empty() {
+                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+                    script: procedure.procedure_meta.script,
+                })))
+            } else {
+                Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
+                    script: procedure.procedure_meta.script,
+                    arg_names: procedure.procedure_meta.arg_names,
+                    args: arguments.clone(),
+                })))
+            }
         } else {
-            Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
-                script: procedure.procedure_meta.script,
-                arg_names: procedure.procedure_meta.arg_names,
-                args: arguments.clone(),
-            })))
+            Err(ErrorCode::UnknownProcedure(format!(
+                "Unknown procedure {}",
+                procedure_ident
+            )))
         }
     }
 

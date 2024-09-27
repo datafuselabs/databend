@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
-use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::procedure::ProcedureInfo;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
+use databend_common_meta_app::principal::procedure_name_ident::ProcedureName;
 use databend_common_meta_app::principal::CreateProcedureReply;
 use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::GetProcedureReply;
@@ -30,6 +30,7 @@ use databend_common_meta_app::principal::ProcedureIdToNameIdent;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -54,7 +55,10 @@ impl ProcedureMgr {
         &self,
         req: CreateProcedureReq,
         overriding: bool,
-    ) -> Result<CreateProcedureReply, KVAppError> {
+    ) -> Result<
+        Result<CreateProcedureReply, ExistError<ProcedureName, ProcedureIdentity>>,
+        MetaTxnError,
+    > {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let name_ident = &req.name_ident;
         let meta = &req.meta;
@@ -71,8 +75,8 @@ impl ProcedureMgr {
             .await?;
 
         match create_res {
-            Ok(id) => Ok(CreateProcedureReply { procedure_id: *id }),
-            Err(_) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
+            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
+            Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }
 
@@ -81,7 +85,7 @@ impl ProcedureMgr {
     pub async fn drop_procedure(
         &self,
         name_ident: &ProcedureNameIdent,
-    ) -> Result<Option<(SeqV<ProcedureId>, SeqV<ProcedureMeta>)>, KVAppError> {
+    ) -> Result<Option<(SeqV<ProcedureId>, SeqV<ProcedureMeta>)>, MetaTxnError> {
         debug!(name_ident :? =(name_ident); "SchemaApi: {}", func_name!());
         let dropped = self
             .kv_api
@@ -96,7 +100,7 @@ impl ProcedureMgr {
     pub async fn get_procedure(
         &self,
         req: &GetProcedureReq,
-    ) -> Result<Option<GetProcedureReply>, KVAppError> {
+    ) -> Result<Option<GetProcedureReply>, MetaError> {
         debug!(req :? =(req); "SchemaApi: {}", func_name!());
 
         let res = self.kv_api.get_id_value(&req.inner).await?;
@@ -114,7 +118,7 @@ impl ProcedureMgr {
     pub async fn list_procedures(
         &self,
         req: ListProcedureReq,
-    ) -> Result<Vec<ProcedureInfo>, KVAppError> {
+    ) -> Result<Vec<ProcedureInfo>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Get procedure id list by `prefix_list` "<prefix>/<tenant>"
