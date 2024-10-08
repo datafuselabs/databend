@@ -245,7 +245,7 @@ geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", 
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
-jsonb = "0.4.3"
+jsonb = { git = "https://github.com/b41sh/jsonb", rev = "3018f69a5ef78b33624cb26797f8b8e7e0d2b93c" }
 jwt-simple = "0.11.0"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
