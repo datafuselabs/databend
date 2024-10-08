@@ -1385,7 +1385,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null) {
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
             return None;
         }
 

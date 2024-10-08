@@ -2261,6 +2261,7 @@ Functions overloads:
 1 is_true(Boolean NULL) :: Boolean
 0 jq FACTORY
 0 json_array FACTORY
+0 json_array_distinct FACTORY
 0 json_array_elements FACTORY
 0 json_contains_in_left(Variant, Variant) :: Boolean
 1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
@@ -2275,6 +2276,7 @@ Functions overloads:
 1 json_exists_key(Variant NULL, String NULL) :: Boolean NULL
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
+0 json_insert FACTORY
 0 json_object FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
