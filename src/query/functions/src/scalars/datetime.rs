@@ -19,10 +19,8 @@ use chrono::format::Parsed;
 use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
-use chrono::Days;
 use chrono::Duration;
 use chrono::MappedLocalTime;
-use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
@@ -45,8 +43,8 @@ use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_expression::types::timestamp::MICROS_IN_A_MILLI;
-use databend_common_expression::types::timestamp::MICROS_IN_A_SEC;
+use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
+use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
@@ -97,6 +95,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_add_functions(registry);
     register_sub_functions(registry);
 
+    // date_diff([year | quarter | month | week | day | hour | minute | second], [date | timestamp], [date | timestamp])
+    // [date | timestamp] +/- [date | timestamp]
+    register_diff_functions(registry);
+
     // now, today, yesterday, tomorrow
     register_real_time_functions(registry);
 
@@ -114,9 +116,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 #[inline]
 fn int64_to_timestamp(n: i64) -> Result<i64, String> {
     if -31536000000 < n && n < 31536000000 {
-        Ok(n * MICROS_IN_A_SEC)
+        Ok(n * MICROS_PER_SEC)
     } else if -31536000000000 < n && n < 31536000000000 {
-        Ok(n * MICROS_IN_A_MILLI)
+        Ok(n * MICROS_PER_MILLI)
     } else {
         check_timestamp(n)
     }
@@ -463,7 +465,7 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     }
 
     fn calc_date_to_timestamp(val: i32, tz: Tz) -> i64 {
-        let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+        let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
         let epoch_time_with_ltz = tz
             .from_utc_datetime(
                 &NaiveDate::from_ymd_opt(1970, 1, 1)
@@ -797,7 +799,7 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    match AddYearsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
+                    match EvalYearsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
                         Ok(t) => builder.push(t),
                         Err(e) => {
                             ctx.set_error(builder.len(), e);
@@ -812,7 +814,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddYearsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
+                        match EvalYearsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -828,7 +830,7 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    match AddMonthsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta} * 3) {
+                    match EvalMonthsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta} * 3) {
                         Ok(t) => builder.push(t),
                         Err(e) => {
                             ctx.set_error(builder.len(), e);
@@ -843,7 +845,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta} * 3) {
+                        match EvalMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta} * 3) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -859,7 +861,7 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    match AddMonthsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
+                    match EvalMonthsImpl::eval_date(date, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
                         Ok(t) => builder.push(t),
                         Err(e) => {
                             ctx.set_error(builder.len(), e);
@@ -874,7 +876,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
+                        match EvalMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz, $signed_wrapper!{delta}) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -890,7 +892,7 @@ macro_rules! impl_register_arith_functions {
 
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
-                    match AddDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
+                    match EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
                         Ok(t) => builder.push(t),
                         Err(e) => {
                             ctx.set_error(builder.len(), e);
@@ -905,7 +907,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
+                        match EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -922,7 +924,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|date, delta, builder, ctx| {
                     let delta = 7 * delta;
-                    match AddDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
+                    match EvalDaysImpl::eval_date(date, $signed_wrapper!{delta}) {
                         Ok(t) => builder.push(t),
                         Err(e) => {
                             ctx.set_error(builder.len(), e);
@@ -938,7 +940,7 @@ macro_rules! impl_register_arith_functions {
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
                         let delta = 7 * delta;
-                        match AddDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
+                        match EvalDaysImpl::eval_timestamp(ts, $signed_wrapper!{delta}) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -955,8 +957,8 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-                        match AddTimesImpl::eval_timestamp(
+                        let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
+                        match EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
@@ -976,7 +978,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddTimesImpl::eval_timestamp(
+                        match EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_HOUR,
@@ -997,9 +999,9 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                        let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
 
-                        match AddTimesImpl::eval_timestamp(
+                        match EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
@@ -1019,7 +1021,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddTimesImpl::eval_timestamp(
+                        match EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_MINUTE,
@@ -1040,9 +1042,9 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<DateType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        let val = (ts as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+                        let val = (ts as i64) * 24 * 3600 * MICROS_PER_SEC;
 
-                        match AddTimesImpl::eval_timestamp(
+                        match EvalTimesImpl::eval_timestamp(
                             val,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
@@ -1062,7 +1064,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match AddTimesImpl::eval_timestamp(
+                        match EvalTimesImpl::eval_timestamp(
                             ts,
                             $signed_wrapper!{delta},
                             FACTOR_SECOND,
@@ -1082,6 +1084,235 @@ macro_rules! impl_register_arith_functions {
 
 impl_register_arith_functions!(register_add_functions, "add", unsigned_ident);
 impl_register_arith_functions!(register_sub_functions, "subtract", signed_ident);
+
+fn register_diff_functions(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "diff_years",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_years =
+                    EvalYearsImpl::eval_date_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_years as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_years",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_years =
+                    EvalYearsImpl::eval_timestamp_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_years);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "diff_quarters",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_years =
+                    EvalQuartersImpl::eval_date_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_years as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_quarters",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_years =
+                    EvalQuartersImpl::eval_timestamp_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_years);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "diff_months",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_months =
+                    EvalMonthsImpl::eval_date_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_months as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_months",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, ctx| {
+                let diff_months =
+                    EvalMonthsImpl::eval_timestamp_diff(date_start, date_end, ctx.func_ctx.tz);
+                builder.push(diff_months);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "diff_weeks",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_years = EvalWeeksImpl::eval_date_diff(date_start, date_end);
+                builder.push(diff_years as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_weeks",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_years = EvalWeeksImpl::eval_timestamp_diff(date_start, date_end);
+                builder.push(diff_years);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Int64Type, _, _>(
+        "diff_days",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, DateType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_days = EvalDaysImpl::eval_date_diff(date_start, date_end);
+                builder.push(diff_days as i64);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_days",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_days = EvalDaysImpl::eval_timestamp_diff(date_start, date_end);
+                builder.push(diff_days);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_hours",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_hours =
+                    EvalTimesImpl::eval_timestamp_diff(date_start, date_end, FACTOR_HOUR);
+                builder.push(diff_hours);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_minutes",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_minutes =
+                    EvalTimesImpl::eval_timestamp_diff(date_start, date_end, FACTOR_MINUTE);
+                builder.push(diff_minutes);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "diff_seconds",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampType, TimestampType, Int64Type>(
+            |date_end, date_start, builder, _| {
+                let diff_seconds =
+                    EvalTimesImpl::eval_timestamp_diff(date_start, date_end, FACTOR_SECOND);
+                builder.push(diff_seconds);
+            },
+        ),
+    );
+
+    registry.register_2_arg::<DateType, DateType, Int32Type, _, _>(
+        "minus",
+        |_, lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm: i32 = num_traits::cast::cast(rhs.max)?;
+                let rn: i32 = num_traits::cast::cast(rhs.min)?;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a - b,
+    );
+
+    registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
+        "minus",
+        |_, lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: ln.checked_sub(rm)?,
+                    max: lm.checked_sub(rn)?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::Full)
+        },
+        |a, b, _| a - b,
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Float64Type, _, _>(
+        "months_between",
+        |_, lhs, rhs| {
+            let lm = lhs.max;
+            let ln = lhs.min;
+            let rm = rhs.max;
+            let rn = rhs.min;
+
+            FunctionDomain::Domain(SimpleDomain::<F64> {
+                min: EvalMonthsImpl::months_between(ln, rm).into(),
+                max: EvalMonthsImpl::months_between(lm, rn).into(),
+            })
+        },
+        vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
+            EvalMonthsImpl::months_between(a, b).into()
+        }),
+    );
+
+    registry
+        .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Float64Type, _, _>(
+            "months_between",
+            |_, lhs, rhs| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                FunctionDomain::Domain(SimpleDomain::<F64> {
+                    min: EvalMonthsImpl::months_between_ts(ln, rm).into(),
+                    max: EvalMonthsImpl::months_between_ts(lm, rn).into(),
+                })
+            },
+            vectorize_2_arg::<TimestampType, TimestampType, Float64Type>(|a, b, _ctx| {
+                EvalMonthsImpl::months_between_ts(a, b).into()
+            }),
+        );
+}
 
 fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_aliases("now", &["current_timestamp"]);
@@ -1448,25 +1679,6 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_2_arg::<DateType, DateType, Int32Type, _, _>(
-        "plus",
-        |_, lhs, rhs| {
-            (|| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm: i32 = num_traits::cast::cast(rhs.max)?;
-                let rn: i32 = num_traits::cast::cast(rhs.min)?;
-
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: ln.checked_add(rn)?,
-                    max: lm.checked_add(rm)?,
-                }))
-            })()
-            .unwrap_or(FunctionDomain::Full)
-        },
-        |a, b, _| a + b,
-    );
-
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "plus",
         |_, lhs, rhs| {
@@ -1491,24 +1703,6 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
                 }
             },
         ),
-    );
-
-    registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
-        "plus",
-        |_, lhs, rhs| {
-            (|| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm = rhs.max;
-                let rn = rhs.min;
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
-                    min: ln.checked_add(rn)?,
-                    max: lm.checked_add(rm)?,
-                }))
-            })()
-            .unwrap_or(FunctionDomain::Full)
-        },
-        |a, b, _| a + b,
     );
 
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
@@ -1538,25 +1732,6 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_2_arg::<DateType, DateType, Int32Type, _, _>(
-        "minus",
-        |_, lhs, rhs| {
-            (|| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm: i32 = num_traits::cast::cast(rhs.max)?;
-                let rn: i32 = num_traits::cast::cast(rhs.min)?;
-
-                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
-                    min: ln.checked_sub(rm)?,
-                    max: lm.checked_sub(rn)?,
-                }))
-            })()
-            .unwrap_or(FunctionDomain::Full)
-        },
-        |a, b, _| a - b,
-    );
-
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "minus",
         |_, lhs, rhs| {
@@ -1583,62 +1758,6 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
             },
         ),
     );
-
-    registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
-        "minus",
-        |_, lhs, rhs| {
-            (|| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm = rhs.max;
-                let rn = rhs.min;
-
-                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
-                    min: ln.checked_sub(rm)?,
-                    max: lm.checked_sub(rn)?,
-                }))
-            })()
-            .unwrap_or(FunctionDomain::Full)
-        },
-        |a, b, _| a - b,
-    );
-
-    registry.register_passthrough_nullable_2_arg::<DateType, DateType, Float64Type, _, _>(
-        "months_between",
-        |_, lhs, rhs| {
-            let lm = lhs.max;
-            let ln = lhs.min;
-            let rm = rhs.max;
-            let rn = rhs.min;
-
-            FunctionDomain::Domain(SimpleDomain::<F64> {
-                min: months_between(ln, rm).into(),
-                max: months_between(lm, rn).into(),
-            })
-        },
-        vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
-            months_between(a, b).into()
-        }),
-    );
-
-    registry
-        .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, Float64Type, _, _>(
-            "months_between",
-            |_, lhs, rhs| {
-                let lm = lhs.max;
-                let ln = lhs.min;
-                let rm = rhs.max;
-                let rn = rhs.min;
-
-                FunctionDomain::Domain(SimpleDomain::<F64> {
-                    min: months_between_ts(ln, rm).into(),
-                    max: months_between_ts(lm, rn).into(),
-                })
-            },
-            vectorize_2_arg::<TimestampType, TimestampType, Float64Type>(|a, b, _ctx| {
-                months_between_ts(a, b).into()
-            }),
-        );
 }
 
 fn register_rounder_functions(registry: &mut FunctionRegistry) {
@@ -1892,52 +2011,4 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
             DateRounder::eval_timestamp::<ToStartOfISOYear>(val, ctx.func_ctx.tz)
         }),
     );
-}
-
-// current we don't consider tz here
-#[inline]
-fn months_between_ts(ts_a: i64, ts_b: i64) -> f64 {
-    months_between(
-        (ts_a / 86_400_000_000) as i32,
-        (ts_b / 86_400_000_000) as i32,
-    )
-}
-
-#[inline]
-fn months_between(date_a: i32, date_b: i32) -> f64 {
-    let date_a = Utc
-        .timestamp_opt((date_a as i64) * 86400, 0)
-        .unwrap()
-        .date_naive(); // Assuming date_a is in days
-    let date_b = Utc
-        .timestamp_opt((date_b as i64) * 86400, 0)
-        .unwrap()
-        .date_naive(); // Assuming date_b is in days
-
-    let year_diff = date_a.year() - date_b.year();
-    let month_diff = date_a.month() as i32 - date_b.month() as i32;
-
-    // Calculate total months difference
-    let total_months_diff = year_diff * 12 + month_diff;
-
-    // Determine if special case for fractional part applies
-    let is_same_day_of_month = date_a.day() == date_b.day();
-    let are_both_end_of_month = date_a
-        .checked_add_days(Days::new(1))
-        .map(|d| d.month() != date_a.month())
-        .unwrap_or(false)
-        && date_b
-            .checked_add_days(Days::new(1))
-            .map(|d| d.month() != date_b.month())
-            .unwrap_or(false);
-
-    let day_fraction = if is_same_day_of_month || are_both_end_of_month {
-        0.0
-    } else {
-        let day_diff = date_a.day() as i32 - date_b.day() as i32;
-        day_diff as f64 / 31.0 // Using 31-day month for fractional part
-    };
-
-    // Total difference including fractional part
-    total_months_diff as f64 + day_fraction
 }

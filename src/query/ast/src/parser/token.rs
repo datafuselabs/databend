@@ -478,6 +478,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_DIFF", ignore(ascii_case))]
+    DATE_DIFF,
     #[token("DATE_PART", ignore(ascii_case))]
     DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
@@ -1567,6 +1569,7 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
             | TokenKind::DATE_TRUNC
             | TokenKind::IGNORE_RESULT

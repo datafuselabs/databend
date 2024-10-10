@@ -1032,14 +1032,21 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => self.resolve_date_add(*span, unit, interval, date)?,
+            } => self.resolve_date_arith(*span, unit, interval, date, false)?,
+            Expr::DateDiff {
+                span,
+                unit,
+                date_start,
+                date_end,
+                ..
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, true)?,
             Expr::DateSub {
                 span,
                 unit,
                 interval,
                 date,
                 ..
-            } => self.resolve_date_add(
+            } => self.resolve_date_arith(
                 *span,
                 unit,
                 &Expr::UnaryOp {
@@ -1048,6 +1055,7 @@ impl<'a> TypeChecker<'a> {
                     expr: interval.clone(),
                 },
                 date,
+                false,
             )?,
             Expr::DateTrunc {
                 span, unit, date, ..
@@ -2834,26 +2842,30 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn resolve_date_add(
+    pub fn resolve_date_arith(
         &mut self,
         span: Span,
         interval_kind: &ASTIntervalKind,
-        interval: &Expr,
-        date: &Expr,
+        date_rhs: &Expr,
+        date_lhs: &Expr,
+        is_diff: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let func_name = format!("add_{}s", interval_kind.to_string().to_lowercase());
-
+        let func_name = if is_diff {
+            format!("diff_{}s", interval_kind.to_string().to_lowercase())
+        } else {
+            format!("add_{}s", interval_kind.to_string().to_lowercase())
+        };
         let mut args = vec![];
         let mut arg_types = vec![];
 
-        let (date, date_type) = *self.resolve(date)?;
-        args.push(date);
-        arg_types.push(date_type);
+        let (date_lhs, date_lhs_type) = *self.resolve(date_lhs)?;
+        args.push(date_lhs);
+        arg_types.push(date_lhs_type);
 
-        let (interval, interval_type) = *self.resolve(interval)?;
+        let (date_rhs, date_rhs_type) = *self.resolve(date_rhs)?;
 
-        args.push(interval);
-        arg_types.push(interval_type);
+        args.push(date_rhs);
+        arg_types.push(date_rhs_type);
 
         self.resolve_scalar_function_call(span, &func_name, vec![], args)
     }

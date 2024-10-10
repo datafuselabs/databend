@@ -404,6 +404,20 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::space())
             .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
+        Expr::DateDiff {
+            unit,
+            date_start,
+            date_end,
+            ..
+        } => RcDoc::text("DATE_DIFF(")
+            .append(RcDoc::text(unit.to_string()))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(pretty_expr(*date_start))
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(pretty_expr(*date_end))
+            .append(RcDoc::text(")")),
         Expr::DateSub {
             unit,
             interval,

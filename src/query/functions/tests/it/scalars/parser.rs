@@ -48,7 +48,7 @@ macro_rules! with_interval_mapped_name {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-              Year => "year", Quarter => "quarter", Month => "month", Day => "day",
+              Year => "year", Quarter => "quarter", Month => "month", Week => "week", Day => "day",
               Hour => "hour", Minute => "minute", Second => "second",
             ],
             $($tail)*
@@ -411,6 +411,27 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     args: vec![
                         transform_expr(*date, columns),
                         transform_expr(*interval, columns),
+                    ],
+                },
+                kind => {
+                    unimplemented!("{kind:?} is not supported")
+                }
+            })
+        }
+        AExpr::DateDiff {
+            span,
+            unit,
+            date_start,
+            date_end,
+        } => {
+            with_interval_mapped_name!(|INTERVAL| match unit {
+                IntervalKind::INTERVAL => RawExpr::FunctionCall {
+                    span,
+                    name: concat!("diff_", INTERVAL, "s").to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(*date_end, columns),
+                        transform_expr(*date_start, columns),
                     ],
                 },
                 kind => {

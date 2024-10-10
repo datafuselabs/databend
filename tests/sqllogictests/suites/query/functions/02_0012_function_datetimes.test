@@ -902,6 +902,176 @@ select date_add(QUARTER, 1, to_date('2018-01-02'))
 2018-04-02
 
 query T
+SELECT DATE_ADD(WEEK, 1, TODAY())=DATE_ADD('day', 7, TODAY())
+----
+1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+24
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-31'), to_date('2024-01-01'))
+----
+1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2024-01-01'), to_date('2023-12-31'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-30'), to_date('2023-12-31'))
+----
+0
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-31'), to_date('2023-12-30'))
+----
+0
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-06-01'), to_date('2024-01-01'))
+----
+3
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2024-01-01'), to_date('2023-06-01'))
+----
+-3
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-01-01'), to_date('2023-02-28'))
+----
+0
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-01-01'), to_date('2023-06-01'))
+----
+1
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-06-01'), to_date('2023-01-01'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-02-01'), to_date('2023-07-01'))
+----
+2
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-07-01'), to_date('2023-02-01'))
+----
+-2
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+288
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2012-02-29'), to_date('2013-03-28'))
+----
+13
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2016-12-31'), to_timestamp('2017-01-01'))
+----
+0
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-01-02'))
+----
+1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-01-05'))
+----
+1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-05'), to_date('2017-01-01'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-12-30'))
+----
+52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-12-30'), to_date('2017-01-01'))
+----
+-52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-12-31'))
+----
+52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-12-31'), to_date('2017-01-01'))
+----
+-52
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+8765
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2012-02-29'), to_date('2013-02-28'))
+----
+365
+
+query T
+SELECT DATE_DIFF(DAY, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+1
+
+query T
+SELECT DATE_DIFF(DAY, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(HOUR, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+36
+
+query T
+SELECT DATE_DIFF(HOUR, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-36
+
+query T
+SELECT DATE_DIFF(MINUTE, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+2123
+
+query T
+SELECT DATE_DIFF(MINUTE, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-2123
+
+query T
+SELECT DATE_DIFF(SECOND, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+127397
+
+query T
+SELECT DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-127397
+
+query T
 select date_sub(QUARTER, 1, to_date('2018-01-02'))
 ----
 2017-10-02
@@ -1133,7 +1303,3 @@ select to_timestamp('2022-03-27 07:54:31.12');
 ----
 2022-03-27 07:54:31.120000
 
-query T
-SELECT DATE_ADD('week', 1, TODAY())=DATE_ADD('day', 7, TODAY())
-----
-1

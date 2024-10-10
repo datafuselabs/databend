@@ -15,7 +15,7 @@
 
 use crate::encoding::delta_bitpacked;
 
-/// Encodes a clonable iterator of `&[u8]` into `buffer`. This does not allocated on the heap.
+/// Encodes a cloneable iterator of `&[u8]` into `buffer`. This does not allocated on the heap.
 /// # Implementation
 /// This encoding is equivalent to call [`delta_bitpacked::encode`] on the lengths of the items
 /// of the iterator followed by extending the buffer from each item of the iterator.

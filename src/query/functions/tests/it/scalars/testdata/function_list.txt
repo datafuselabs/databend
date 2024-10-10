@@ -1236,6 +1236,32 @@ Functions overloads:
 0 degrees(Float64) :: Float64
 1 degrees(Float64 NULL) :: Float64 NULL
 0 delete_by_keypath FACTORY
+0 diff_days(Date, Date) :: Int64
+1 diff_days(Date NULL, Date NULL) :: Int64 NULL
+2 diff_days(Timestamp, Timestamp) :: Int64
+3 diff_days(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_hours(Timestamp, Timestamp) :: Int64
+1 diff_hours(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_minutes(Timestamp, Timestamp) :: Int64
+1 diff_minutes(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_months(Date, Date) :: Int64
+1 diff_months(Date NULL, Date NULL) :: Int64 NULL
+2 diff_months(Timestamp, Timestamp) :: Int64
+3 diff_months(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_quarters(Date, Date) :: Int64
+1 diff_quarters(Date NULL, Date NULL) :: Int64 NULL
+2 diff_quarters(Timestamp, Timestamp) :: Int64
+3 diff_quarters(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_seconds(Timestamp, Timestamp) :: Int64
+1 diff_seconds(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_weeks(Date, Date) :: Int64
+1 diff_weeks(Date NULL, Date NULL) :: Int64 NULL
+2 diff_weeks(Timestamp, Timestamp) :: Int64
+3 diff_weeks(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+0 diff_years(Date, Date) :: Int64
+1 diff_years(Date NULL, Date NULL) :: Int64 NULL
+2 diff_years(Timestamp, Timestamp) :: Int64
+3 diff_years(Timestamp NULL, Timestamp NULL) :: Int64 NULL
 0 div(UInt8, UInt8) :: UInt8
 1 div(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 div(UInt8, UInt16) :: UInt16
@@ -2741,14 +2767,14 @@ Functions overloads:
 223 minus(Float64 NULL, Float32 NULL) :: Float64 NULL
 224 minus(Float64, Float64) :: Float64
 225 minus(Float64 NULL, Float64 NULL) :: Float64 NULL
-226 minus(Date, Int64) :: Date
-227 minus(Date NULL, Int64 NULL) :: Date NULL
-228 minus(Date, Date) :: Int32
-229 minus(Date NULL, Date NULL) :: Int32 NULL
-230 minus(Timestamp, Int64) :: Timestamp
-231 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-232 minus(Timestamp, Timestamp) :: Int64
-233 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+226 minus(Date, Date) :: Int32
+227 minus(Date NULL, Date NULL) :: Int32 NULL
+228 minus(Timestamp, Timestamp) :: Int64
+229 minus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+230 minus(Date, Int64) :: Date
+231 minus(Date NULL, Int64 NULL) :: Date NULL
+232 minus(Timestamp, Int64) :: Timestamp
+233 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 modulo(UInt8, UInt8) :: UInt8
 1 modulo(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 modulo(UInt8, UInt16) :: UInt16
@@ -3409,12 +3435,8 @@ Functions overloads:
 200 plus(Float64 NULL, Float64 NULL) :: Float64 NULL
 201 plus(Date, Int64) :: Date
 202 plus(Date NULL, Int64 NULL) :: Date NULL
-203 plus(Date, Date) :: Int32
-204 plus(Date NULL, Date NULL) :: Int32 NULL
-205 plus(Timestamp, Int64) :: Timestamp
-206 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-207 plus(Timestamp, Timestamp) :: Int64
-208 plus(Timestamp NULL, Timestamp NULL) :: Int64 NULL
+203 plus(Timestamp, Int64) :: Timestamp
+204 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 point_in_ellipses FACTORY
 0 point_in_polygon FACTORY
 1 point_in_polygon FACTORY

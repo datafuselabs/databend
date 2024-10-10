@@ -212,6 +212,12 @@ pub enum Expr {
         interval: Box<Expr>,
         date: Box<Expr>,
     },
+    DateDiff {
+        span: Span,
+        unit: IntervalKind,
+        date_start: Box<Expr>,
+        date_end: Box<Expr>,
+    },
     DateSub {
         span: Span,
         unit: IntervalKind,
@@ -260,6 +266,7 @@ impl Expr {
             | Expr::Map { span, .. }
             | Expr::Interval { span, .. }
             | Expr::DateAdd { span, .. }
+            | Expr::DateDiff { span, .. }
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
             | Expr::Hole { span, .. } => *span,
@@ -388,6 +395,15 @@ impl Expr {
                 date,
                 ..
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
+            Expr::DateDiff {
+                span,
+                date_start,
+                date_end,
+                ..
+            } => merge_span(
+                merge_span(*span, date_start.whole_span()),
+                date_end.whole_span(),
+            ),
             Expr::DateSub {
                 span,
                 interval,
@@ -409,6 +425,7 @@ impl Expr {
             "SUBSTRING",
             "TRIM",
             "DATE_ADD",
+            "DATE_DIFF",
             "DATE_SUB",
             "DATE_TRUNC",
         ]
@@ -697,6 +714,14 @@ impl Display for Expr {
                     ..
                 } => {
                     write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
+                }
+                Expr::DateDiff {
+                    unit,
+                    date_start,
+                    date_end,
+                    ..
+                } => {
+                    write!(f, "DATE_DIFF({unit}, {date_start}, {date_end})")?;
                 }
                 Expr::DateSub {
                     unit,

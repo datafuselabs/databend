@@ -35,6 +35,7 @@ fn test_datetime() {
     test_timestamp_arith(file);
     test_to_number(file);
     test_rounder_functions(file);
+    test_date_date_diff(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -596,4 +597,103 @@ fn test_rounder_functions(file: &mut impl Write) {
     run_ast(file, "date_trunc(hour, to_timestamp(1630812366))", &[]);
     run_ast(file, "date_trunc(minute, to_timestamp(1630812366))", &[]);
     run_ast(file, "date_trunc(second, to_timestamp(1630812366))", &[]);
+}
+
+fn test_date_date_diff(file: &mut impl Write) {
+    run_ast(file, "date_diff(year, to_date(0), to_date(10000))", &[]);
+    run_ast(file, "date_diff(year, to_date(10000), to_date(0))", &[]);
+    run_ast(
+        file,
+        "date_diff(year, to_date('2000-01-01'), to_date('2024-12-31'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(year, to_date('2023-12-31'), to_date('2024-01-01'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(year, to_date('2024-01-01'), to_date('2023-12-31'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(year, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(year, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(file, "date_diff(month, to_date(0), to_date(10000))", &[]);
+    run_ast(file, "date_diff(month, to_date(10000), to_date(0))", &[]);
+    run_ast(
+        file,
+        "date_diff(month, to_date('2000-01-01'), to_date('2024-12-31'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(month, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(month, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(file, "date_diff(day, to_date(0), to_date(10000))", &[]);
+    run_ast(file, "date_diff(day, to_date(10000), to_date(0))", &[]);
+    run_ast(
+        file,
+        "date_diff(day, to_date('2000-01-01'), to_date('2024-12-31'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(day, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(day, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(hour, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(hour, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(minute, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(minute, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(second, to_timestamp('2023-11-12 09:38:18.165575'), to_timestamp('2025-03-27 21:01:35.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(second, to_timestamp('2020-02-29 23:59:59.165575'), to_timestamp('2019-02-28 23:59:59.423179'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "date_diff(second, to_timestamp('2020-02-29 23:59:59'), to_timestamp('2019-02-28 23:59:59'))",
+        &[],
+    );
 }
