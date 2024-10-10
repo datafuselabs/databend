@@ -248,7 +248,7 @@ iceberg = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", 
 iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
 iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
 itertools = "0.10.5"
-jsonb = "0.4.3"
+jsonb = { git = "https://github.com/b41sh/jsonb", rev = "f9c8845" }
 jwt-simple = "0.11.0"
 libc = { version = "0.2.158" }
 match-template = "0.0.1"
