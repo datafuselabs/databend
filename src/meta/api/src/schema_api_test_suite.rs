@@ -7395,17 +7395,11 @@ impl SchemaApiTestSuite {
                 util.create_db().await?;
             }
 
-            let db_name_ident =
-                DatabaseNameIdent::new(Tenant::new_literal(tenant_name), db_name.to_string());
-            let get_db_req = GetDatabaseReq {
-                inner: db_name_ident.clone(),
-            };
-            let db_info = mt.get_database(get_db_req).await?;
-            let db_id = db_info.database_id.db_id;
+            let db_id = util.db_id();
 
             {
                 info!("--- list dictionary from db2 with no create before");
-                let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
+                let req = ListDictionaryReq::new(dict_tenant.clone(), *db_id);
                 let res = mt.list_dictionaries(req).await?;
                 assert!(res.is_empty());
             }
