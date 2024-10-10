@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Write;
 
 use databend_common_arrow::arrow::array::Array;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -66,19 +67,22 @@ pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
 
 pub fn serialize_column(col: &Column) -> Vec<u8> {
     let mut buffer = Vec::new();
-
-    let schema = Schema::from(vec![col.arrow_field()]);
-    let mut writer = FileWriter::new(&mut buffer, schema, None, IpcWriteOptions::default());
-    writer.start().unwrap();
-    writer
-        .write(
-            &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
-            None,
-        )
-        .unwrap();
-    writer.finish().unwrap();
-
+    serialize_column_in(col, &mut buffer).unwrap();
     buffer
+}
+
+pub fn serialize_column_in(
+    col: &Column,
+    w: &mut impl Write,
+) -> databend_common_arrow::arrow::error::Result<()> {
+    let schema = Schema::from(vec![col.arrow_field()]);
+    let mut writer = FileWriter::new(w, schema, None, IpcWriteOptions::default());
+    writer.start()?;
+    writer.write(
+        &databend_common_arrow::arrow::chunk::Chunk::new(vec![col.as_arrow()]),
+        None,
+    )?;
+    writer.finish()
 }
 
 pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {

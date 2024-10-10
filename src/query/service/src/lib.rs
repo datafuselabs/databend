@@ -16,6 +16,8 @@
 #![allow(internal_features)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::uninlined_format_args)]
+#![feature(ptr_alignment_type)]
+#![feature(iter_map_windows)]
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]

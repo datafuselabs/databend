@@ -16,14 +16,14 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::io;
 use std::ops::Range;
+use std::ptr::Alignment;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::dma_buffer_as_vec;
 use databend_common_base::base::dma_read_file_range;
-use databend_common_base::base::dma_write_file_vectored;
+use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
@@ -31,7 +31,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
-use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::arrow::serialize_column_in;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
@@ -126,10 +126,16 @@ impl Spiller {
         let instant = Instant::now();
 
         // Spill data to storage.
-        let encoded = EncodedBlock::from_block(data_block);
-        let columns_layout = encoded.columns_layout();
-        let data_size = encoded.size();
-        let location = self.write_encodes(data_size, vec![encoded]).await?;
+        let mut encoder = self.block_encoder();
+        encoder.add_block(data_block);
+        let data_size = encoder.size();
+        let BlocksEncoder {
+            buf,
+            mut columns_layout,
+            ..
+        } = encoder;
+
+        let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
         match location {
@@ -138,7 +144,8 @@ impl Spiller {
         }
 
         // Record columns layout for spilled data.
-        self.columns_layout.insert(location.clone(), columns_layout);
+        self.columns_layout
+            .insert(location.clone(), columns_layout.pop().unwrap());
 
         Ok(location)
     }
@@ -179,24 +186,35 @@ impl Spiller {
         partitioned_data: Vec<(usize, DataBlock)>,
     ) -> Result<SpilledData> {
         // Serialize data block.
-        let mut write_bytes = 0;
-        let mut write_data = Vec::with_capacity(partitioned_data.len());
-        let mut spilled_partitions = Vec::with_capacity(partitioned_data.len());
+        let mut encoder = self.block_encoder();
+        let mut partition_ids = Vec::new();
         for (partition_id, data_block) in partitioned_data.into_iter() {
-            let begin = write_bytes;
-
-            let encoded = EncodedBlock::from_block(data_block);
-            let columns_layout = encoded.columns_layout();
-            let data_size = encoded.size();
-
-            write_bytes += data_size;
-            write_data.push(encoded);
-            spilled_partitions.push((partition_id, begin..write_bytes, columns_layout));
+            partition_ids.push(partition_id);
+            encoder.add_block(data_block);
         }
+
+        let write_bytes = encoder.size();
+        let BlocksEncoder {
+            buf,
+            offsets,
+            columns_layout,
+            ..
+        } = encoder;
+
+        let partitions = partition_ids
+            .into_iter()
+            .zip(
+                offsets
+                    .windows(2)
+                    .map(|x| x[0]..x[1])
+                    .zip(columns_layout.into_iter()),
+            )
+            .map(|(id, (range, layout))| (id, range, layout))
+            .collect();
 
         // Spill data to storage.
         let instant = Instant::now();
-        let location = self.write_encodes(write_bytes, write_data).await?;
+        let location = self.write_encodes(write_bytes, buf).await?;
 
         // Record statistics.
         match location {
@@ -206,7 +224,7 @@ impl Spiller {
 
         Ok(SpilledData::MergedPartition {
             location,
-            partitions: spilled_partitions,
+            partitions,
         })
     }
 
@@ -337,7 +355,7 @@ impl Spiller {
         }
     }
 
-    async fn write_encodes(&mut self, size: usize, blocks: Vec<EncodedBlock>) -> Result<Location> {
+    async fn write_encodes(&mut self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
         let location = match &self.disk_spill {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
@@ -357,26 +375,27 @@ impl Spiller {
                     .await?;
 
                 let mut written = 0;
-                for data in blocks.into_iter().flat_map(|x| x.0) {
+                for data in buf.into_data() {
                     written += data.len();
-                    writer.write(data).await?;
+                    writer.write(dma_buffer_as_vec(data)).await?;
                 }
 
                 writer.close().await?;
                 written
             }
-            Location::Local(path) => {
-                let bufs = blocks
-                    .iter()
-                    .flat_map(|x| &x.0)
-                    .map(|data| io::IoSlice::new(data))
-                    .collect::<Vec<_>>();
-
-                dma_write_file_vectored(path.as_ref(), &bufs).await?
-            }
+            Location::Local(path) => buf.into_file(path).await?,
         };
         debug_assert_eq!(size, written);
         Ok(location)
+    }
+
+    fn block_encoder(&self) -> BlocksEncoder {
+        let align = self
+            .disk_spill
+            .as_ref()
+            .map(|dir| dir.block_alignment())
+            .unwrap_or(Alignment::MIN);
+        BlocksEncoder::new(align, 8 * 1024 * 1024)
     }
 
     pub(crate) fn spilled_files(&self) -> Vec<Location> {
@@ -398,29 +417,39 @@ pub enum Location {
     Local(TempPath),
 }
 
-pub struct EncodedBlock(pub Vec<Vec<u8>>);
+struct BlocksEncoder {
+    buf: DmaWriteBuf,
+    offsets: Vec<usize>,
+    columns_layout: Vec<Vec<usize>>,
+}
 
-impl EncodedBlock {
-    pub fn from_block(block: DataBlock) -> Self {
-        let data = block
-            .columns()
-            .iter()
-            .map(|entry| {
+impl BlocksEncoder {
+    fn new(align: Alignment, chunk: usize) -> Self {
+        Self {
+            buf: DmaWriteBuf::new(align, chunk),
+            offsets: vec![0],
+            columns_layout: Vec::new(),
+        }
+    }
+
+    fn add_block(&mut self, block: DataBlock) {
+        let columns_layout = std::iter::once(self.size())
+            .chain(block.columns().iter().map(|entry| {
                 let column = entry
                     .value
                     .convert_to_full_column(&entry.data_type, block.num_rows());
-                serialize_column(&column)
-            })
+                serialize_column_in(&column, &mut self.buf).unwrap();
+                self.size()
+            }))
+            .map_windows(|x: &[_; 2]| x[1] - x[0])
             .collect();
-        EncodedBlock(data)
+
+        self.columns_layout.push(columns_layout);
+        self.offsets.push(self.size())
     }
 
-    pub fn columns_layout(&self) -> Vec<usize> {
-        self.0.iter().map(|data| data.len()).collect()
-    }
-
-    pub fn size(&self) -> usize {
-        self.0.iter().map(|data| data.len()).sum()
+    fn size(&self) -> usize {
+        self.buf.size()
     }
 }
 
