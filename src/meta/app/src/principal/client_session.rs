@@ -16,6 +16,4 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ClientSession {
-    pub user_name: String,
-}
+pub struct ClientSession;

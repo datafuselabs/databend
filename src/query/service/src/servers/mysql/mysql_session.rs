@@ -95,9 +95,10 @@ impl MySQLConnection {
 
                 let tenant = session.get_current_tenant();
                 let session_id = session.get_id();
+                let user = session.get_current_user()?.name;
                 UserApiProvider::instance()
                     .client_session_api(&tenant)
-                    .drop_client_session_id(&session_id)
+                    .drop_client_session_id(&session_id, &user)
                     .await
                     .ok();
                 drop_all_temp_tables(&session_id, session.temp_tbl_mgr()).await

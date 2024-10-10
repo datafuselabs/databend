@@ -529,7 +529,7 @@ impl HttpQuery {
         let user_name = session.get_current_user()?.name;
 
         let has_temp_table_before_run = if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &session);
+            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
             true
         } else {
             false
@@ -671,6 +671,7 @@ impl HttpQuery {
                             *guard = Some(not_empty);
                             ClientSessionManager::instance().on_query_finish(
                                 cid,
+                                &self.user_name,
                                 session_state.temp_tbl_mgr,
                                 !not_empty,
                                 not_empty != self.has_temp_table_before_run,

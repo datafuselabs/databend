@@ -35,9 +35,7 @@ impl FromToProto for mt::ClientSession {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let v = Self {
-            user_name: p.user_name,
-        };
+        let v = Self {};
         Ok(v)
     }
 
@@ -45,7 +43,6 @@ impl FromToProto for mt::ClientSession {
         let p = pb::ClientSession {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            user_name: self.user_name.clone(),
         };
         Ok(p)
     }

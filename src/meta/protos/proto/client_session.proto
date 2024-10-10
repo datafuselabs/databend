@@ -23,5 +23,4 @@ package databend_proto;
 message ClientSession {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
-  string user_name = 2;
 }

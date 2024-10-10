@@ -23,7 +23,6 @@ use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::client_session::ClientSession;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
@@ -108,6 +107,10 @@ impl ClientSessionManager {
         GlobalInstance::get()
     }
 
+    pub fn state_key(client_session_id: &str, user_name: &str) -> String {
+        format!("{client_session_id}:{user_name}")
+    }
+
     #[async_backtrace::framed]
     pub async fn init(_cfg: &InnerConfig) -> Result<()> {
         let mgr = Arc::new(Self {
@@ -154,7 +157,7 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 client_session_id,
-                ClientSession { user_name },
+                &user_name,
                 REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -214,7 +217,7 @@ impl ClientSessionManager {
             client_session_api
                 .upsert_token(&old, token_info, TOMBSTONE_TTL, true)
                 .await?;
-            self.refresh_in_memory_states(&client_session_id);
+            self.refresh_in_memory_states(&client_session_id, &user);
         };
         self.refresh_tokens
             .write()
@@ -251,9 +254,7 @@ impl ClientSessionManager {
         client_session_api
             .upsert_client_session_id(
                 &client_session_id,
-                ClientSession {
-                    user_name: claim.user.clone(),
-                },
+                &claim.user,
                 REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
             )
             .await?;
@@ -332,10 +333,11 @@ impl ClientSessionManager {
                 .await
                 .ok();
             client_session_api
-                .drop_client_session_id(&claim.session_id)
+                .drop_client_session_id(&claim.session_id, &claim.user)
                 .await
                 .ok();
-            let state = self.session_state.lock().remove(&claim.session_id);
+            let state_key = Self::state_key(&claim.session_id, &claim.user);
+            let state = self.session_state.lock().remove(&state_key);
             if let Some(state) = state {
                 drop_all_temp_tables(&claim.session_id, state.temp_tbl_mgr).await?;
             }
@@ -343,16 +345,18 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    pub fn refresh_in_memory_states(&self, client_session_id: &str) {
+    pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
+        let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(client_session_id.to_string()).and_modify(|e| {
-            e.query_state = QueryState::InUse;
+        guard.entry(key).and_modify(|e| {
+            e.query_state = QueryState::Idle(Instant::now());
         });
     }
 
-    pub fn on_query_start(&self, client_session_id: &str, session: &Arc<Session>) {
+    pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
+        let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(client_session_id.to_string()).and_modify(|e| {
+        guard.entry(key).and_modify(|e| {
             if matches!(e.query_state, QueryState::Idle(_)) {
                 e.query_state = QueryState::Idle(Instant::now());
                 session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
@@ -362,13 +366,15 @@ impl ClientSessionManager {
     pub fn on_query_finish(
         &self,
         client_session_id: &str,
+        user_name: &str,
         temp_tbl_mgr: TempTblMgrRef,
         is_empty: bool,
         just_changed: bool,
     ) {
+        let key = Self::state_key(client_session_id, user_name);
         if !is_empty || just_changed {
             let mut guard = self.session_state.lock();
-            match guard.entry(client_session_id.to_string()) {
+            match guard.entry(key) {
                 Entry::Vacant(e) => {
                     if !is_empty {
                         e.insert(SessionState {

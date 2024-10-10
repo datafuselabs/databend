@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -25,12 +25,12 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::principal::client_session_ident::UserSessionId;
 use databend_common_storage::DataOperator;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
-use uuid::Uuid;
 
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
@@ -62,26 +62,30 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
             .recursive(true)
             .await?;
         let client_session_mgr = UserApiProvider::instance().client_session_api(&ctx.get_tenant());
-        let mut session_ids = HashSet::new();
+        let mut user_session_ids = HashMap::new();
         while let Some(entry) = lister.try_next().await? {
             let path = entry.path();
-            if let Some(session_id) = path.split('/').nth(1) {
-                if session_id.is_empty() {
+            if let Some(prefix) = path.split('/').nth(1) {
+                if prefix.is_empty() {
                     continue;
                 }
-                // check if session_id is a valid uuid
-                let _ = Uuid::parse_str(session_id)
-                    .map_err(|e| ErrorCode::Internal(format!("Invalid session_id: {}", e)))?;
-                session_ids.insert(session_id.to_string());
+                let id = UserSessionId::parse(prefix).map_err(|e| {
+                    ErrorCode::Internal(format!(
+                        "invalid TEMP_TABLE_STORAGE_PREFIX({}): {}",
+                        prefix, e
+                    ))
+                })?;
+
+                user_session_ids.insert(prefix.to_string(), id);
             }
         }
-        for session_id in session_ids {
+        for (prefix, user_session_id) in user_session_ids {
             if client_session_mgr
-                .get_client_session(&session_id)
+                .get_client_session(&user_session_id.session_id, &user_session_id.user_name)
                 .await?
                 .is_none()
             {
-                let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, session_id);
+                let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, prefix);
                 info!("Removing temporary table: {}", path);
                 op.remove_all(&path).await?;
             }
