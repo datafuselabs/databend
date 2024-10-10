@@ -15,9 +15,12 @@
 use std::alloc::Layout;
 use std::borrow::BorrowMut;
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
+use databend_common_base::base::convert_byte_size;
+use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -47,6 +50,11 @@ pub struct PartialSingleStateAggregator {
     places: Vec<StateAddr>,
     arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
+
+    start: Instant,
+    first_block_start: Option<Instant>,
+    rows: usize,
+    bytes: usize,
 }
 
 impl PartialSingleStateAggregator {
@@ -76,6 +84,10 @@ impl PartialSingleStateAggregator {
             places,
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
+            start: Instant::now(),
+            first_block_start: None,
+            rows: 0,
+            bytes: 0,
         })
     }
 }
@@ -84,13 +96,17 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
     const NAME: &'static str = "AggregatorPartialTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
+        if self.first_block_start.is_none() {
+            self.first_block_start = Some(Instant::now());
+        }
+
         let is_agg_index_block = block
             .get_meta()
             .and_then(AggIndexMeta::downcast_ref_from)
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.convert_to_full();
+        let block = block.consume_convert_to_full();
 
         for (idx, func) in self.funcs.iter().enumerate() {
             let place = self.places[idx];
@@ -106,6 +122,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 func.accumulate(place, columns, None, block.num_rows())?;
             }
         }
+
+        self.rows += block.num_rows();
+        self.bytes += block.memory_size();
 
         Ok(vec![])
     }
@@ -136,6 +155,20 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 unsafe { func.drop_state(*place) }
             }
         }
+
+        log::info!(
+            "Aggregated {} to 1 rows in {} sec (real: {}). ({} rows/sec, {}/sec, {})",
+            self.rows,
+            self.start.elapsed().as_secs_f64(),
+            if let Some(t) = &self.first_block_start {
+                t.elapsed().as_secs_f64()
+            } else {
+                self.start.elapsed().as_secs_f64()
+            },
+            convert_number_size(self.rows as f64 / self.start.elapsed().as_secs_f64()),
+            convert_byte_size(self.bytes as f64 / self.start.elapsed().as_secs_f64()),
+            convert_byte_size(self.bytes as _),
+        );
 
         Ok(generate_data_block)
     }
@@ -195,7 +228,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if !block.is_empty() {
-            let block = block.convert_to_full();
+            let block = block.consume_convert_to_full();
 
             for (index, _) in self.funcs.iter().enumerate() {
                 let binary_array = block.get_by_offset(index).value.as_column().unwrap();

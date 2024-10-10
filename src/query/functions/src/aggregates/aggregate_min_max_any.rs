@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
@@ -87,6 +88,36 @@ where
             }
             None => {
                 self.value = Some(T::to_owned_scalar(other));
+            }
+        }
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let column_len = T::column_len(&other);
+        if column_len == 0 {
+            return Ok(());
+        }
+
+        let column_iter = T::iter_column(&other);
+        if let Some(validity) = validity {
+            if validity.unset_bits() == column_len {
+                return Ok(());
+            }
+            for (data, valid) in column_iter.zip(validity.iter()) {
+                if valid {
+                    let _ = self.add(data, function_data);
+                }
+            }
+        } else {
+            let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
+            if let Some(v) = v {
+                let _ = self.add(v, function_data);
             }
         }
         Ok(())

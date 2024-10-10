@@ -240,6 +240,18 @@ impl DataBlock {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
     }
 
+    pub fn consume_convert_to_full(self) -> Self {
+        if self
+            .columns()
+            .iter()
+            .all(|entry| entry.value.as_column().is_some())
+        {
+            return self;
+        }
+
+        self.convert_to_full()
+    }
+
     pub fn convert_to_full(&self) -> Self {
         let columns = self
             .columns()

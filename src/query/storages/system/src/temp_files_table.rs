@@ -119,7 +119,7 @@ impl AsyncSystemTable for TempFilesTable {
             num_rows,
         );
 
-        Ok(data_block.convert_to_full())
+        Ok(data_block.consume_convert_to_full())
     }
 }
 

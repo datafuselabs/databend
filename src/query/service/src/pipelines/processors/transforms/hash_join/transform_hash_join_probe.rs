@@ -352,7 +352,7 @@ impl Processor for TransformHashJoinProbe {
                         {
                             self.probe_hash_table(data_block)?;
                         } else if let Some(data_block) = self.input_data_blocks.pop_front() {
-                            let data_block = data_block.convert_to_full();
+                            let data_block = data_block.consume_convert_to_full();
                             self.probe_hash_table(data_block)?;
                         }
                     }

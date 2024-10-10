@@ -71,8 +71,8 @@ fn expected_data_block(
 }
 
 fn check_data_block(expected: Vec<DataBlock>, blocks: Vec<DataBlock>) -> Result<()> {
-    let expected_data_block = DataBlock::concat(&expected)?.convert_to_full();
-    let data_block = DataBlock::concat(&blocks)?.convert_to_full();
+    let expected_data_block = DataBlock::concat(&expected)?.consume_convert_to_full();
+    let data_block = DataBlock::concat(&blocks)?.consume_convert_to_full();
 
     for (expected_column, column) in expected_data_block
         .columns()

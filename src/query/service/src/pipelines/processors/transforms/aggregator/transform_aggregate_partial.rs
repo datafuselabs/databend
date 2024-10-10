@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
@@ -111,6 +112,10 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
+    start: Instant,
+    first_block_start: Option<Instant>,
+    processed_bytes: usize,
+    processed_rows: usize,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -164,6 +169,10 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: AggregateSettings::try_from(ctx)?,
+                start: Instant::now(),
+                first_block_start: None,
+                processed_bytes: 0,
+                processed_rows: 0,
             },
         ))
     }
@@ -239,9 +248,15 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.convert_to_full();
+        let block = block.consume_convert_to_full();
         let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
+
+        self.processed_bytes += block.memory_size();
+        self.processed_rows += rows_num;
+        if self.first_block_start.is_none() {
+            self.first_block_start = Some(Instant::now());
+        }
 
         {
             match &mut self.hash_table {
@@ -449,6 +464,26 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialAggrega
             HashTable::AggregateHashTable(hashtable) => {
                 let partition_count = hashtable.payload.partition_count();
                 let mut blocks = Vec::with_capacity(partition_count);
+
+                log::info!(
+                    "Aggregated {} to {} rows in {} sec(real: {}). ({} rows/sec, {}/sec, {})",
+                    self.processed_rows,
+                    hashtable.payload.len(),
+                    self.start.elapsed().as_secs_f64(),
+                    if let Some(t) = &self.first_block_start {
+                        t.elapsed().as_secs_f64()
+                    } else {
+                        self.start.elapsed().as_secs_f64()
+                    },
+                    convert_number_size(
+                        self.processed_rows as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(
+                        self.processed_bytes as f64 / self.start.elapsed().as_secs_f64()
+                    ),
+                    convert_byte_size(self.processed_bytes as f64),
+                );
+
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(

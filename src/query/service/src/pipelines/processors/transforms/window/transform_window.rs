@@ -1005,7 +1005,7 @@ where T: Number + ResultTypeOfUnary
             let num_rows = data.num_rows();
             if num_rows != 0 {
                 self.blocks.push_back(WindowBlock {
-                    block: data.convert_to_full(),
+                    block: data.consume_convert_to_full(),
                     builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
                 });
             }

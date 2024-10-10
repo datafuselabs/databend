@@ -47,7 +47,6 @@ lexical-core = "0.8.5"
 libm = "0.2.6"
 match-template = { workspace = true }
 md-5 = "0.10.5"
-multiversion = "0.7.4"
 naive-cityhash = "0.2.0"
 num-traits = "0.2.15"
 once_cell = { workspace = true }

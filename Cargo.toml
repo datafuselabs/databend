@@ -351,18 +351,26 @@ useless_format = "allow"
 mutable_key_type = "allow"
 result_large_err = "allow"
 
+## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
+## Test SQL: 
+## select sum(number) from numbers_mt(10000000000);   ~ 3x performance 
+## select max(number) from numbers_mt(10000000000);   ~ 3x performance
+# [profile.release]
+# debug = 1
+# lto = "thin"
+# overflow-checks = false
+# incremental = false
+# codegen-units = 1
+
 [profile.release]
 debug = 1
 lto = "thin"
 overflow-checks = false
+opt-level = "s"         ## defaults to be 3
 incremental = false
-opt-level = "s"
-
-# codegen-units = 1 # Reduce number of codegen units to increase optimizations.
 
 # [profile.release.package]
-# arrow2 = { codegen-units = 4 }
-# common-functions = { codegen-units = 16 }
+# databend-common-arrow = { codegen-units = 16 }
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
 

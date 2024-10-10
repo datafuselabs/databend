@@ -101,7 +101,7 @@ impl DataBlock {
         let arrow_schema = table_schema_to_arrow_schema(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
-            .convert_to_full()
+            .consume_convert_to_full()
             .columns()
             .iter()
             .zip(arrow_schema.fields())

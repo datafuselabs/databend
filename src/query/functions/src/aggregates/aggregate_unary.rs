@@ -47,10 +47,22 @@ where
     fn add_batch(
         &mut self,
         other: T::Column,
+        validity: Option<&Bitmap>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        for value in T::iter_column(&other) {
-            self.add(value, function_data)?;
+        match validity {
+            Some(validity) => {
+                for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                    if valid {
+                        self.add(data, function_data)?;
+                    }
+                }
+            }
+            None => {
+                for value in T::iter_column(&other) {
+                    self.add(value, function_data)?;
+                }
+            }
         }
         Ok(())
     }
@@ -206,18 +218,8 @@ where
     ) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
         let state: &mut S = place.get::<S>();
-        match validity {
-            Some(bitmap) if bitmap.unset_bits() > 0 => {
-                let column_iter = T::iter_column(&column);
-                for (value, is_valid) in column_iter.zip(bitmap.iter()) {
-                    if is_valid {
-                        state.add(value, self.function_data.as_deref())?;
-                    }
-                }
-                Ok(())
-            }
-            _ => state.add_batch(column, self.function_data.as_deref()),
-        }
+
+        state.add_batch(column, validity, self.function_data.as_deref())
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {

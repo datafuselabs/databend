@@ -49,6 +49,7 @@ pub struct AggregateHashTable {
     // use for append rows directly during deserialize
     pub direct_append: bool,
     pub config: HashTableConfig,
+
     current_radix_bits: u64,
     entries: Vec<Entry>,
     count: usize,
@@ -585,6 +586,7 @@ impl AggregateHashTable {
                 .iter()
                 .map(|arena| arena.allocated_bytes())
                 .sum::<usize>()
+            + self.entries.len() * std::mem::size_of::<Entry>()
     }
 }
 

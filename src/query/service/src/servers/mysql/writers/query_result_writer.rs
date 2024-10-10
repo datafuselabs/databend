@@ -242,7 +242,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     let mut buf = Vec::<u8>::new();
 
                     let columns = block
-                        .convert_to_full()
+                        .consume_convert_to_full()
                         .columns()
                         .iter()
                         .map(|column| column.value.clone().into_column().unwrap())
