@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaError;
@@ -31,5 +33,20 @@ impl From<InvalidArgument> for MetaTxnError {
     fn from(value: InvalidArgument) -> Self {
         let network_error = MetaNetworkError::from(value);
         Self::MetaError(MetaError::from(network_error))
+    }
+}
+
+impl From<MetaNetworkError> for MetaTxnError {
+    fn from(value: MetaNetworkError) -> Self {
+        Self::MetaError(MetaError::from(value))
+    }
+}
+
+impl From<MetaTxnError> for ErrorCode {
+    fn from(meta_err: MetaTxnError) -> Self {
+        match meta_err {
+            MetaTxnError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
+            MetaTxnError::MetaError(err) => ErrorCode::from(err),
+        }
     }
 }

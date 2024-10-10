@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_sql::plans::DropProcedurePlan;
@@ -55,9 +56,17 @@ impl Interpreter for DropProcedureInterpreter {
         let tenant = self.plan.tenant.clone();
 
         let drop_procedure_req: DropProcedureReq = self.plan.clone().into();
-        let _ = UserApiProvider::instance()
-            .drop_procedure(&tenant, drop_procedure_req, self.plan.if_exists)
+
+        let dropped = UserApiProvider::instance()
+            .procedure_api(&tenant)
+            .drop_procedure(&drop_procedure_req.name_ident)
             .await?;
+        if dropped.is_none() && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownProcedure(format!(
+                "Unknown procedure '{}' while drop procedure",
+                drop_procedure_req.name_ident
+            )));
+        }
 
         Ok(PipelineBuildResult::create())
     }
