@@ -275,26 +275,21 @@ jobs:
         with:
           name: test-stateful-standalone-linux
 
-  #  Temporarily commented out, since this job is run on self-hosted, may
-  #  bring troubles to other jobs run on self-hosted.
-  #
-  #  Maybe we could patch `libfaketime` and let it support jemalloc?
-  #
-  #  test_ee_standalone_fake_time:
-  #    needs: [build, check]
-  #    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-  #    steps:
-  #      - uses: actions/checkout@v4
-  #      - uses: ./.github/actions/setup_license
-  #        with:
-  #          runner_provider: ${{ inputs.runner_provider }}
-  #      - uses: ./.github/actions/test_ee_standalone_fake_time_linux
-  #        timeout-minutes: 10
-  #      - name: Upload failure
-  #        if: failure()
-  #        uses: ./.github/actions/artifact_failure
-  #        with:
-  #          name: test-stateful-standalone-fake-time-linux
+  test_ee_standalone_fake_time:
+    needs: [build, check]
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+      - uses: ./.github/actions/test_ee_standalone_fake_time_linux
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-fake-time-linux
 
   test_ee_management_mode:
     needs: [ build, check ]
