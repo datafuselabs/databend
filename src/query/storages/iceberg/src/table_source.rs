@@ -35,10 +35,11 @@ use futures::StreamExt;
 use iceberg::scan::ArrowRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
+use crate::IcebergTable;
 
 pub struct IcebergTableSource {
     // Source processor related fields.
-    table: iceberg::table::Table,
+    table: IcebergTable,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
 
@@ -57,7 +58,7 @@ impl IcebergTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        table: iceberg::table::Table,
+        table: IcebergTable,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
@@ -135,7 +136,7 @@ impl Processor for IcebergTableSource {
         } else if let Some(part) = self.ctx.get_partition() {
             let part = IcebergPartInfo::from_part(&part)?;
             // TODO: enable row filter?
-            let reader = self.table.reader_builder().build();
+            let reader = self.table.table().await?.reader_builder().build();
             // TODO: don't use stream here.
             let stream = reader
                 .read(Box::pin(stream::iter([Ok(part.to_task())])))

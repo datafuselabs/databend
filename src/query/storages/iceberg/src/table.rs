@@ -47,6 +47,7 @@ use crate::IcebergCatalog;
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
 /// accessor wrapper as a table
+#[derive(Clone)]
 pub struct IcebergTable {
     info: TableInfo,
     ctl: IcebergCatalog,
@@ -141,7 +142,8 @@ impl IcebergTable {
         })
     }
 
-    async fn table(&self) -> Result<&iceberg::table::Table> {
+    /// Fetch or init the iceberg table
+    pub async fn table(&self) -> Result<&iceberg::table::Table> {
         self.table
             .get_or_try_init(|| async {
                 let table =
@@ -164,10 +166,6 @@ impl IcebergTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let table = self
-            .table
-            .get()
-            .expect("iceberg table must have been loaded");
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(parts_len, max_threads);
@@ -175,12 +173,7 @@ impl IcebergTable {
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
             |output| {
-                IcebergTableSource::create(
-                    ctx.clone(),
-                    output,
-                    output_schema.clone(),
-                    table.clone(),
-                )
+                IcebergTableSource::create(ctx.clone(), output, output_schema.clone(), self.clone())
             },
             max_threads.max(1),
         )
