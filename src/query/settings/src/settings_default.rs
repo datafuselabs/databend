@@ -909,6 +909,18 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_flight_connection_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The maximum retry count for cluster flight. Disable if 0.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=30)),
+                }),
+                ("flight_connection_retry_interval", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "The retry interval of cluster flight is in seconds.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=900)),
+                }),
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",

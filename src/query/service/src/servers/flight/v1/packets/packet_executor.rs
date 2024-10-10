@@ -14,7 +14,7 @@
 
 use crate::servers::flight::v1::packets::QueryFragment;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragments {
     pub query_id: String,
     pub fragments: Vec<QueryFragment>,

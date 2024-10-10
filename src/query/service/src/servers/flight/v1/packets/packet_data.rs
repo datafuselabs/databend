@@ -28,6 +28,8 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::MutationStatus;
 use log::error;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::servers::flight::v1::packets::ProgressInfo;
 
@@ -61,6 +63,12 @@ pub enum DataPacket {
     CopyStatus(CopyStatus),
     MutationStatus(MutationStatus),
     DataCacheMetrics(DataCacheMetricValues),
+    FlightControl(FlightControlCommand),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum FlightControlCommand {
+    Close,
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -78,6 +86,7 @@ impl DataPacket {
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
             DataPacket::QueryProfiles(_) => 0,
             DataPacket::DataCacheMetrics(_) => 0,
+            DataPacket::FlightControl(_) => 0,
         }
     }
 }
@@ -133,6 +142,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::DataCacheMetrics(metrics) => FlightData {
                 app_metadata: vec![0x08],
                 data_body: serde_json::to_vec(&metrics)?,
+                data_header: vec![],
+                flight_descriptor: None,
+            },
+            DataPacket::FlightControl(command) => FlightData {
+                app_metadata: vec![0x09],
+                data_body: serde_json::to_vec(&command)?,
                 data_header: vec![],
                 flight_descriptor: None,
             },
@@ -195,6 +210,11 @@ impl TryFrom<FlightData> for DataPacket {
                 let status =
                     serde_json::from_slice::<DataCacheMetricValues>(&flight_data.data_body)?;
                 Ok(DataPacket::DataCacheMetrics(status))
+            }
+            0x09 => {
+                let command =
+                    serde_json::from_slice::<FlightControlCommand>(&flight_data.data_body)?;
+                Ok(DataPacket::FlightControl(command))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

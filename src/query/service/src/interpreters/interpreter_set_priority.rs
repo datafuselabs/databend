@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::SetPriorityPlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::SET_PRIORITY;
@@ -61,9 +62,13 @@ impl SetPriorityInterpreter {
         }
 
         let settings = self.ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_max_flight_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
         let res = cluster
-            .do_action::<_, bool>(SET_PRIORITY, message, timeout)
+            .do_action::<_, bool>(SET_PRIORITY, message, flight_params)
             .await?;
 
         match res.values().any(|x| *x) {

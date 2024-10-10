@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::KillPlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::KILL_QUERY;
@@ -54,7 +55,6 @@ impl KillInterpreter {
     async fn kill_cluster_query(&self) -> Result<PipelineBuildResult> {
         let cluster = self.ctx.get_cluster();
         let settings = self.ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
 
         let mut message = HashMap::with_capacity(cluster.nodes.len());
 
@@ -63,9 +63,14 @@ impl KillInterpreter {
                 message.insert(node_info.id.clone(), self.plan.clone());
             }
         }
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_max_flight_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
 
         let res = cluster
-            .do_action::<_, bool>(KILL_QUERY, message, timeout)
+            .do_action::<_, bool>(KILL_QUERY, message, flight_params)
             .await?;
 
         match res.values().any(|x| *x) {

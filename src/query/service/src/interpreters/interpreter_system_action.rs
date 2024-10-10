@@ -22,6 +22,7 @@ use databend_common_sql::plans::SystemAction;
 use databend_common_sql::plans::SystemPlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::SYSTEM_ACTION;
@@ -74,9 +75,13 @@ impl Interpreter for SystemActionInterpreter {
             }
 
             let settings = self.ctx.get_settings();
-            let timeout = settings.get_flight_client_timeout()?;
+            let flight_params = FlightParams {
+                timeout: settings.get_flight_client_timeout()?,
+                retry_times: settings.get_max_flight_retry_times()?,
+                retry_interval: settings.get_flight_retry_interval()?,
+            };
             cluster
-                .do_action::<_, ()>(SYSTEM_ACTION, message, timeout)
+                .do_action::<_, ()>(SYSTEM_ACTION, message, flight_params)
                 .await?;
         }
 

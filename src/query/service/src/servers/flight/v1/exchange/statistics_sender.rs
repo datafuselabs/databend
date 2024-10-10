@@ -29,7 +29,6 @@ use log::warn;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
-use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
@@ -43,11 +42,10 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
+        tx: FlightSender,
         executor: Arc<PipelineExecutor>,
     ) -> Self {
         let spawner = ctx.clone();
-        let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner.spawn({
@@ -231,8 +229,4 @@ impl StatisticsSender {
 
         progress_info
     }
-
-    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
-    //     // ctx.get_exchange_manager()
-    // }
 }

@@ -19,6 +19,7 @@ mod packet_fragment;
 mod packet_publisher;
 
 pub use packet_data::DataPacket;
+pub use packet_data::FlightControlCommand;
 pub use packet_data::FragmentData;
 pub use packet_data_progressinfo::ProgressInfo;
 pub use packet_executor::QueryFragments;

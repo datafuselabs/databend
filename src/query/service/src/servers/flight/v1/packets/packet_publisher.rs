@@ -34,6 +34,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -140,7 +141,7 @@ pub struct QueryEnv {
 }
 
 impl QueryEnv {
-    pub async fn init(&self, ctx: &Arc<QueryContext>, timeout: u64) -> Result<()> {
+    pub async fn init(&self, ctx: &Arc<QueryContext>, flight_params: FlightParams) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
         let cluster = ctx.get_cluster();
@@ -151,7 +152,7 @@ impl QueryEnv {
         }
 
         let _ = cluster
-            .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
+            .do_action::<_, ()>(INIT_QUERY_ENV, message, flight_params)
             .await?;
 
         Ok(())

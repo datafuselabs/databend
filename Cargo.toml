@@ -244,6 +244,7 @@ geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
+hyper = "0.14.20"
 iceberg = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
 iceberg-catalog-hms = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }
 iceberg-catalog-rest = { version = "0.3.0", git = "https://github.com/apache/iceberg-rust/", rev = "c3549836796f93aa3ad22276af788aa3d92533a1" }

@@ -27,15 +27,15 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use log::info;
 
+use crate::servers::flight::flight_client::RetryableFlightReceiver;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::FlightReceiver;
 
 pub struct ExchangeSourceReader {
     finished: AtomicBool,
     output: Arc<OutputPort>,
     output_data: Vec<DataPacket>,
-    flight_receiver: FlightReceiver,
+    flight_receiver: RetryableFlightReceiver,
     source: String,
     destination: String,
     fragment: usize,
@@ -44,7 +44,7 @@ pub struct ExchangeSourceReader {
 impl ExchangeSourceReader {
     pub fn create(
         output: Arc<OutputPort>,
-        flight_receiver: FlightReceiver,
+        flight_receiver: RetryableFlightReceiver,
         source: &str,
         destination: &str,
         fragment: usize,
@@ -156,7 +156,7 @@ impl Processor for ExchangeSourceReader {
 }
 
 pub fn create_reader_item(
-    flight_receiver: FlightReceiver,
+    flight_receiver: RetryableFlightReceiver,
     source: &str,
     destination: &str,
     fragment: usize,

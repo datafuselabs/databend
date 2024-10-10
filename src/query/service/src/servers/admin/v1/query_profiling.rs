@@ -30,6 +30,7 @@ use poem::IntoResponse;
 
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::GET_PROFILE;
 use crate::sessions::SessionManager;
 
@@ -103,9 +104,13 @@ async fn get_cluster_profile(query_id: &str) -> Result<Vec<PlanProfile>, ErrorCo
             message.insert(node_info.id.clone(), query_id.to_owned());
         }
     }
-
+    let flight_params = FlightParams {
+        timeout: 60,
+        retry_times: 3,
+        retry_interval: 3,
+    };
     let res = cluster
-        .do_action::<_, Option<Vec<PlanProfile>>>(GET_PROFILE, message, 60)
+        .do_action::<_, Option<Vec<PlanProfile>>>(GET_PROFILE, message, flight_params)
         .await?;
 
     match res.into_values().find(Option::is_some) {

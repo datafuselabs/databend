@@ -17,7 +17,6 @@ use std::net::TcpListener;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::Empty;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
@@ -26,7 +25,9 @@ use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_query::servers::flight::FlightService;
+use databend_query::servers::flight::RequestBuilder;
 use databend_query::test_kits::*;
+use futures_util::StreamExt;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -53,15 +54,31 @@ async fn test_tls_rpc_server() -> Result<()> {
     // normal case
     let conn = ConnectionFactory::create_rpc_channel(listener_address, None, tls_conf).await?;
     let mut f_client = FlightServiceClient::new(conn);
-    let r = f_client.list_actions(Empty {}).await;
+    let (server_tx, server_rx) = async_channel::bounded(1);
+    let r = f_client
+        .do_exchange(
+            RequestBuilder::create(Box::pin(server_rx))
+                .with_metadata("x-type", "health")?
+                .build(),
+        )
+        .await;
     assert!(r.is_ok());
-
+    server_tx.close();
     // client access without tls enabled will be failed
     // - channel can still be created, but communication will be failed
     let channel = ConnectionFactory::create_rpc_channel(listener_address, None, None).await?;
+
     let mut f_client = FlightServiceClient::new(channel);
-    let r = f_client.list_actions(Empty {}).await;
+    let (server_tx, server_rx) = async_channel::bounded(1);
+    let r = f_client
+        .do_exchange(
+            RequestBuilder::create(Box::pin(server_rx))
+                .with_metadata("x-type", "health")?
+                .build(),
+        )
+        .await;
     assert!(r.is_err());
+    server_tx.close();
 
     Ok(())
 }
@@ -118,5 +135,29 @@ async fn test_rpc_server_port_used() -> Result<()> {
     let r = srv.start_with_incoming(local_socket).await;
 
     assert!(r.is_err());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rpc_server_do_exchange() -> Result<()> {
+    let listener_address = SocketAddr::from_str("127.0.0.1:9995")?;
+    let mut rpc_service = FlightService::create(ConfigBuilder::create().build())?;
+    rpc_service.start(listener_address).await?;
+    let conn = ConnectionFactory::create_rpc_channel(listener_address, None, None).await?;
+    let mut f_client = FlightServiceClient::new(conn);
+    let (server_tx, server_rx) = async_channel::bounded(1);
+    let r = f_client
+        .do_exchange(
+            RequestBuilder::create(Box::pin(server_rx))
+                .with_metadata("x-type", "health")?
+                .build(),
+        )
+        .await;
+    assert!(r.is_ok());
+    let message = r.unwrap().into_inner().next().await.unwrap()?;
+    assert_eq!(message.app_metadata.last(), Some(&0x03));
+    assert_eq!(message.data_body, Vec::from("ok"));
+
+    server_tx.close();
     Ok(())
 }

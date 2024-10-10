@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod codec;
 mod flight_client;
+mod flight_server;
 mod flight_service;
 mod request_builder;
 pub mod v1;
 
+pub use codec::MessageCodec;
 pub use flight_client::FlightClient;
 pub use flight_client::FlightExchange;
-pub use flight_client::FlightReceiver;
 pub use flight_client::FlightSender;
-pub use flight_service::FlightService;
+pub use flight_client::RetryableFlightReceiver;
+pub use flight_server::FlightService;
+pub use request_builder::RequestBuilder;

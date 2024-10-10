@@ -20,6 +20,8 @@ export STORAGE_ALLOW_INSECURE=true
 
 echo "Install dependence"
 python3 -m pip install --quiet mysql-connector-python requests
+sudo apt-get update -yq
+sudo apt-get install -yq dsniff net-tools
 
 echo "calling test suite"
 echo "Starting Cluster databend-query"

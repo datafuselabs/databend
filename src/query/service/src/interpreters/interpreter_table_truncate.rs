@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
@@ -95,9 +96,13 @@ impl Interpreter for TruncateTableInterpreter {
             }
 
             let settings = self.ctx.get_settings();
-            let timeout = settings.get_flight_client_timeout()?;
+            let flight_params = FlightParams {
+                timeout: settings.get_flight_client_timeout()?,
+                retry_times: settings.get_max_flight_retry_times()?,
+                retry_interval: settings.get_flight_retry_interval()?,
+            };
             cluster
-                .do_action::<_, ()>(TRUNCATE_TABLE, message, timeout)
+                .do_action::<_, ()>(TRUNCATE_TABLE, message, flight_params)
                 .await?;
         }
 
