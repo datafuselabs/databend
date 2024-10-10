@@ -37,6 +37,7 @@ pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub use utils::is_possible_non_standard_decimal_block;
 pub use utils::parse_storage_prefix;
 pub use utils::trim_vacuum2_object_prefix;
 pub use utils::try_extract_uuid_str_from_path;

@@ -83,7 +83,27 @@ pub fn parse_storage_prefix(options: &BTreeMap<String, String>, table_id: u64) -
 
 #[inline]
 pub fn trim_vacuum2_object_prefix(key: &str) -> &str {
-    key.strip_prefix(VACUUM2_OBJECT_KEY_PREFIX).unwrap_or(key)
+    // if object key (the file_name/stem part only) starts with a char which is larger or equals to
+    // VACUUM2_OBJECT_KEY_PREFIX( i.e. char 'g'), strip it off
+    if key >= VACUUM2_OBJECT_KEY_PREFIX {
+        &key[1..]
+    } else {
+        key
+    }
+}
+
+pub fn is_possible_non_standard_decimal_block(block_full_path: &str) -> Result<bool> {
+    let file_name = Path::new(block_full_path)
+        .file_name()
+        .ok_or_else(|| {
+            ErrorCode::StorageOther(format!(
+                "Illegal block path, no file name found: {}",
+                block_full_path
+            ))
+        })?
+        .to_str()
+        .expect("File stem of a block full path should always be valid UTF-8");
+    Ok(file_name < VACUUM2_OBJECT_KEY_PREFIX)
 }
 
 // Extracts the UUID part from the object key.
@@ -142,6 +162,28 @@ mod tests {
 
         for (input, expected) in test_cases {
             assert_eq!(try_extract_uuid_str_from_path(input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_is_possible_non_standard_decimal_block() {
+        let test_cases = vec![
+            (
+                // stem of block path starts with 'g', should not contain non-standard decimals
+                "bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                false,
+            ),
+            (
+                "bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet",
+                true,
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(
+                is_possible_non_standard_decimal_block(input).unwrap(),
+                expected
+            );
         }
     }
 }

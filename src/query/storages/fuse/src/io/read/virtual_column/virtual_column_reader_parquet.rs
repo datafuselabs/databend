@@ -200,6 +200,7 @@ impl VirtualColumnReader {
                     part.nums_rows,
                     &columns_chunks,
                     &part.compression,
+                    "gx",
                 )
             })
             .transpose()?;

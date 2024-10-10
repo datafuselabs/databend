@@ -33,6 +33,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 
 mod adapter;
+mod arrow_parquet;
 mod deserialize;
 
 pub use adapter::RowGroupImplBuilder;
@@ -58,6 +59,7 @@ impl BlockReader {
             num_rows,
             &column_chunks,
             compression,
+            block_path,
         )?;
         let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
