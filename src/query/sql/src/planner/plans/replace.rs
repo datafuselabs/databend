@@ -15,17 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FormatTreeNode;
-use databend_common_expression::types::StringType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::FromData;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::LockGuard;
 
-use super::insert::format_insert_source;
 use crate::plans::InsertInputSource;
 
 #[derive(Clone)]
@@ -58,41 +53,6 @@ impl Replace {
 
     pub fn has_select_plan(&self) -> bool {
         matches!(&self.source, InsertInputSource::SelectPlan(_))
-    }
-
-    #[async_backtrace::framed]
-    pub async fn explain(
-        &self,
-        verbose: bool,
-    ) -> databend_common_exception::Result<Vec<DataBlock>> {
-        let mut result = vec![];
-
-        let Replace {
-            catalog,
-            database,
-            table,
-            source,
-            on_conflict_fields,
-            ..
-        } = self;
-
-        let table_name = format!("{}.{}.{}", catalog, database, table);
-        let on_columns = on_conflict_fields
-            .iter()
-            .map(|field| format!("{}.{} (#{})", table, field.name, field.column_id))
-            .collect::<Vec<_>>()
-            .join(",");
-
-        let children = vec![
-            FormatTreeNode::new(format!("table: {table_name}")),
-            FormatTreeNode::new(format!("on columns: [{on_columns}]")),
-        ];
-
-        let formatted_plan = format_insert_source("ReplacePlan", source, verbose, children)?;
-        let line_split_result: Vec<&str> = formatted_plan.lines().collect();
-        let formatted_plan = StringType::from_data(line_split_result);
-        result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-        Ok(vec![DataBlock::concat(&result)?])
     }
 }
 
