@@ -7388,6 +7388,24 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- prepare db2");
+            let db_name = "db2";
+            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+            {
+                util.create_db().await?;
+            }
+
+            let db_id = util.db_id();
+
+            {
+                info!("--- list dictionary from db2 with no create before");
+                let req = ListDictionaryReq::new(dict_tenant.clone(), *db_id);
+                let res = mt.list_dictionaries(req).await?;
+                assert!(res.is_empty());
+            }
+        }
+
+        {
             info!("--- get dictionary");
             let req = dict_ident1.clone();
             let res = mt.get_dictionary(req).await?;
