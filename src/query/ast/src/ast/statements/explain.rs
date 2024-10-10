@@ -37,6 +37,8 @@ pub enum ExplainKind {
 
     // Explain analyze plan
     AnalyzePlan,
+
+    Graphical,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

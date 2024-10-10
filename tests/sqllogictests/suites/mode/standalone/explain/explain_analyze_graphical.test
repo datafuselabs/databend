@@ -1,0 +1,20 @@
+statement ok
+drop database if exists testdb
+
+statement ok
+create database testdb
+
+statement ok
+use testdb
+
+statement ok
+create table t(a int, b int)
+
+statement ok
+insert into t select number, number + 1 from numbers(1000)
+
+query T
+explain analyze graphical select * from t where a = 1
+
+statement ok
+drop database testdb

@@ -75,6 +75,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::RAW) => ExplainKind::Raw,
                     Some(TokenKind::OPTIMIZED) => ExplainKind::Optimized,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
+                    Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -85,11 +86,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ PARTIAL? ~ #statement
+            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
         },
-        |(_, _, partial, statement)| Statement::ExplainAnalyze {
-            partial: partial.is_some(),
-            query: Box::new(statement.stmt),
+        |(_, _, opt_partial_or_graphical, statement)| {
+            let (partial, graphical) = match opt_partial_or_graphical {
+                Some(Token {
+                    kind: TokenKind::PARTIAL,
+                    ..
+                }) => (true, false),
+                Some(Token {
+                    kind: TokenKind::GRAPHICAL,
+                    ..
+                }) => (false, true),
+                _ => (false, false),
+            };
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query: Box::new(statement.stmt),
+            }
         },
     );
 

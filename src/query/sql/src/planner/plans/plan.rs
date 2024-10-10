@@ -176,6 +176,7 @@ pub enum Plan {
     },
     ExplainAnalyze {
         partial: bool,
+        graphical: bool,
         plan: Box<Plan>,
     },
 

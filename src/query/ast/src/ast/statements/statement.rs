@@ -46,6 +46,7 @@ pub enum Statement {
     ExplainAnalyze {
         // if partial is true, only scan/filter/join will be shown.
         partial: bool,
+        graphical: bool,
         query: Box<Statement>,
     },
 
@@ -413,12 +414,19 @@ impl Display for Statement {
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
+                    ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
             }
-            Statement::ExplainAnalyze { partial, query } => {
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query,
+            } => {
                 if *partial {
                     write!(f, "EXPLAIN ANALYZE PARTIAL {query}")?;
+                } else if *graphical {
+                    write!(f, "EXPLAIN ANALYZE GRAPHICAL {query}")?;
                 } else {
                     write!(f, "EXPLAIN ANALYZE {query}")?;
                 }
