@@ -22,6 +22,7 @@ pub use locations::TableMetaLocationGenerator;
 pub use read::AggIndexReader;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
+pub use read::ColumnarSegmentInfoReader;
 pub use read::CompactSegmentInfoReader;
 pub use read::InvertedIndexReader;
 pub use read::MergeIOReadResult;

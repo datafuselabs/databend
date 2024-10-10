@@ -26,6 +26,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_table_meta::meta::ColumnarSegmentInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -49,6 +50,8 @@ pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWr
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type CompactSegmentInfoReader =
     InMemoryItemCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type ColumnarSegmentInfoReader =
+    InMemoryItemCacheReader<ColumnarSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type InvertedIndexMetaReader =
     InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 
@@ -58,6 +61,16 @@ impl MetaReaders {
     pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
         CompactSegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
+            LoaderWrapper((dal, schema)),
+        )
+    }
+
+    pub fn columnar_segment_info_reader(
+        dal: Operator,
+        schema: TableSchemaRef,
+    ) -> ColumnarSegmentInfoReader {
+        ColumnarSegmentInfoReader::new(
+            CacheManager::instance().get_columnar_segment_cache(),
             LoaderWrapper((dal, schema)),
         )
     }
@@ -134,6 +147,19 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
         (version, schema.clone()).read(reader.reader())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<ColumnarSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<ColumnarSegmentInfo> {
+        let compact_segment_info: CompactSegmentInfo = self.load(params).await?;
+        let schema = &self.0.1;
+        let segment_info = databend_storages_common_table_meta::meta::SegmentInfo::try_from(
+            &compact_segment_info,
+        )?;
+        ColumnarSegmentInfo::try_from_segment_info_and_schema(segment_info, schema)
     }
 }
 

@@ -15,6 +15,7 @@
 mod segment;
 mod snapshot;
 
+pub use segment::ColumnarSegmentInfo;
 pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+mod prune;
+mod util;
 
-pub use meta_readers::ColumnarSegmentInfoReader;
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::TableSnapshotReader;
+pub use self::prune::prune;

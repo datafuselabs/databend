@@ -35,6 +35,7 @@ use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
+use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
 
@@ -196,4 +197,8 @@ fn arrow_field_from_arrow2_field(field: Arrow2Field) -> ArrowField {
     };
 
     ArrowField::new(field.name, data_type, field.is_nullable).with_metadata(metadata)
+}
+
+pub fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
+    arrow_schema::DataType::from(crate::converts::arrow2::table_type_to_arrow_type(ty))
 }

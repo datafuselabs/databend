@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
+#[repr(u8)]
 pub enum Compression {
     // Lz4 will be deprecated.
     Lz4,

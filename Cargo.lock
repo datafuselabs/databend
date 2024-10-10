@@ -5479,6 +5479,7 @@ dependencies = [
 name = "databend-storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "bincode 1.3.3",
  "chrono",
  "databend-common-arrow",

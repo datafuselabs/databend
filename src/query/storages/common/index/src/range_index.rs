@@ -46,9 +46,9 @@ use crate::Index;
 
 #[derive(Clone)]
 pub struct RangeIndex {
-    expr: Expr<String>,
-    func_ctx: FunctionContext,
-    schema: TableSchemaRef,
+    pub expr: Expr<String>,
+    pub func_ctx: FunctionContext,
+    pub schema: TableSchemaRef,
 
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,

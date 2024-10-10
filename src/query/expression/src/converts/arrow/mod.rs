@@ -18,3 +18,4 @@ mod to;
 pub const EXTENSION_KEY: &str = "Extension";
 
 pub use to::table_schema_to_arrow_schema;
+pub use to::table_type_to_arrow_type;

@@ -16,8 +16,41 @@ use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
 
+use arrow::array::Array;
+use arrow::array::AsArray;
+use arrow::array::Date32Array;
+use arrow::array::Decimal128Array;
+use arrow::array::Decimal256Array;
+use arrow::array::Float32Array;
+use arrow::array::Float64Array;
+use arrow::array::Int16Array;
+use arrow::array::Int32Array;
+use arrow::array::Int64Array;
+use arrow::array::Int8Array;
+use arrow::array::LargeStringArray;
+use arrow::array::RecordBatch;
+use arrow::array::StringArray;
+use arrow::array::StructArray;
+use arrow::array::TimestampMicrosecondArray;
+use arrow::array::TimestampNanosecondArray;
+use arrow::array::UInt16Array;
+use arrow::array::UInt32Array;
+use arrow::array::UInt64Array;
+use arrow::array::UInt8Array;
+use arrow::buffer::NullBuffer;
+use arrow::datatypes::DataType as ArrowDataType;
+use arrow::datatypes::Field;
+use arrow::datatypes::Fields;
+use arrow::datatypes::Schema;
+use arrow::datatypes::TimeUnit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::table_type_to_arrow_type;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,6 +64,7 @@ use crate::meta::format::MetaCompression;
 use crate::meta::format::SegmentHeader;
 use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
 use crate::meta::v2::BlockMeta;
+use crate::meta::ColumnMeta;
 use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
@@ -38,7 +72,7 @@ use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct SegmentInfo {
     /// format version of SegmentInfo table meta data
     ///
@@ -302,4 +336,416 @@ impl TryFrom<SegmentInfo> for CompactSegmentInfo {
             raw_block_metas: bytes,
         })
     }
+}
+
+pub struct ColumnarSegmentInfo {
+    pub format_version: FormatVersion,
+    pub summary: Statistics,
+    pub blocks: RecordBatch,
+}
+
+impl ColumnarSegmentInfo {
+    pub fn try_from_segment_info_and_schema(
+        value: SegmentInfo,
+        schema: &TableSchema,
+    ) -> std::result::Result<Self, ErrorCode> {
+        let data_block = block_metas_to_columnar(&value.blocks, schema)?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary,
+            blocks: data_block,
+        })
+    }
+
+    pub fn block_location(&self, idx: usize) -> &str {
+        let array = self.blocks.column(3).as_struct();
+        let location_array = array.column(0).as_string::<i32>();
+        location_array.value(idx)
+    }
+
+    pub fn block_meta(&self, _idx: usize) -> Arc<BlockMeta> {
+        todo!()
+    }
+}
+
+fn block_metas_to_columnar(
+    blocks: &[Arc<BlockMeta>],
+    table_schema: &TableSchema,
+) -> Result<RecordBatch> {
+    let mut row_counts = Vec::with_capacity(blocks.len());
+    let mut block_sizes = Vec::with_capacity(blocks.len());
+    let mut file_sizes = Vec::with_capacity(blocks.len());
+    let mut location_paths = Vec::with_capacity(blocks.len());
+    let mut location_format_versions = Vec::with_capacity(blocks.len());
+    let mut bloom_filter_index_location_paths = Vec::with_capacity(blocks.len());
+    let mut bloom_filter_index_location_format_versions = Vec::with_capacity(blocks.len());
+    let mut bloom_filter_index_sizes = Vec::with_capacity(blocks.len());
+    let mut inverted_index_sizes = Vec::with_capacity(blocks.len());
+    let mut compressions = Vec::with_capacity(blocks.len());
+    let mut create_ons = Vec::with_capacity(blocks.len());
+    for block in blocks {
+        row_counts.push(block.row_count);
+        block_sizes.push(block.block_size);
+        file_sizes.push(block.file_size);
+        location_paths.push(block.location.0.clone());
+        location_format_versions.push(block.location.1);
+        bloom_filter_index_location_paths.push(
+            block
+                .bloom_filter_index_location
+                .as_ref()
+                .map(|l| l.0.clone()),
+        );
+        bloom_filter_index_location_format_versions
+            .push(block.bloom_filter_index_location.as_ref().map(|l| l.1));
+        bloom_filter_index_sizes.push(block.bloom_filter_index_size);
+        inverted_index_sizes.push(block.inverted_index_size);
+        compressions.push(block.compression as u8);
+        create_ons.push(block.create_on.map(|t| t.timestamp_nanos_opt().unwrap()));
+    }
+
+    let location_fields: Fields = vec![
+        Field::new("path", ArrowDataType::Utf8, false),
+        Field::new("format_version", ArrowDataType::UInt64, false),
+    ]
+    .into();
+    let location_type = ArrowDataType::Struct(location_fields.clone());
+    let mut fields = vec![
+        Field::new("row_count", ArrowDataType::UInt64, false),
+        Field::new("block_size", ArrowDataType::UInt64, false),
+        Field::new("file_size", ArrowDataType::UInt64, false),
+        Field::new("location", location_type.clone(), false),
+        Field::new("bloom_filter_index_location", location_type, true),
+        Field::new("bloom_filter_index_size", ArrowDataType::UInt64, false),
+        Field::new("inverted_index_size", ArrowDataType::UInt64, true),
+        Field::new("compression", ArrowDataType::UInt8, false),
+        Field::new(
+            "create_on",
+            ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
+            true,
+        ),
+    ];
+
+    let mut columns: Vec<Arc<dyn Array>> = vec![
+        Arc::new(UInt64Array::from(row_counts)),
+        Arc::new(UInt64Array::from(block_sizes)),
+        Arc::new(UInt64Array::from(file_sizes)),
+        Arc::new(StructArray::try_new(
+            location_fields.clone(),
+            vec![
+                Arc::new(StringArray::from(location_paths)),
+                Arc::new(UInt64Array::from(location_format_versions)),
+            ],
+            None,
+        )?),
+        Arc::new(StructArray::try_new(
+            location_fields,
+            vec![
+                Arc::new(StringArray::from(bloom_filter_index_location_paths)),
+                Arc::new(UInt64Array::from(
+                    bloom_filter_index_location_format_versions,
+                )),
+            ],
+            None,
+        )?),
+        Arc::new(UInt64Array::from(bloom_filter_index_sizes)),
+        Arc::new(UInt64Array::from(inverted_index_sizes)),
+        Arc::new(UInt8Array::from(compressions)),
+        Arc::new(TimestampNanosecondArray::from(create_ons)),
+    ];
+
+    let is_parquet = matches!(
+        blocks[0].col_metas.values().next().unwrap(),
+        ColumnMeta::Parquet(_)
+    );
+
+    for table_field in table_schema.fields.iter() {
+        if !range_index_supported_type(&table_field.data_type) {
+            continue;
+        }
+        let col_stats_fields: Fields = vec![
+            Field::new(
+                "min",
+                table_type_to_arrow_type(&table_field.data_type),
+                false,
+            ),
+            Field::new(
+                "max",
+                table_type_to_arrow_type(&table_field.data_type),
+                false,
+            ),
+            Field::new("null_count", ArrowDataType::UInt64, false),
+            Field::new("in_memory_size", ArrowDataType::UInt64, false),
+            Field::new("distinct_of_values", ArrowDataType::UInt64, true),
+        ]
+        .into();
+        fields.push(Field::new(
+            table_field.column_id.to_string(),
+            ArrowDataType::Struct(col_stats_fields.clone()),
+            true,
+        ));
+        let null_count: Vec<u64> = blocks
+            .iter()
+            .map(|b| {
+                b.col_stats
+                    .get(&table_field.column_id)
+                    .map(|s| s.null_count)
+                    .unwrap_or_default()
+            })
+            .collect();
+        let in_memory_size: Vec<u64> = blocks
+            .iter()
+            .map(|b| {
+                b.col_stats
+                    .get(&table_field.column_id)
+                    .map(|s| s.in_memory_size)
+                    .unwrap_or_default()
+            })
+            .collect();
+        let distinct_of_values: Vec<Option<u64>> = blocks
+            .iter()
+            .map(|b| {
+                b.col_stats
+                    .get(&table_field.column_id)
+                    .and_then(|s| s.distinct_of_values)
+            })
+            .collect();
+        let min = scalar_iter_to_array(
+            blocks
+                .iter()
+                .map(|b| b.col_stats.get(&table_field.column_id).map(|s| &s.min)),
+            &table_field.data_type,
+        )?;
+        let max = scalar_iter_to_array(
+            blocks
+                .iter()
+                .map(|b| b.col_stats.get(&table_field.column_id).map(|s| &s.max)),
+            &table_field.data_type,
+        )?;
+        let nulls = blocks
+            .iter()
+            .map(|b| b.col_stats.contains_key(&table_field.column_id))
+            .collect::<Vec<_>>();
+        let arrays: Vec<Arc<dyn Array>> = vec![
+            Arc::new(min),
+            Arc::new(max),
+            Arc::new(UInt64Array::from(null_count)),
+            Arc::new(UInt64Array::from(in_memory_size)),
+            Arc::new(UInt64Array::from(distinct_of_values)),
+        ];
+        columns.push(Arc::new(StructArray::try_new(
+            col_stats_fields,
+            arrays,
+            Some(NullBuffer::from(nulls.clone())),
+        )?));
+
+        if is_parquet {
+            let col_meta_fields: Fields = vec![
+                Field::new("offset", ArrowDataType::UInt64, false),
+                Field::new("len", ArrowDataType::UInt64, false),
+                Field::new("num_values", ArrowDataType::UInt64, false),
+            ]
+            .into();
+            let col_meta_type = ArrowDataType::Struct(col_meta_fields.clone());
+            fields.push(Field::new(
+                table_field.column_id.to_string(),
+                col_meta_type,
+                true,
+            ));
+            let offset = blocks
+                .iter()
+                .map(|b| {
+                    b.col_metas
+                        .get(&table_field.column_id)
+                        .map(|c: &ColumnMeta| c.as_parquet().unwrap().offset)
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let len = blocks
+                .iter()
+                .map(|b| {
+                    b.col_metas
+                        .get(&table_field.column_id)
+                        .map(|c: &ColumnMeta| c.as_parquet().unwrap().len)
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let num_values = blocks
+                .iter()
+                .map(|b| {
+                    b.col_metas
+                        .get(&table_field.column_id)
+                        .map(|c: &ColumnMeta| c.as_parquet().unwrap().num_values)
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let arrays: Vec<Arc<dyn Array>> = vec![
+                Arc::new(UInt64Array::from(offset)),
+                Arc::new(UInt64Array::from(len)),
+                Arc::new(UInt64Array::from(num_values)),
+            ];
+            columns.push(Arc::new(StructArray::try_new(
+                col_meta_fields,
+                arrays,
+                Some(NullBuffer::from(nulls.clone())),
+            )?));
+        } else {
+            todo!()
+        }
+    }
+
+    let schema = Schema::new(fields);
+    let record_batch = RecordBatch::try_new(Arc::new(schema.clone()), columns)?;
+    Ok(record_batch)
+}
+
+fn scalar_iter_to_array<'a, I>(iter: I, data_type: &TableDataType) -> Result<Arc<dyn Array>>
+where I: Iterator<Item = Option<&'a Scalar>> {
+    match data_type.remove_nullable() {
+        TableDataType::Number(NumberDataType::Int8) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_int8().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Int8Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::Int16) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_int16().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Int16Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::Int32) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_int32().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Int32Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::Int64) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_int64().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Int64Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::UInt8) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_u_int8().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(UInt8Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::UInt16) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_u_int16().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(UInt16Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::UInt32) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_u_int32().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(UInt32Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::UInt64) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_u_int64().unwrap())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(UInt64Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::Float32) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_float32().unwrap().as_ref())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Float32Array::from(values)))
+        }
+        TableDataType::Number(NumberDataType::Float64) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_number().unwrap().as_float64().unwrap().as_ref())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Float64Array::from(values)))
+        }
+        TableDataType::Date => {
+            let values = iter
+                .map(|s| s.map(|s| *s.as_date().unwrap()).unwrap_or_default())
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Date32Array::from(values)))
+        }
+        TableDataType::Timestamp => {
+            let values = iter
+                .map(|s| s.map(|s| *s.as_timestamp().unwrap()).unwrap_or_default())
+                .collect::<Vec<_>>();
+            Ok(Arc::new(TimestampMicrosecondArray::from(values)))
+        }
+        TableDataType::String => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| s.as_string().unwrap().to_string())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(LargeStringArray::from(values)))
+        }
+        TableDataType::Decimal(DecimalDataType::Decimal128(_)) => {
+            let values = iter
+                .map(|s| {
+                    s.map(|s| *s.as_decimal().unwrap().as_decimal128().unwrap().0)
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Decimal128Array::from(values)))
+        }
+        TableDataType::Decimal(DecimalDataType::Decimal256(_)) => {
+            let values = iter
+                .map(|s| unsafe {
+                    s.map(|s| {
+                        std::mem::transmute::<_, arrow::datatypes::i256>(
+                            *s.as_decimal().unwrap().as_decimal256().unwrap().0,
+                        )
+                    })
+                    .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(Arc::new(Decimal256Array::from(values)))
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn range_index_supported_type(data_type: &TableDataType) -> bool {
+    let inner_type = data_type.remove_nullable();
+    matches!(
+        inner_type,
+        TableDataType::Number(_)
+            | TableDataType::Date
+            | TableDataType::Timestamp
+            | TableDataType::String
+            | TableDataType::Decimal(_)
+    )
 }

@@ -29,6 +29,7 @@ pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
 pub use bloom::BloomBlockFilterReader;
 pub use inverted_index::InvertedIndexReader;
+pub use meta::ColumnarSegmentInfoReader;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;

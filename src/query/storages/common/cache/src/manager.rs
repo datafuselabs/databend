@@ -27,6 +27,7 @@ use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
+use crate::caches::ColumnarSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
@@ -45,6 +46,7 @@ pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     table_statistic_cache: Option<TableSnapshotStatisticCache>,
     compact_segment_info_cache: Option<CompactSegmentInfoCache>,
+    columnar_segment_info_cache: Option<ColumnarSegmentInfoCache>,
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     inverted_index_meta_cache: Option<InvertedIndexMetaCache>,
@@ -126,6 +128,7 @@ impl CacheManager {
                 table_statistic_cache: None,
                 table_data_cache,
                 in_memory_table_data_cache,
+                columnar_segment_info_cache: None,
                 block_meta_cache: None,
             }));
         } else {
@@ -139,6 +142,10 @@ impl CacheManager {
             );
             let compact_segment_info_cache = Self::new_named_bytes_cache(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
+                config.table_meta_segment_bytes as usize,
+            );
+            let columnar_segment_info_cache = Self::new_named_bytes_cache(
+                MEMORY_CACHE_COLUMNAR_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
             );
             let bloom_index_filter_cache = Self::new_named_bytes_cache(
@@ -194,6 +201,7 @@ impl CacheManager {
                 table_data_cache,
                 in_memory_table_data_cache,
                 block_meta_cache,
+                columnar_segment_info_cache,
             }));
         }
 
@@ -218,6 +226,10 @@ impl CacheManager {
 
     pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
         self.compact_segment_info_cache.clone()
+    }
+
+    pub fn get_columnar_segment_cache(&self) -> Option<ColumnarSegmentInfoCache> {
+        self.columnar_segment_info_cache.clone()
     }
 
     pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
@@ -307,6 +319,7 @@ const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
 const MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
 const MEMORY_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
+const MEMORY_CACHE_COLUMNAR_SEGMENT_INFO: &str = "memory_cache_columnar_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
