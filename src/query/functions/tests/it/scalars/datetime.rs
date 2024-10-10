@@ -35,6 +35,42 @@ fn test_datetime() {
     test_timestamp_arith(file);
     test_to_number(file);
     test_rounder_functions(file);
+    test_convert_timezone(file);
+}
+
+fn test_convert_timezone(file: &mut impl Write) {
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', to_timestamp(100))",
+        &[],
+    );
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', to_timestamp(-100))",
+        &[],
+    );
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', to_timestamp(0))",
+        &[],
+    );
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', to_timestamp(315360000000))",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', 'Europe/Simferopol', to_timestamp(100))",
+        &[],
+    );
+
+    run_ast(
+        file,
+        "convert_timezone('America/New_York', 'Europe/Simferopol', to_timestamp(0))",
+        &[],
+    );
 }
 
 fn test_to_timestamp(file: &mut impl Write) {

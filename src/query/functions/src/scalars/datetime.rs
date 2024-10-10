@@ -60,6 +60,7 @@ use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -108,6 +109,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // [date | timestamp] +/- number
     register_timestamp_add_sub(registry);
+
+    // convert_timezone( target_timezone, date, src_timezone)
+    register_convert_timezone(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -131,6 +135,109 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     })
 }
 
+fn register_convert_timezone(registry: &mut FunctionRegistry) {
+    // 2 arguments function [target_timezone, src_timestamp]
+    registry.register_passthrough_nullable_2_arg::<StringType, TimestampType, TimestampType, _, _>(
+        "convert_timezone",
+        |_, _, _| FunctionDomain::MayThrow,
+        eval_convert_timezone,
+    );
+
+    // 3 arguments function [src_timezone, target_timezone, src_timestamp]
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, TimestampType, TimestampType, _, _>(
+        "convert_timezone",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<StringType, StringType, TimestampType, TimestampType>(
+            |src_tz, target_tz, src_timestamp, output, ctx| {
+                // Parsing parameters
+                let t_tz: Tz = match target_tz.parse() {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+                let s_tz: Tz = match src_tz.parse() {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse src `timezone`. {}", e),
+                        );
+                    }
+                };
+
+                let p_src_timestamp: i64 = match Some(src_timestamp){
+                    Ok(timestamp) => {
+                        timestamp.Utc.timestamp_opt(src_timestamp, 0).unwrap();
+                    },
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+
+
+                // Create dummy timezone
+                let utc_now: DateTime<Utc> = Utc::now();
+
+                let src_time = utc_now.with_timezone(&s_tz);
+                let target_time = utc_now.with_timezone(&t_tz);
+
+                // Calculate the difference in seconds
+                let delta = target_time.signed_duration_since(src_time);
+                let result_timestamp = p_src_timestamp + delta.num_seconds();
+
+                output.push(result_timestamp)
+            },
+        ),
+    );
+
+    fn eval_convert_timezone(
+        target_tz: ValueRef<StringType>,
+        src_timestamp: ValueRef<TimestampType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampType> {
+        vectorize_with_builder_2_arg::<StringType, TimestampType, TimestampType>(
+            |target_tz, src_timestamp, output, ctx| {
+                // Parse the target timezone
+                let t_tz: Tz = match target_tz.parse() {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+
+                // Assume the source timestamp is in UTC
+                match Some(src_timestamp) {
+                    Ok(src_timestamp) => {
+                        let timestamp: i64 = src_timestamp;
+                        let datetime: DateTime<Utc> = Utc.timestamp_opt(src_timestamp, 0).unwrap();
+
+                        // Convert the UTC time to the specified target timezone
+                        let target_datetime: DateTime<Tz> = datetime.with_timezone(&t_tz);
+                        let result_timestamp = target_datetime.timestamp();
+                        // Return the adjusted timestamp as a Unix timestamp in seconds
+                        output.push(result_timestamp)
+                    }
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+            },
+        )(target_tz, src_timestamp, ctx)
+    }
+}
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_date", &["str_to_date", "date"]);
     registry.register_aliases("to_year", &["str_to_year", "year"]);
