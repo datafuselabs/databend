@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::future::Future;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -22,21 +24,18 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
-use databend_storages_common_cache::CacheKey;
-use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::InMemoryCacheReader;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
 use databend_storages_common_index::InvertedIndexDirectory;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use futures_util::future::try_join_all;
 use opendal::Operator;
 
 use crate::index::InvertedIndexFile;
 use crate::io::MetaReaders;
-
-type CachedReader = InMemoryCacheReader<InvertedIndexFile, InvertedIndexFileLoader>;
 
 const INDEX_COLUMN_NAMES: [&str; 8] = [
     "fast",
@@ -99,43 +98,70 @@ pub(crate) async fn load_inverted_index_meta(
 /// Loads bytes of each inverted index files
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-pub(crate) async fn load_inverted_index_file<'a>(
-    name: &'a str,
-    col_meta: &'a SingleColumnMeta,
-    index_path: &'a str,
-    dal: &'a Operator,
-) -> Result<Arc<InvertedIndexFile>> {
+pub(crate) async fn load_inverted_index_files<'a>(
+    settings: &ReadSettings,
+    columns: Vec<(String, Range<u64>)>,
+    location: &'a str,
+    operator: &'a Operator,
+) -> Result<Vec<Arc<InvertedIndexFile>>> {
     let start = Instant::now();
-    let storage_runtime = GlobalIORuntime::instance();
-    let bytes = {
-        let column_data_reader = InvertedIndexFileReader::new(
-            index_path.to_owned(),
-            name.to_owned(),
-            col_meta,
-            dal.clone(),
-        );
-        async move { column_data_reader.read().await }
+
+    let mut files = vec![];
+    let mut ranges = vec![];
+    let mut column_id = 0;
+    let mut names_map = HashMap::new();
+    let inverted_index_file_cache = CacheManager::instance().get_inverted_index_file_cache();
+    for (name, range) in columns.into_iter() {
+        let cache_key = cache_key_of_column(location, &name);
+        if let Some(cache_file) =
+            inverted_index_file_cache.get_sized(&cache_key, range.end - range.start)
+        {
+            files.push(cache_file);
+            continue;
+        }
+
+        // if cache missed, prepare the ranges to be read
+        ranges.push((column_id, range));
+        names_map.insert(column_id, (name, cache_key));
+        column_id += 1;
     }
-    .execute_in_runtime(&storage_runtime)
-    .await??;
+
+    if !ranges.is_empty() {
+        let merge_io_result =
+            MergeIOReader::merge_io_read(settings, operator.clone(), location, &ranges).await?;
+
+        // merge column data fetched from object storage
+        for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+            let chunk = merge_io_result
+                .owner_memory
+                .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+            let data = chunk.slice(range.clone());
+
+            let (name, cache_key) = names_map.remove(column_id).unwrap();
+            let file = InvertedIndexFile::create(name, data.into());
+
+            // add index file to cache
+            inverted_index_file_cache.insert(cache_key, file.clone());
+            files.push(file.into());
+        }
+    }
 
     // Perf.
     {
         metrics_inc_block_inverted_index_read_milliseconds(start.elapsed().as_millis() as u64);
     }
 
-    Ok(bytes)
+    Ok(files)
 }
 
 /// load inverted index directory
 #[fastrace::trace]
 pub(crate) async fn load_inverted_index_directory<'a>(
-    dal: Operator,
-    index_path: &'a str,
+    settings: &ReadSettings,
+    location: &'a str,
+    operator: &'a Operator,
+    inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
 ) -> Result<InvertedIndexDirectory> {
-    // load inverted index meta, contains the offsets of each files.
-    let inverted_index_meta = load_inverted_index_meta(dal.clone(), index_path).await?;
-
     // load inverted index files, usually including following eight files:
     // 1. fast file
     // 2. store file
@@ -145,97 +171,26 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     // 6. term file
     // 7. meta.json file
     // 8. .managed.json file
-    let futs = inverted_index_meta
-        .columns
-        .iter()
-        .map(|(name, column_meta)| load_inverted_index_file(name, column_meta, index_path, &dal))
-        .collect::<Vec<_>>();
+    let mut columns = Vec::with_capacity(inverted_index_meta_map.len());
+    for (col_name, col_meta) in inverted_index_meta_map {
+        let col_range = col_meta.offset..(col_meta.offset + col_meta.len);
+        columns.push((col_name, col_range));
+    }
 
-    let files: Vec<_> = try_join_all(futs).await?.into_iter().collect();
+    let files = load_inverted_index_files(settings, columns, location, operator).await?;
     // use those files to create inverted index directory
     let directory = InvertedIndexDirectory::try_create(files)?;
 
     Ok(directory)
 }
 
-/// Read the inverted index file data.
-pub(crate) struct InvertedIndexFileReader {
-    cached_reader: CachedReader,
-    param: LoadParams,
+fn cache_key_of_column(index_path: &str, index_column_name: &str) -> String {
+    format!("{index_path}-{index_column_name}")
 }
 
-impl InvertedIndexFileReader {
-    pub fn new(
-        index_path: String,
-        name: String,
-        column_meta: &SingleColumnMeta,
-        operator: Operator,
-    ) -> Self {
-        let cache_key = Self::cache_key_of_column(&index_path, &name);
-
-        let loader = InvertedIndexFileLoader {
-            offset: column_meta.offset,
-            len: column_meta.len,
-            name,
-            cache_key,
-            operator,
-        };
-
-        let cached_reader = CachedReader::new(InvertedIndexFile::cache(), loader);
-
-        let param = LoadParams {
-            location: index_path,
-            len_hint: None,
-            ver: 0,
-            put_cache: true,
-        };
-
-        InvertedIndexFileReader {
-            cached_reader,
-            param,
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn read(&self) -> Result<Arc<InvertedIndexFile>> {
-        self.cached_reader.read(&self.param).await
-    }
-
-    fn cache_key_of_column(index_path: &str, index_column_name: &str) -> String {
-        format!("{index_path}-{index_column_name}")
-    }
-
-    pub(crate) fn cache_key_of_index_columns(index_path: &str) -> Vec<String> {
-        INDEX_COLUMN_NAMES
-            .iter()
-            .map(|column_name| Self::cache_key_of_column(index_path, column_name))
-            .collect()
-    }
-}
-
-/// Loader that fetch range of the target object with customized cache key
-pub struct InvertedIndexFileLoader {
-    pub offset: u64,
-    pub len: u64,
-    pub name: String,
-    pub cache_key: String,
-    pub operator: Operator,
-}
-
-#[async_trait::async_trait]
-impl Loader<InvertedIndexFile> for InvertedIndexFileLoader {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<InvertedIndexFile> {
-        let buffer = self
-            .operator
-            .read_with(&params.location)
-            .range(self.offset..self.offset + self.len)
-            .await?;
-
-        InvertedIndexFile::try_create(self.name.clone(), buffer.to_vec())
-    }
-
-    fn cache_key(&self, _params: &LoadParams) -> CacheKey {
-        self.cache_key.clone()
-    }
+pub(crate) fn cache_key_of_index_columns(index_path: &str) -> Vec<String> {
+    INDEX_COLUMN_NAMES
+        .iter()
+        .map(|column_name| cache_key_of_column(index_path, column_name))
+        .collect()
 }

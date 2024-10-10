@@ -34,12 +34,12 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 
 // Native storage format
 

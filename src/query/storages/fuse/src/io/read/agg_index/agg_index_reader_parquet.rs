@@ -17,20 +17,20 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storage::parquet_rs::read_metadata_sync;
 use databend_common_storage::read_metadata_async;
+use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::AggIndexReader;
 use crate::io::read::utils::build_columns_meta;
-use crate::io::ReadSettings;
+use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
-use crate::MergeIOReadResult;
 
 impl AggIndexReader {
     pub fn sync_read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
         loc: &str,
-    ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
+    ) -> Option<(PartInfoPtr, BlockReadResult)> {
         let op = self.reader.operator.blocking();
         match op.stat(loc) {
             Ok(_meta) => {
@@ -71,7 +71,7 @@ impl AggIndexReader {
         &self,
         read_settings: &ReadSettings,
         loc: &str,
-    ) -> Option<(PartInfoPtr, MergeIOReadResult)> {
+    ) -> Option<(PartInfoPtr, BlockReadResult)> {
         match self.reader.operator.stat(loc).await {
             Ok(_meta) => {
                 let metadata = read_metadata_async(loc, &self.reader.operator, None)
@@ -112,7 +112,7 @@ impl AggIndexReader {
     pub fn deserialize_parquet_data(
         &self,
         part: PartInfoPtr,
-        data: MergeIOReadResult,
+        data: BlockReadResult,
     ) -> Result<DataBlock> {
         let columns_chunks = data.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(&part)?;

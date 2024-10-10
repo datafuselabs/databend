@@ -25,9 +25,9 @@ use databend_common_pipeline_sources::PrefetchAsyncSource;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_sql::StreamContext;
+use databend_storages_common_io::ReadSettings;
 
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 use crate::operations::ClusterStatsGenType;
 use crate::operations::CompactBlockPartInfo;
 use crate::operations::CompactSourceMeta;

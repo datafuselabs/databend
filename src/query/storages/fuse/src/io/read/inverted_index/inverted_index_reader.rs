@@ -21,8 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use futures_util::future::try_join_all;
 use opendal::Operator;
 use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
@@ -39,10 +39,10 @@ use tantivy::Index;
 use tantivy_fst::raw::Fst;
 
 use crate::index::DocIdsCollector;
+use crate::io::read::inverted_index::inverted_index_loader::cache_key_of_index_columns;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
-use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_file;
+use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_files;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_meta;
-use crate::io::read::inverted_index::inverted_index_loader::InvertedIndexFileReader;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -60,6 +60,7 @@ impl InvertedIndexReader {
     #[allow(clippy::too_many_arguments)]
     pub async fn do_filter(
         self,
+        settings: &ReadSettings,
         need_position: bool,
         has_score: bool,
         query: Box<dyn Query>,
@@ -74,6 +75,7 @@ impl InvertedIndexReader {
 
         let matched_rows = self
             .search(
+                settings,
                 index_loc,
                 query,
                 field_ids,
@@ -94,54 +96,20 @@ impl InvertedIndexReader {
         Ok(matched_rows)
     }
 
-    async fn read_column_data<'a>(
-        &self,
-        index_path: &'a str,
-        name: &str,
-        field_ids: &HashSet<u32>,
-        inverted_index_meta_map: &HashMap<String, SingleColumnMeta>,
-    ) -> Result<HashMap<u32, OwnedBytes>> {
-        let mut col_metas = Vec::with_capacity(field_ids.len());
-        let mut col_field_map = HashMap::with_capacity(field_ids.len());
-        for field_id in field_ids {
-            let col_name = format!("{}-{}", name, field_id);
-            if let Some(col_meta) = inverted_index_meta_map.get(&col_name) {
-                col_metas.push((col_name.clone(), col_meta));
-                col_field_map.insert(col_name, *field_id);
-            }
-        }
-        if col_metas.is_empty() {
-            let col_files = HashMap::new();
-            return Ok(col_files);
-        }
-
-        let futs = col_metas
-            .iter()
-            .map(|(name, col_meta)| load_inverted_index_file(name, col_meta, index_path, &self.dal))
-            .collect::<Vec<_>>();
-
-        let col_files = try_join_all(futs)
-            .await?
-            .into_iter()
-            .map(|f| {
-                let field_id = col_field_map.get(&f.name).unwrap();
-                (*field_id, f.data.clone())
-            })
-            .collect::<HashMap<_, _>>();
-
-        Ok(col_files)
-    }
-
     // legacy query search function, using tantivy searcher.
     async fn legacy_search<'a>(
         &self,
+        settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
         has_score: bool,
         tokenizer_manager: TokenizerManager,
         row_count: u64,
+        inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
-        let directory = load_inverted_index_directory(self.dal.clone(), index_path).await?;
+        let directory =
+            load_inverted_index_directory(settings, index_path, &self.dal, inverted_index_meta_map)
+                .await?;
 
         let mut index = Index::open(directory)?;
         index.set_tokenizers(tokenizer_manager);
@@ -209,6 +177,7 @@ impl InvertedIndexReader {
     #[allow(clippy::too_many_arguments)]
     async fn search<'a>(
         &self,
+        settings: &ReadSettings,
         index_path: &'a str,
         query: Box<dyn Query>,
         field_ids: &HashSet<u32>,
@@ -222,7 +191,7 @@ impl InvertedIndexReader {
         // 1. read index meta.
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
 
-        let inverted_index_meta_map = inverted_index_meta
+        let mut inverted_index_meta_map = inverted_index_meta
             .columns
             .clone()
             .into_iter()
@@ -233,18 +202,45 @@ impl InvertedIndexReader {
         // use compatible search function to read.
         if inverted_index_meta_map.contains_key("meta.json") {
             return self
-                .legacy_search(index_path, query, has_score, tokenizer_manager, row_count)
+                .legacy_search(
+                    settings,
+                    index_path,
+                    query,
+                    has_score,
+                    tokenizer_manager,
+                    row_count,
+                    inverted_index_meta_map,
+                )
                 .await;
         }
 
-        // 2. read fst files.
-        let mut fst_files = self
-            .read_column_data(index_path, "fst", field_ids, &inverted_index_meta_map)
-            .await?;
-
-        let mut fst_maps = HashMap::new();
+        // 2. read fst and term files.
+        let mut columns = Vec::with_capacity(field_ids.len() * 2);
         for field_id in field_ids {
-            let fst = if let Some(fst_data) = fst_files.remove(field_id) {
+            let fst_col_name = format!("fst-{}", field_id);
+            let term_col_name = format!("term-{}", field_id);
+
+            if let Some(fst_col_meta) = inverted_index_meta_map.remove(&fst_col_name) {
+                let fst_range = fst_col_meta.offset..(fst_col_meta.offset + fst_col_meta.len);
+                columns.push((fst_col_name, fst_range));
+            }
+            if let Some(term_col_meta) = inverted_index_meta_map.remove(&term_col_name) {
+                let term_range = term_col_meta.offset..(term_col_meta.offset + term_col_meta.len);
+                columns.push((term_col_name, term_range));
+            }
+        }
+
+        let column_files =
+            load_inverted_index_files(settings, columns, index_path, &self.dal).await?;
+        let mut column_files_map = column_files
+            .into_iter()
+            .map(|f| (f.name.clone(), f.data.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let mut fst_maps = HashMap::with_capacity(field_ids.len());
+        for field_id in field_ids {
+            let fst_col_name = format!("fst-{}", field_id);
+            let fst = if let Some(fst_data) = column_files_map.remove(&fst_col_name) {
                 Fst::new(fst_data).map_err(|err| {
                     std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
@@ -281,20 +277,19 @@ impl InvertedIndexReader {
             return Ok(None);
         }
 
-        // 4. read term dict files, and get term info for each terms.
-        let term_dict_files = self
-            .read_column_data(index_path, "term", field_ids, &inverted_index_meta_map)
-            .await?;
-
+        // 4. collect term infos for each terms.
         let mut term_infos = HashMap::with_capacity(matched_terms.len());
-        for (field_id, term_dict_data) in term_dict_files.into_iter() {
-            let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
-            let term_info_store = TermInfoStore::open(term_dict_file)?;
+        for field_id in field_ids {
+            let term_col_name = format!("term-{}", field_id);
+            if let Some(term_dict_data) = column_files_map.remove(&term_col_name) {
+                let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
+                let term_info_store = TermInfoStore::open(term_dict_file)?;
 
-            for (_, (term_field_id, term_id)) in matched_terms.iter() {
-                if field_id == *term_field_id {
-                    let term_info = term_info_store.get(*term_id);
-                    term_infos.insert(*term_id, (field_id, term_info));
+                for (_, (term_field_id, term_id)) in matched_terms.iter() {
+                    if field_id == term_field_id {
+                        let term_info = term_info_store.get(*term_id);
+                        term_infos.insert(*term_id, (*field_id, term_info));
+                    }
                 }
             }
         }
@@ -305,7 +300,7 @@ impl InvertedIndexReader {
         } else {
             term_infos.len()
         };
-        let mut slice_metas = Vec::with_capacity(term_slice_len);
+        let mut slice_columns = Vec::with_capacity(term_slice_len);
         let mut slice_name_map = HashMap::with_capacity(term_slice_len);
         for (term_id, (field_id, term_info)) in term_infos.iter() {
             let idx_name = format!("idx-{}", field_id);
@@ -318,15 +313,11 @@ impl InvertedIndexReader {
             // ignore 8 bytes total_num_tokens_slice
             let offset = idx_meta.offset + 8 + (term_info.postings_range.start as u64);
             let len = term_info.postings_range.len() as u64;
-            let idx_slice_meta = SingleColumnMeta {
-                offset,
-                len,
-                num_values: 1,
-            };
+            let idx_slice_range = offset..(offset + len);
 
             let idx_slice_name = format!("{}-{}", idx_name, term_info.postings_range.start);
-            slice_metas.push((idx_slice_name.clone(), idx_slice_meta));
-            slice_name_map.insert(idx_slice_name, *term_id);
+            slice_name_map.insert(idx_slice_name.clone(), *term_id);
+            slice_columns.push((idx_slice_name, idx_slice_range));
 
             if need_position {
                 let pos_name = format!("pos-{}", field_id);
@@ -338,31 +329,24 @@ impl InvertedIndexReader {
                 })?;
                 let offset = pos_meta.offset + (term_info.positions_range.start as u64);
                 let len = term_info.positions_range.len() as u64;
-                let pos_slice_meta = SingleColumnMeta {
-                    offset,
-                    len,
-                    num_values: 1,
-                };
+                let pos_slice_range = offset..(offset + len);
+
                 let pos_slice_name = format!("{}-{}", pos_name, term_info.positions_range.start);
-                slice_metas.push((pos_slice_name.clone(), pos_slice_meta));
-                slice_name_map.insert(pos_slice_name, *term_id);
+                slice_name_map.insert(pos_slice_name.clone(), *term_id);
+                slice_columns.push((pos_slice_name, pos_slice_range));
             }
         }
 
-        let futs = slice_metas
-            .iter()
-            .map(|(name, col_meta)| load_inverted_index_file(name, col_meta, index_path, &self.dal))
-            .collect::<Vec<_>>();
-
-        let slice_files = try_join_all(futs)
-            .await?
+        let slice_column_files =
+            load_inverted_index_files(settings, slice_columns, index_path, &self.dal).await?;
+        let slice_column_files_map = slice_column_files
             .into_iter()
             .map(|f| (f.name.clone(), f.data.clone()))
             .collect::<HashMap<_, _>>();
 
         let mut block_postings_map = HashMap::with_capacity(term_infos.len());
         let mut position_reader_map = HashMap::with_capacity(term_infos.len());
-        for (slice_name, slice_data) in slice_files.into_iter() {
+        for (slice_name, slice_data) in slice_column_files_map.into_iter() {
             let term_id = slice_name_map.remove(&slice_name).unwrap();
             let (_, term_info) = term_infos.get(&term_id).unwrap();
 
@@ -414,8 +398,8 @@ impl InvertedIndexReader {
         Ok(None)
     }
 
-    // delegation of [InvertedIndexFileReader::cache_key_of_index_columns]
+    // delegation of [inverted_index_loader::cache_key_of_index_columns]
     pub fn cache_key_of_index_columns(index_path: &str) -> Vec<String> {
-        InvertedIndexFileReader::cache_key_of_index_columns(index_path)
+        cache_key_of_index_columns(index_path)
     }
 }

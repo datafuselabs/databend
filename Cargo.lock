@@ -4952,6 +4952,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "derive-visitor",
@@ -5425,10 +5426,14 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "bytes",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-metrics",
  "fastrace 0.7.2",
+ "futures",
  "log",
  "opendal 0.49.0",
 ]

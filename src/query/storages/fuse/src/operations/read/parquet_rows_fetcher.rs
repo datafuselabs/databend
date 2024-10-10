@@ -29,6 +29,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use itertools::Itertools;
@@ -37,10 +38,9 @@ use super::fuse_rows_fetcher::RowsFetcher;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
-use crate::io::ReadSettings;
+use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
-use crate::MergeIOReadResult;
 
 pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
     snapshot: Option<Arc<TableSnapshot>>,
@@ -262,7 +262,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
     fn build_block(
         reader: &BlockReader,
         part: &PartInfoPtr,
-        chunk: MergeIOReadResult,
+        chunk: BlockReadResult,
     ) -> Result<DataBlock> {
         let columns_chunks = chunk.columns_chunks()?;
         let part = FuseBlockPartInfo::from_part(part)?;

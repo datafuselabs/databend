@@ -38,17 +38,17 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MutationStatus;
+use databend_storages_common_io::ReadSettings;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
+use crate::BlockReadResult;
 use crate::FuseStorageFormat;
-use crate::MergeIOReadResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MutationAction {
@@ -58,7 +58,7 @@ pub enum MutationAction {
 
 enum State {
     ReadData(Option<PartInfoPtr>),
-    FilterData(PartInfoPtr, MergeIOReadResult),
+    FilterData(PartInfoPtr, BlockReadResult),
     ReadRemain {
         part: PartInfoPtr,
         data_block: DataBlock,
@@ -66,7 +66,7 @@ enum State {
     },
     MergeRemain {
         part: PartInfoPtr,
-        merged_io_read_result: MergeIOReadResult,
+        block_read_result: BlockReadResult,
         data_block: DataBlock,
         filter: Option<Value<BooleanType>>,
     },
@@ -274,13 +274,13 @@ impl Processor for MutationSource {
             }
             State::MergeRemain {
                 part,
-                merged_io_read_result,
+                block_read_result,
                 mut data_block,
                 filter,
             } => {
                 let path = FuseBlockPartInfo::from_part(&part)?.location.clone();
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = merged_io_read_result.columns_chunks()?;
+                    let chunks = block_read_result.columns_chunks()?;
                     let remain_block = remain_reader.deserialize_chunks_with_part_info(
                         part,
                         chunks,
@@ -398,7 +398,7 @@ impl Processor for MutationSource {
                         .await?;
                     self.state = State::MergeRemain {
                         part,
-                        merged_io_read_result: read_res,
+                        block_read_result: read_res,
                         data_block,
                         filter,
                     };

@@ -17,4 +17,4 @@ mod virtual_column_reader_native;
 mod virtual_column_reader_parquet;
 
 pub use virtual_column_reader::VirtualColumnReader;
-pub use virtual_column_reader_parquet::VirtualMergeIOReadResult;
+pub use virtual_column_reader_parquet::VirtualBlockReadResult;

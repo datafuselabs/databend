@@ -30,33 +30,33 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::parquet_rs::read_metadata_sync;
+use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::VirtualColumnReader;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
 use crate::io::read::utils::build_columns_meta;
-use crate::io::BlockReader;
-use crate::io::ReadSettings;
+use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
-use crate::MergeIOReadResult;
 
-pub struct VirtualMergeIOReadResult {
+pub struct VirtualBlockReadResult {
     pub part: PartInfoPtr,
     // The schema of virtual columns
     pub schema: ArrowSchema,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
-    pub data: MergeIOReadResult,
+    pub data: BlockReadResult,
 }
 
-impl VirtualMergeIOReadResult {
+impl VirtualBlockReadResult {
     pub fn create(
         part: PartInfoPtr,
         schema: ArrowSchema,
         ignore_column_ids: Option<HashSet<ColumnId>>,
-        data: MergeIOReadResult,
-    ) -> VirtualMergeIOReadResult {
-        VirtualMergeIOReadResult {
+        data: BlockReadResult,
+    ) -> VirtualBlockReadResult {
+        VirtualBlockReadResult {
             part,
             schema,
             ignore_column_ids,
@@ -70,7 +70,7 @@ impl VirtualColumnReader {
         &self,
         read_settings: &ReadSettings,
         loc: &str,
-    ) -> Option<VirtualMergeIOReadResult> {
+    ) -> Option<VirtualBlockReadResult> {
         let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
         debug_assert_eq!(metadata.num_row_groups(), 1);
         let row_group = &metadata.row_groups()[0];
@@ -92,14 +92,16 @@ impl VirtualColumnReader {
             );
 
             let merge_io_result =
-                BlockReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
+                MergeIOReader::sync_merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
                     .ok()?;
 
-            Some(VirtualMergeIOReadResult::create(
+            let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+
+            Some(VirtualBlockReadResult::create(
                 part,
                 schema,
                 ignore_column_ids,
-                merge_io_result,
+                block_read_res,
             ))
         } else {
             None
@@ -110,7 +112,7 @@ impl VirtualColumnReader {
         &self,
         read_settings: &ReadSettings,
         loc: &str,
-    ) -> Option<VirtualMergeIOReadResult> {
+    ) -> Option<VirtualBlockReadResult> {
         let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
         let schema = infer_schema_with_extension(metadata.file_metadata()).ok()?;
         debug_assert_eq!(metadata.num_row_groups(), 1);
@@ -131,21 +133,18 @@ impl VirtualColumnReader {
                 None,
             );
 
-            let merge_io_result = BlockReader::merge_io_read(
-                read_settings,
-                self.dal.clone(),
-                loc,
-                &ranges,
-                self.reader.put_cache,
-            )
-            .await
-            .ok()?;
+            let merge_io_result =
+                MergeIOReader::merge_io_read(read_settings, self.dal.clone(), loc, &ranges)
+                    .await
+                    .ok()?;
 
-            Some(VirtualMergeIOReadResult::create(
+            let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+
+            Some(VirtualBlockReadResult::create(
                 part,
                 schema,
                 ignore_column_ids,
-                merge_io_result,
+                block_read_res,
             ))
         } else {
             None
@@ -187,7 +186,7 @@ impl VirtualColumnReader {
     pub fn deserialize_virtual_columns(
         &self,
         mut data_block: DataBlock,
-        virtual_data: Option<VirtualMergeIOReadResult>,
+        virtual_data: Option<VirtualBlockReadResult>,
     ) -> Result<DataBlock> {
         let record_batch = virtual_data
             .map(|virtual_data| {

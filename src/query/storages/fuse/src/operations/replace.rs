@@ -22,12 +22,12 @@ use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use rand::prelude::SliceRandom;
 
 use crate::io::BlockBuilder;
-use crate::io::ReadSettings;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::MergeIntoOperationAggregator;
 use crate::FuseTable;

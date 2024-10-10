@@ -22,7 +22,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::DeletedSegmentInfo;
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SerializeDataMeta {
@@ -62,7 +62,7 @@ impl SerializeBlock {
 
 pub enum CompactSourceMeta {
     Concat {
-        read_res: Vec<MergeIOReadResult>,
+        read_res: Vec<BlockReadResult>,
         metas: Vec<Arc<BlockMeta>>,
         index: BlockMetaIndex,
     },

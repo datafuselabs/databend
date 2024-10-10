@@ -956,9 +956,9 @@ pub struct InvertedIndexFile {
 }
 
 impl InvertedIndexFile {
-    pub fn try_create(name: String, data: Vec<u8>) -> Result<Self> {
+    pub fn create(name: String, data: Vec<u8>) -> Self {
         let data = OwnedBytes::new(data);
-        Ok(Self { name, data })
+        Self { name, data }
     }
 }
 

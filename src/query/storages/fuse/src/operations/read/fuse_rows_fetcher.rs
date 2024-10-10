@@ -34,10 +34,10 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_storages_common_io::ReadSettings;
 
 use super::native_rows_fetcher::NativeRowsFetcher;
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
-use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 

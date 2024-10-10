@@ -34,7 +34,7 @@ use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -200,7 +200,7 @@ impl BlockReader {
 
     pub fn report_cache_metrics<'a>(
         &self,
-        merged_result: &MergeIOReadResult,
+        block_read_res: &BlockReadResult,
         ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,
     ) {
         let bytes_read_from_storage: usize = ranges
@@ -208,13 +208,13 @@ impl BlockReader {
             .sum();
 
         let cache_metrics = self.ctx.get_data_cache_metrics();
-        let read_from_disk_cache: usize = merged_result
+        let read_from_disk_cache: usize = block_read_res
             .cached_column_data
             .iter()
             .map(|(_, bytes)| bytes.len())
             .sum();
 
-        let read_from_in_mem_cache_array: usize = merged_result
+        let read_from_in_mem_cache_array: usize = block_read_res
             .cached_column_array
             .iter()
             .map(|(_, sized_array)| sized_array.1)

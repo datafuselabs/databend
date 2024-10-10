@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::ops::Range;
 
 use arrow::datatypes::Schema as ArrowSchema;
-use databend_common_base::rangemap::RangeMerger;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
@@ -26,83 +23,20 @@ use databend_common_storage::parquet_rs::read_metadata_sync;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
-use opendal::Operator;
+use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::ReadSettings;
 
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::io::read::block::block_reader_merge_io::OwnerMemory;
-use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 impl BlockReader {
-    pub fn sync_merge_io_read(
-        read_settings: &ReadSettings,
-        op: Operator,
-        location: &str,
-        raw_ranges: &[(ColumnId, Range<u64>)],
-    ) -> Result<MergeIOReadResult> {
-        let path = location.to_string();
-
-        // Build merged read ranges.
-        let ranges = raw_ranges
-            .iter()
-            .map(|(_, r)| r.clone())
-            .collect::<Vec<_>>();
-        let range_merger = RangeMerger::from_iter(
-            ranges,
-            read_settings.storage_io_min_bytes_for_seek,
-            read_settings.storage_io_max_page_bytes_for_read,
-        );
-        let merged_ranges = range_merger.ranges();
-
-        // Read merged range data.
-        let mut io_res = Vec::with_capacity(merged_ranges.len());
-        for (idx, range) in merged_ranges.iter().enumerate() {
-            io_res.push(Self::sync_read_range(
-                op.clone(),
-                location,
-                idx,
-                range.start,
-                range.end,
-            )?);
-        }
-
-        let owner_memory = OwnerMemory::create(io_res);
-
-        // for sync read, we disable table data cache
-        let table_data_cache = None;
-        let mut read_res = MergeIOReadResult::create(
-            owner_memory,
-            raw_ranges.len(),
-            path.clone(),
-            table_data_cache,
-        );
-
-        for (raw_idx, raw_range) in raw_ranges {
-            let column_id = *raw_idx as ColumnId;
-            let column_range = raw_range.start..raw_range.end;
-
-            // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(|| ErrorCode::Internal(format!(
-                "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                column_range, path, merged_ranges
-            )))?;
-
-            // Fetch the raw data for the raw range.
-            let start = (column_range.start - merged_range.start) as usize;
-            let end = (column_range.end - merged_range.start) as usize;
-            read_res.add_column_chunk(merged_range_idx, column_id, column_range, start..end);
-        }
-
-        Ok(read_res)
-    }
-
     pub fn sync_read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
         part: &PartInfoPtr,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
-    ) -> Result<MergeIOReadResult> {
+    ) -> Result<BlockReadResult> {
         let part = FuseBlockPartInfo::from_part(part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
@@ -128,25 +62,21 @@ impl BlockReader {
             }
         }
 
-        let mut merge_io_result =
-            Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, &ranges)?;
-        merge_io_result.cached_column_array = cached_column_array;
+        let merge_io_result = MergeIOReader::sync_merge_io_read(
+            settings,
+            self.operator.clone(),
+            &part.location,
+            &ranges,
+        )?;
 
-        self.report_cache_metrics(&merge_io_result, ranges.iter().map(|(_, r)| r));
+        // for sync read, we disable table data cache
+        let cached_column_data = vec![];
+        let block_read_res =
+            BlockReadResult::create(merge_io_result, cached_column_data, cached_column_array);
 
-        Ok(merge_io_result)
-    }
+        self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
 
-    #[inline]
-    pub fn sync_read_range(
-        op: Operator,
-        path: &str,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.blocking().read_with(path).range(start..end).call()?;
-        Ok((index, chunk.to_vec()))
+        Ok(block_read_res)
     }
 
     pub fn sync_read_schema(&self, loc: &str) -> Option<ArrowSchema> {

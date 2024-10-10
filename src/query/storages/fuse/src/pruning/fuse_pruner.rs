@@ -153,7 +153,7 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(dal.clone(), push_down)?;
+        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.

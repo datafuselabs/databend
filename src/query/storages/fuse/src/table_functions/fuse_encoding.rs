@@ -49,16 +49,17 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 
-use crate::io::BlockReader;
-use crate::io::ReadSettings;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::parse_db_tb_col_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
+use crate::BlockReadResult;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -179,15 +180,18 @@ impl<'a> FuseEncodingImpl<'a> {
                             let (offset, len) = column_meta.offset_length();
                             let ranges = vec![(column_id, offset..(offset + len))];
                             let read_settings = ReadSettings::from_ctx(&self.ctx)?;
-                            let merge_io_read_res = BlockReader::merge_io_read(
+                            let merge_io_result = MergeIOReader::merge_io_read(
                                 &read_settings,
                                 table.operator.clone(),
                                 &block.location.0,
                                 &ranges,
-                                true,
                             )
                             .await?;
-                            let column_chunks = merge_io_read_res.columns_chunks()?;
+
+                            let block_read_res =
+                                BlockReadResult::create(merge_io_result, vec![], vec![]);
+
+                            let column_chunks = block_read_res.columns_chunks()?;
                             let pages = column_chunks
                                 .get(&column_id)
                                 .unwrap()

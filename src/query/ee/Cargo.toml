@@ -50,6 +50,7 @@ databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }

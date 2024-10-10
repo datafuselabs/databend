@@ -13,54 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::SizedColumnArray;
-use databend_storages_common_cache::TableDataCache;
-use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
-
-type ChunkIndex = usize;
-pub struct OwnerMemory {
-    chunks: HashMap<ChunkIndex, Bytes>,
-}
-
-impl OwnerMemory {
-    pub fn create(chunks: Vec<(ChunkIndex, Vec<u8>)>) -> OwnerMemory {
-        let chunks = chunks
-            .into_iter()
-            .map(|(idx, chunk)| (idx, Bytes::from(chunk)))
-            .collect();
-        OwnerMemory { chunks }
-    }
-
-    pub fn get_chunk(&self, index: ChunkIndex, path: &str) -> Result<Bytes> {
-        match self.chunks.get(&index) {
-            Some(chunk) => Ok(chunk.clone()),
-            None => Err(ErrorCode::Internal(format!(
-                "It's a terrible bug, not found range data, merged_range_idx:{}, path:{}",
-                index, path
-            ))),
-        }
-    }
-}
 
 type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
-pub struct MergeIOReadResult {
-    block_path: String,
-    columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,
-    owner_memory: OwnerMemory,
-    pub cached_column_data: CachedColumnData,
-    pub cached_column_array: CachedColumnArray,
-    table_data_cache: Option<TableDataCache>,
-}
 
 #[derive(EnumAsInner)]
 pub enum DataItem<'a> {
@@ -68,29 +31,34 @@ pub enum DataItem<'a> {
     ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
-impl MergeIOReadResult {
+pub struct BlockReadResult {
+    merge_io_result: MergeIOReadResult,
+    pub(crate) cached_column_data: CachedColumnData,
+    pub(crate) cached_column_array: CachedColumnArray,
+}
+
+impl BlockReadResult {
     pub fn create(
-        owner_memory: OwnerMemory,
-        capacity: usize,
-        path: String,
-        table_data_cache: Option<TableDataCache>,
-    ) -> MergeIOReadResult {
-        MergeIOReadResult {
-            block_path: path,
-            columns_chunk_offsets: HashMap::with_capacity(capacity),
-            owner_memory,
-            cached_column_data: vec![],
-            cached_column_array: vec![],
-            table_data_cache,
+        merge_io_result: MergeIOReadResult,
+        cached_column_data: CachedColumnData,
+        cached_column_array: CachedColumnArray,
+    ) -> BlockReadResult {
+        BlockReadResult {
+            merge_io_result,
+            cached_column_data,
+            cached_column_array,
         }
     }
 
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem>> {
-        let mut res = HashMap::with_capacity(self.columns_chunk_offsets.len());
+        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
 
         // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.columns_chunk_offsets {
-            let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.block_path)?;
+        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
+            let chunk = self
+                .merge_io_result
+                .owner_memory
+                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
             res.insert(*column_id, DataItem::RawData(chunk.slice(range.clone())));
         }
 
@@ -109,11 +77,14 @@ impl MergeIOReadResult {
     }
 
     pub fn column_buffers(&self) -> Result<HashMap<ColumnId, Bytes>> {
-        let mut res = HashMap::with_capacity(self.columns_chunk_offsets.len());
+        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
 
         // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.columns_chunk_offsets {
-            let chunk = self.owner_memory.get_chunk(*chunk_idx, &self.block_path)?;
+        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
+            let chunk = self
+                .merge_io_result
+                .owner_memory
+                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
             res.insert(*column_id, chunk.slice(range.clone()));
         }
 
@@ -124,33 +95,5 @@ impl MergeIOReadResult {
         }
 
         Ok(res)
-    }
-
-    fn get_chunk(&self, index: usize, path: &str) -> Result<Bytes> {
-        self.owner_memory.get_chunk(index, path)
-    }
-
-    pub fn add_column_chunk(
-        &mut self,
-        chunk_index: usize,
-        column_id: ColumnId,
-        column_range: Range<u64>,
-        range: Range<usize>,
-    ) {
-        if let Some(table_data_cache) = &self.table_data_cache {
-            // populate raw column data cache (compressed raw bytes)
-            if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
-                let cache_key = TableDataCacheKey::new(
-                    &self.block_path,
-                    column_id,
-                    column_range.start,
-                    column_range.end - column_range.start,
-                );
-                let data = chunk_data.slice(range.clone());
-                table_data_cache.insert(cache_key.as_ref().to_owned(), data);
-            }
-        }
-        self.columns_chunk_offsets
-            .insert(column_id, (chunk_index, range));
     }
 }

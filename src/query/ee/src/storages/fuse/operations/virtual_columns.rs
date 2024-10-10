@@ -33,12 +33,12 @@ use databend_common_sql::parse_computed_expr;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::ReadSettings;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
