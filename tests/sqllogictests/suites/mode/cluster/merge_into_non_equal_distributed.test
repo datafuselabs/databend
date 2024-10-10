@@ -52,6 +52,61 @@ select * from t2 order by a;
 ----
 8
 
+## issue 16588
+query T
+explain merge into t1 using (select * from t2) as t on 1 <> 1 when matched then update * when not matched then insert *
+----
+CommitSink
+└── Exchange
+    ├── output columns: []
+    ├── exchange type: Merge
+    └── DataMutation
+        ├── target table: [catalog: default] [database: default] [table: t1]
+        ├── matched delete: [condition: None]
+        ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
+        └── Exchange
+            ├── output columns: [t2.a (#0), t1._row_id (#2)]
+            ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#2), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
+            └── HashJoin
+                ├── output columns: [t2.a (#0), t1._row_id (#2)]
+                ├── join type: LEFT OUTER
+                ├── build keys: []
+                ├── probe keys: []
+                ├── filters: []
+                ├── estimated rows: 1.00
+                ├── Exchange(Build)
+                │   ├── output columns: [t1._row_id (#2)]
+                │   ├── exchange type: Hash()
+                │   └── EmptyResultScan
+                └── Exchange(Probe)
+                    ├── output columns: [t2.a (#0)]
+                    ├── exchange type: Hash()
+                    └── TableScan
+                        ├── table: default.default.t2
+                        ├── output columns: [a (#0)]
+                        ├── read rows: 1
+                        ├── read size: < 1 KiB
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 1.00
+
+query T
+explain merge into t1 using (select * from t2) as t on 1 <> 1 when matched then update *
+----
+CommitSink
+└── Exchange
+    ├── output columns: []
+    ├── exchange type: Merge
+    └── DataMutation
+        ├── target table: [catalog: default] [database: default] [table: t1]
+        ├── matched delete: [condition: None]
+        └── Exchange
+            ├── output columns: [t2.a (#0), t1._row_id (#2)]
+            ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#2), 31), 2047))
+            └── EmptyResultScan
+
 ## check there is add row_number.
 query T
 explain merge into t1 using (select * from t2) as t on t1.a > t.a when matched then update * when not matched then insert *;

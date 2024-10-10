@@ -49,8 +49,11 @@ use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::Operator;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
@@ -504,9 +507,41 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
     mutation.distributed = opt_ctx.enable_distributed_optimization;
 
+    let schema = mutation.schema();
+    // To fix issue #16588, if target table is rewritten as an empty scan, that means
+    // the condition is false and the match branch can never be executed.
+    // Therefore, the match evaluators can be reset.
+    let inner_rel_op = input_s_expr.plan.rel_op();
+    if !mutation.matched_evaluators.is_empty() {
+        match inner_rel_op {
+            RelOp::ConstantTableScan => {
+                mutation.matched_evaluators = vec![MatchedEvaluator {
+                    condition: None,
+                    update: None,
+                }];
+                mutation.can_try_update_column_only = false;
+            }
+            RelOp::Join => {
+                let right_child = input_s_expr.child(1)?;
+                let mut right_child_rel = right_child.plan.rel_op();
+                if right_child_rel == RelOp::Exchange {
+                    right_child_rel = right_child.child(0)?.plan.rel_op();
+                }
+                if right_child_rel == RelOp::ConstantTableScan {
+                    mutation.matched_evaluators = vec![MatchedEvaluator {
+                        condition: None,
+                        update: None,
+                    }];
+                    mutation.can_try_update_column_only = false;
+                }
+            }
+            _ => (),
+        }
+    }
+
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
-            if mutation.distributed {
+            if mutation.distributed && inner_rel_op == RelOp::Join {
                 let join = Join::try_from(input_s_expr.plan().clone())?;
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
                 let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
@@ -537,7 +572,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     };
 
     Ok(Plan::DataMutation {
-        schema: mutation.schema(),
+        schema,
         s_expr: Box::new(SExpr::create_unary(
             Arc::new(RelOperator::Mutation(mutation)),
             Arc::new(input_s_expr),
